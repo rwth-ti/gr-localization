@@ -35,9 +35,6 @@ class top_block(gr.top_block):
         probe_port = 5555 + options.id_rx
         probe_adr = "tcp://*:" + str(probe_port)
 
-        # set sampling rate
-        self.samp_rate = samp_rate = 50e6
-
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr)
 
@@ -53,12 +50,6 @@ class top_block(gr.top_block):
         self.usrp_source.set_clock_source("external", 0)
         self.usrp_source.set_time_source("external", 0)
 
-        self.usrp_source.set_samp_rate(samp_rate)
-        self.usrp_source.set_center_freq(uhd.tune_request(self.options.rx_freq,0), 0)
-        self.usrp_source.set_bandwidth(1e6,0)
-        self.usrp_source.set_gain(30, 0)
-        self.usrp_source.set_antenna("RX2", 0)
-
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
         self.connect(self.usrp_source, self.zmq_probe)
@@ -68,7 +59,21 @@ class top_block(gr.top_block):
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.set_request_socket(fusion_center_adr)
         self.rpc_manager.add_interface("start_fg",self.start_fg)
+        self.rpc_manager.add_interface("set_gain",self.set_gain)
+        self.rpc_manager.add_interface("set_samp_rate",self.set_samp_rate)
+        self.rpc_manager.add_interface("set_bw",self.set_bw)
+        self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.start_watcher()
+
+    def set_samp_rate(self,samp_rate):
+        self.usrp_source.set_samp_rate(samp_rate)
+        self.sync_time_nmea()
+    def set_bw(self,bw):
+        self.usrp_source.set_bandwidth(bw,0)
+    def set_gain(self,gain):
+        self.usrp_source.set_gain(gain, 0)
+    def set_antenna(self,antenna):
+        self.usrp_source.set_antenna(antenna, 0)
 
     def register_receiver(self):
         while(True):
@@ -76,7 +81,7 @@ class top_block(gr.top_block):
             self.rpc_manager.request("register_receiver",[os.uname()[1],self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx])
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive):
+    def start_fg(self, samples_to_receive, freq, lo_offset):
         print "Start Flowgraph"
         try:
             # get times from USRP
@@ -86,7 +91,7 @@ class top_block(gr.top_block):
             time_to_recv = uhd.time_spec(time_last_pps + 1)
             # synchronize LOs
             self.usrp_source.set_command_time(time_to_sync)
-            self.usrp_source.set_center_freq(uhd.tune_request(self.options.rx_freq,0), 0)
+            self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
             self.usrp_source.clear_command_time()
             # ask for samples at a specific time
             stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
@@ -122,9 +127,9 @@ class top_block(gr.top_block):
             else:
                 # sleep for 100 msec
                 time.sleep(0.1)
-        print "Just after NMEA sync: ", self.usrp_source.get_time_now().get_real_secs()
+        print "Just after NMEA sync: ", self.usrp_source.get_time_last_pps().get_real_secs()
         time.sleep(1)
-        print "After 1s: ", self.usrp_source.get_time_now().get_real_secs()
+        print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
         print "NMEA time sync complete!"
 
         self.timer_register = threading.Thread(target = self.register_receiver)

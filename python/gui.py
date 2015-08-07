@@ -30,7 +30,13 @@ class gui(QtGui.QMainWindow):
         # socket addresses
         rpc_adr = "tcp://*:6665"
 
-        self.samples_to_receive = options.num_samples
+        self.samples_to_receive = int(options.num_samples)
+        self.gain = float(options.gain)
+        self.frequency = float(options.frequency)
+        self.samp_rate = float(options.samp_rate)
+        self.bw = float(options.bandwith)
+        self.lo_offset = float(options.lo_offset)
+        self.antenna = options.antenna
 
         self.receivers = {}
 
@@ -86,10 +92,14 @@ class gui(QtGui.QMainWindow):
     def register_receiver(self, hostname, serial, id_rx):
         if not self.receivers.has_key(serial):
             rpc_adr = "tcp://" + hostname + ":" + str(6665 + id_rx)
-            print rpc_adr
             probe_adr = "tcp://" + hostname + ":" + str(5555 + id_rx)
-            print probe_adr
             self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr)
+            self.receivers[serial].set_gain(self.gain)
+            self.receivers[serial].set_bw(self.bw)
+            self.receivers[serial].set_samp_rate(self.samp_rate)
+            self.receivers[serial].set_antenna(self.antenna)
+            self.receivers[serial].frequency = self.frequency
+            self.receivers[serial].lo_offset = self.lo_offset
             self.receivers[serial].samples_to_receive = self.samples_to_receive
             self.probe_manager.add_socket(self.receivers[serial].probe_address, 'complex64', self.receivers[serial].receive_samples)
             print serial, "registered"
@@ -171,8 +181,20 @@ def parse_options():
                       help="Server hostname")
     parser.add_option("-c", "--clientname", type="string", default="localhost",
                       help="Server hostname")
-    parser.add_option("", "--num-samples", type="int", default="1600",
+    parser.add_option("", "--num-samples", type="string", default="5000",
                       help="Number of samples in burst")
+    parser.add_option("", "--antenna", type="string", default="RX2",
+                      help="Antenna to use")
+    parser.add_option("", "--gain", type="float", default="30",
+                      help="Gain in dB")
+    parser.add_option("", "--frequency", type="string", default="2.48e9",
+                      help="Frequency")
+    parser.add_option("", "--samp-rate", type="string", default="10e6",
+                      help="Sampling rate")
+    parser.add_option("", "--lo-offset", type="string", default="0",
+                      help="LO offset")
+    parser.add_option("", "--bandwith", type="string", default="1e6",
+                      help="Bandwith")
     (options, args) = parser.parse_args()
     return options
 
