@@ -14,7 +14,7 @@ from optparse import OptionParser
 import numpy
 import sys
 import os
-from threading import Thread
+import threading
 import time
 import octoclock
 import rpc_manager as rpc_manager_local
@@ -29,9 +29,10 @@ class top_block(gr.top_block):
         self.options = options
 
         # socket addresses
-        rpc_port = 6665 + options.id
+        rpc_port = 6665 + options.id_rx
         rpc_adr = "tcp://*:" + str(rpc_port)
-        probe_port = 5555 + options.id
+        fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
+        probe_port = 5555 + options.id_rx
         probe_adr = "tcp://*:" + str(probe_port)
 
         # set sampling rate
@@ -65,10 +66,15 @@ class top_block(gr.top_block):
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
+        self.rpc_manager.set_request_socket(fusion_center_adr)
         self.rpc_manager.add_interface("start_fg",self.start_fg)
-        #self.rpc_manager.add_interface("set_k",self.set_k)
-        #self.rpc_manager.add_interface("get_sample_rate",self.throttle.sample_rate)
         self.rpc_manager.start_watcher()
+
+    def register_receiver(self):
+        while(True):
+            # register receiver [hostname, usrp_serial, rx_id]
+            self.rpc_manager.request("register_receiver",[os.uname()[1],self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx])
+            time.sleep(10)
 
     def start_fg(self, samples_to_receive):
         print "Start Flowgraph"
@@ -121,6 +127,10 @@ class top_block(gr.top_block):
         print "After 1s: ", self.usrp_source.get_time_now().get_real_secs()
         print "NMEA time sync complete!"
 
+        self.timer_register = threading.Thread(target = self.register_receiver)
+        self.timer_register.daemon = True
+        self.timer_register.start()
+
 ###############################################################################
 # Options Parser
 ###############################################################################
@@ -129,7 +139,9 @@ def parse_options():
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
     parser.add_option("-s", "--serial", type="string", default="",
                       help="USRP serial number")
-    parser.add_option("-i", "--id", type="int", default="1",
+    parser.add_option("", "--fusion-center", type="string", default="localhost",
+                      help="Fusion center address")
+    parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
     parser.add_option("-f", "--rx-freq", type="float", default="2.4e9",
                       help="Receiver frequency")

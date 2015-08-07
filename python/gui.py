@@ -14,6 +14,7 @@ import signal
 import numpy as np
 import receiver_interface
 import time
+import threading
 
 class gui(QtGui.QMainWindow):
     def __init__(self, window_name, options, parent=None):
@@ -27,26 +28,18 @@ class gui(QtGui.QMainWindow):
         self.update_timer = Qt.QTimer()
 
         # socket addresses
-        rpc_adr_usrp1 = "tcp://"+options.servername+":6666"
-        rpc_adr_usrp2 = "tcp://"+options.clientname+":6667"
-        probe_adr_usrp1 = "tcp://"+options.servername+":5556"
-        probe_adr_usrp2 = "tcp://"+options.clientname+":5557"
+        rpc_adr = "tcp://*:6665"
 
         self.samples_to_receive = options.num_samples
 
-        self.receivers = []
-        self.receivers.append(receiver_interface.receiver_interface(rpc_adr_usrp1, probe_adr_usrp1))
-        self.receivers.append(receiver_interface.receiver_interface(rpc_adr_usrp2, probe_adr_usrp2))
-
-        # set samples to receive property of the class
-
-        for receiver in self.receivers:
-            receiver.samples_to_receive = self.samples_to_receive
+        self.receivers = {}
 
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
-        for receiver in self.receivers:
-            self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
+        self.rpc_manager = zeromq.rpc_manager()
+        self.rpc_manager.set_reply_socket(rpc_adr)
+        self.rpc_manager.add_interface("register_receiver",self.register_receiver)
+        self.rpc_manager.start_watcher()
 
         self.gui.setWindowTitle(window_name)
         self.init_plot(self.gui.qwtPlotUsrp1)
@@ -55,6 +48,7 @@ class gui(QtGui.QMainWindow):
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay")
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, "Amplitude")
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100, 100)
 
         # Grid
         pen = Qt.QPen(Qt.Qt.DotLine)
@@ -89,14 +83,33 @@ class gui(QtGui.QMainWindow):
         grid.setPen(pen)
         grid.attach(qwtPlot)
 
+    def register_receiver(self, hostname, serial, id_rx):
+        if not self.receivers.has_key(serial):
+            rpc_adr = "tcp://" + hostname + ":" + str(6665 + id_rx)
+            print rpc_adr
+            probe_adr = "tcp://" + hostname + ":" + str(5555 + id_rx)
+            print probe_adr
+            self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr)
+            self.receivers[serial].samples_to_receive = self.samples_to_receive
+            self.probe_manager.add_socket(self.receivers[serial].probe_address, 'complex64', self.receivers[serial].receive_samples)
+            print serial, "registered"
+            #threading.Thread(target = self.finish_register(serial)).start()
+
+    def finish_register(self, serial):
+        time.sleep(5)
+        self.reset_receivers()
+        print serial, "registered"
+
     def start_receivers(self):
-        for receiver in self.receivers:
+        for key in self.receivers:
+            receiver = self.receivers[key]
             receiver.request_samples()
 
     def reset_receivers(self):
         self.update_timer.stop()
         self.probe_manager = zeromq.probe_manager()
-        for receiver in self.receivers:
+        for key in self.receivers:
+            receiver = self.receivers[key]
             self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
             receiver.samples = []
             receiver.first_packet = True
@@ -106,13 +119,14 @@ class gui(QtGui.QMainWindow):
         self.probe_manager.watcher()
 
     def process_results(self):
-        if all(receiver.reception_complete for receiver in self.receivers):
-            for receiver in self.receivers:
+        if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
+            for key in self.receivers:
+                receiver = self.receivers[key]
                 receiver.first_packet = True
                 receiver.reception_complete = False
-            self.plot_receiver(self.gui.qwtPlotUsrp1, self.receivers[0].samples)
-            self.plot_receiver(self.gui.qwtPlotUsrp2, self.receivers[1].samples)
-            correlation = self.correlate(self.receivers[0],self.receivers[1])
+            self.plot_receiver(self.gui.qwtPlotUsrp1, self.receivers["F57197"].samples)
+            self.plot_receiver(self.gui.qwtPlotUsrp2, self.receivers["F571B0"].samples)
+            correlation = self.correlate(self.receivers["F57197"],self.receivers["F571B0"])
 
     # plot cross correlation
     def plot_correlation(self, plot, samples):
