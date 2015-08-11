@@ -85,7 +85,7 @@ class rpc_manager():
         if socks.get(self.req_socket) == zmq.POLLOUT:
             self.req_socket.send(pmt.serialize_str(pmt.to_pmt((id_str,args))))
             print "[RPC] request:", id_str, ", args:", args
-        socks = dict(self.poller_req_in.poll(2000))
+        socks = dict(self.poller_req_in.poll(5000))
         if socks.get(self.req_socket) == zmq.POLLIN:
             reply = pmt.to_python(pmt.deserialize_str(self.req_socket.recv()))
             print "[RPC] reply:", reply

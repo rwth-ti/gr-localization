@@ -15,10 +15,14 @@ import numpy as np
 import receiver_interface
 import time
 import threading
+import rpc_manager as rpc_manager_local
+import gui_helpers
 
 class gui(QtGui.QMainWindow):
     def __init__(self, window_name, options, parent=None):
         QtGui.QMainWindow.__init__(self, parent)
+
+        self.thread = threading.current_thread()
 
         # give Ctrl+C back to system
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -28,33 +32,54 @@ class gui(QtGui.QMainWindow):
         self.update_timer = Qt.QTimer()
 
         # socket addresses
-        rpc_adr = "tcp://*:6665"
+        rpc_adr = "tcp://*:" + str(7775 + options.id_gui)
+        fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
 
-        self.samples_to_receive = int(options.num_samples)
-        self.gain = float(options.gain)
-        self.frequency = float(options.frequency)
-        self.samp_rate = float(options.samp_rate)
-        self.bw = float(options.bandwith)
-        self.lo_offset = float(options.lo_offset)
-        self.antenna = options.antenna
+        self.samples_to_receive = 1000
+        self.frequency = 2.4e9
+        self.samp_rate = 10e6
+        self.bw = 1e6
+        self.lo_offset = 0
 
-        self.receivers = {}
+        self.results = {}
 
         # ZeroMQ
-        self.probe_manager = zeromq.probe_manager()
-        self.rpc_manager = zeromq.rpc_manager()
+        fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
+
+        self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
+        self.rpc_manager.set_request_socket(fusion_center_adr)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
+        self.rpc_manager.add_interface("register_another_gui",self.register_another_gui)
+        self.rpc_manager.add_interface("get_results",self.get_results)
+        self.rpc_manager.add_interface("set_gui_frequency",self.set_gui_frequency)
+        self.rpc_manager.add_interface("set_gui_samp_rate",self.set_gui_samp_rate)
+        self.rpc_manager.add_interface("set_gui_bw",self.set_gui_bw)
+        self.rpc_manager.add_interface("set_gui_lo_offset",self.set_gui_lo_offset)
+        self.rpc_manager.add_interface("set_gui_samples_to_receive",self.set_gui_samples_to_receive)
+        self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
+        self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.start_watcher()
 
         self.gui.setWindowTitle(window_name)
-        self.init_plot(self.gui.qwtPlotUsrp1)
-        self.init_plot(self.gui.qwtPlotUsrp2)
+        self.init_plot(self.gui.qwtPlotReceiver1)
+        self.init_plot(self.gui.qwtPlotReceiver2)
         self.gui.qwtPlotCorrelation.setTitle("Cross correlation")
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay")
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, "Amplitude")
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100, 100)
+
+        # create and set model for receivers table view
+        self.tmr = gui_helpers.TableModelReceivers(self)
+        self.gui.tableViewReceivers.setModel(self.tmr)
+        self.gui.tableViewReceivers.setItemDelegateForColumn(1, gui_helpers.SpinBoxDelegate(self.gui.tableViewReceivers))
+        self.gui.tableViewReceivers.setItemDelegateForColumn(2, gui_helpers.ComboDelegate(self.gui.tableViewReceivers))
+        self.set_delegate = False
+
+        # create and set model for guis table view
+        self.tmg = gui_helpers.TableModelGuis(self)
+        self.gui.tableViewGuis.setModel(self.tmg)
 
         # Grid
         pen = Qt.QPen(Qt.Qt.DotLine)
@@ -65,10 +90,15 @@ class gui(QtGui.QMainWindow):
         grid_correlation.attach(self.gui.qwtPlotCorrelation)
 
         #Signals
-        self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.probe_manager.watcher)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
-        self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_receivers)
+        self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonResetReceivers, QtCore.SIGNAL("clicked()"), self.reset_receivers)
+        self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
+        self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
+        self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
+        self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
+        self.connect(self.gui.loOffsetSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset)
+        self.connect(self.gui.samplesToReceiveSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
@@ -76,6 +106,9 @@ class gui(QtGui.QMainWindow):
 
         # start update timer
         self.update_timer.start(33)
+        self.timer_register = threading.Thread(target = self.register_gui)
+        self.timer_register.daemon = True
+        self.timer_register.start()
 
     def init_plot(self, qwtPlot):
         qwtPlot.setTitle("Signal Scope")
@@ -89,72 +122,125 @@ class gui(QtGui.QMainWindow):
         grid.setPen(pen)
         grid.attach(qwtPlot)
 
-    def register_receiver(self, hostname, serial, id_rx):
-        if not self.receivers.has_key(serial):
-            rpc_adr = "tcp://" + hostname + ":" + str(6665 + id_rx)
-            probe_adr = "tcp://" + hostname + ":" + str(5555 + id_rx)
-            self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr)
-            self.receivers[serial].set_gain(self.gain)
-            self.receivers[serial].set_bw(self.bw)
-            self.receivers[serial].set_samp_rate(self.samp_rate)
-            self.receivers[serial].set_antenna(self.antenna)
-            self.receivers[serial].frequency = self.frequency
-            self.receivers[serial].lo_offset = self.lo_offset
-            self.receivers[serial].samples_to_receive = self.samples_to_receive
-            self.probe_manager.add_socket(self.receivers[serial].probe_address, 'complex64', self.receivers[serial].receive_samples)
-            print serial, "registered"
-            #threading.Thread(target = self.finish_register(serial)).start()
+    def register_gui(self):
+        first = True
+        while(True):
+            # register receiver [hostname, usrp_serial, rx_id]
+            self.rpc_manager.request("register_gui",[os.uname()[1], options.id_gui, first])
+            first = False
+            print "Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.tmr.receivers
+            for receiver in self.tmr.receivers.values():
+                print receiver.gain
+                print receiver.antenna
+            time.sleep(10)
 
-    def finish_register(self, serial):
-        time.sleep(5)
-        self.reset_receivers()
-        print serial, "registered"
+    def set_frequency(self):
+        self.frequency = self.gui.frequencySpin.value()*1e6
+        self.rpc_manager.request("set_frequency",[self.frequency])
 
-    def start_receivers(self):
-        for key in self.receivers:
-            receiver = self.receivers[key]
-            receiver.request_samples()
+    def set_lo_offset(self):
+        self.lo_offset = self.gui.loOffsetSpin.value()*1e6
+        self.rpc_manager.request("set_lo_offset",[self.lo_offset])
 
-    def reset_receivers(self):
-        self.update_timer.stop()
-        self.probe_manager = zeromq.probe_manager()
-        for key in self.receivers:
-            receiver = self.receivers[key]
-            self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
-            receiver.samples = []
-            receiver.first_packet = True
-            receiver.reception_complete = False
-        self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.probe_manager.watcher)
-        self.update_timer.start(33)
-        self.probe_manager.watcher()
+    def set_samples_to_receive(self):
+        self.samples_to_receive = self.gui.samplesToReceiveSpin.value()
+        self.rpc_manager.request("set_samples_to_receive",[self.samples_to_receive])
+
+    def set_samp_rate(self):
+        self.samp_rate = self.gui.sampRateSpin.value()*1e6
+        self.rpc_manager.request("set_samp_rate",[self.samp_rate])
+
+    def set_bw(self):
+        self.bw = self.gui.bwSpin.value()*1e6
+        self.rpc_manager.request("set_bw",[self.bw])
+
+    def set_gain(self, gain, serial):
+        self.rpc_manager.request("set_gain",[gain, serial])
+
+    def set_antenna(self, antenna, serial):
+        self.rpc_manager.request("set_antenna",[antenna, serial])
+
+    def set_gui_frequency(self, frequency):
+        self.gui.frequencySpin.setValue(frequency/1e6)
+
+    def set_gui_lo_offset(self, lo_offset):
+        self.gui.loOffsetSpin.setValue(lo_offset/1e6)
+
+    def set_gui_samples_to_receive(self, samples_to_receive):
+        self.gui.samplesToReceiveSpin.setValue(samples_to_receive)
+
+    def set_gui_samp_rate(self, samp_rate):
+        self.gui.sampRateSpin.setValue(samp_rate/1e6)
+
+    def set_gui_bw(self, bw):
+        self.gui.bwSpin.setValue(bw/1e6)
+
+    def set_gui_gain(self, gain, serial):
+        self.tmr.set_gain(gain, serial)
+
+    def set_gui_antenna(self, antenna, serial):
+        self.tmr.set_antenna(antenna, serial)
+
+    def get_results(self, results):
+        self.results = results
 
     def process_results(self):
-        if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
-            for key in self.receivers:
-                receiver = self.receivers[key]
-                receiver.first_packet = True
-                receiver.reception_complete = False
-            self.plot_receiver(self.gui.qwtPlotUsrp1, self.receivers["F57197"].samples)
-            self.plot_receiver(self.gui.qwtPlotUsrp2, self.receivers["F571B0"].samples)
-            correlation = self.correlate(self.receivers["F57197"],self.receivers["F571B0"])
+        if self.set_delegate:
+            for row in range(0, self.tmr.rowCount()):
+                self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 1))
+                self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 2))
+            self.set_delegate = False
+
+        if len(self.results.items()) > 0:
+            print "Delay:",self.results["delay"]
+            self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"])
+            self.plot_receiver(self.gui.qwtPlotReceiver1, self.results["receiver1"])
+            self.plot_receiver(self.gui.qwtPlotReceiver2, self.results["receiver2"])
+        self.results = {}
+
+    def register_receiver(self, serial, gain, antenna):
+        if self.tmr.registerReceiver(serial, gain, antenna):
+            self.set_delegate = True
+            # populate cross-correlation combo boxes
+            self.gui.comboBoxReceiver1.addItem(serial)
+            self.gui.comboBoxReceiver2.addItem(serial)
+
+    def register_another_gui(self, serial):
+        self.tmg.registerGui(serial)
+
+    def start_correlation(self):
+        receiver1 = str(self.gui.comboBoxReceiver1.currentText())
+        receiver2 = str(self.gui.comboBoxReceiver2.currentText())
+        self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
+
+    def reset_receivers(self):
+        self.rpc_manager.request("reset_receivers")
+
+    def update_receivers(self):
+        self.gui.tableViewReceivers.hide()
+        self.gui.tableViewReceivers.show()
+        def runit():
+            self.rpc_manager.request("update_receivers")
+        threading.Thread(target=runit).start()
 
     # plot cross correlation
     def plot_correlation(self, plot, samples):
         num_corr_samples = (len(samples) + 1)/2
-        self.x = range(-num_corr_samples+1,num_corr_samples,1)
-        self.y = samples
+        x = range(-num_corr_samples+1,num_corr_samples,1)
+        y = samples
         # clear the previous points from the plot
         plot.clear()
         # draw curve with new points and plot
         curve = Qwt.QwtPlotCurve()
         curve.setPen(Qt.QPen(Qt.Qt.blue, 2))
         curve.attach(plot)
-        curve.setData(self.x, self.y)
+        curve.setData(x, y)
         plot.replot()
 
     def plot_receiver(self, qwtPlot, samples):
         x = range(0,len(samples),1)
         y = np.absolute(samples)
+        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive)
         # clear the previous points from the plot
         qwtPlot.clear()
         # draw curve with new points and plot
@@ -164,37 +250,16 @@ class gui(QtGui.QMainWindow):
         curve.setData(x, y)
         qwtPlot.replot()
 
-    def correlate(self, receiver1, receiver2):
-        self.correlation = np.absolute(np.correlate(receiver1.samples, receiver2.samples, "full", False)).tolist()
-        delay = self.correlation.index(np.max(self.correlation)) - self.samples_to_receive + 1
-        self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(delay) + " samples")
-        #print "Delay:", delay, "samples"
-        self.plot_correlation(self.gui.qwtPlotCorrelation, self.correlation)
-
 ###############################################################################
 # Options Parser
 ###############################################################################
 def parse_options():
     """ Options parser. """
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
-    parser.add_option("-s", "--servername", type="string", default="localhost",
-                      help="Server hostname")
-    parser.add_option("-c", "--clientname", type="string", default="localhost",
-                      help="Server hostname")
-    parser.add_option("", "--num-samples", type="string", default="5000",
-                      help="Number of samples in burst")
-    parser.add_option("", "--antenna", type="string", default="RX2",
-                      help="Antenna to use")
-    parser.add_option("", "--gain", type="float", default="30",
-                      help="Gain in dB")
-    parser.add_option("", "--frequency", type="string", default="2.48e9",
-                      help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="10e6",
-                      help="Sampling rate")
-    parser.add_option("", "--lo-offset", type="string", default="0",
-                      help="LO offset")
-    parser.add_option("", "--bandwith", type="string", default="1e6",
-                      help="Bandwith")
+    parser.add_option("", "--fusion-center", type="string", default="localhost",
+                      help="Fusion center address")
+    parser.add_option("-i", "--id-gui", type="int", default="1",
+                      help="GUI ID")
     (options, args) = parser.parse_args()
     return options
 
@@ -207,4 +272,3 @@ if __name__ == "__main__":
     qapp.main_window = gui("Remote GNU Radio GUI",options)
     qapp.main_window.show()
     qapp.exec_()
-

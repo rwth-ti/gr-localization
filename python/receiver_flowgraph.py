@@ -45,7 +45,7 @@ class top_block(gr.top_block):
             uhd.stream_args(
                 cpu_format="fc32",
                 channels=range(1),
-             ),
+             ), False
         )
         self.usrp_source.set_clock_source("external", 0)
         self.usrp_source.set_time_source("external", 0)
@@ -76,9 +76,11 @@ class top_block(gr.top_block):
         self.usrp_source.set_antenna(antenna, 0)
 
     def register_receiver(self):
+        first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_receiver",[os.uname()[1],self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx])
+            self.rpc_manager.request("register_receiver",[os.uname()[1],self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx,first])
+            first = False
             time.sleep(10)
 
     def start_fg(self, samples_to_receive, freq, lo_offset):
@@ -100,9 +102,11 @@ class top_block(gr.top_block):
             stream_cmd.stream_now = False
             stream_cmd.time_spec = time_to_recv
             self.usrp_source.issue_stream_cmd(stream_cmd)
-            print "Time now: ", time_now
-            print "Time last pps: ", time_last_pps
-            print "Time to receive: ", time_to_recv.get_real_secs()
+            print "Time now:", time_now
+            print "Time last pps:", time_last_pps
+            print "Time to receive:", time_to_recv.get_real_secs()
+            usrp = self.usrp_source
+            print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
         except RuntimeError:
             print "Can't start, flowgraph already running!"
 
@@ -132,10 +136,6 @@ class top_block(gr.top_block):
         print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
         print "NMEA time sync complete!"
 
-        self.timer_register = threading.Thread(target = self.register_receiver)
-        self.timer_register.daemon = True
-        self.timer_register.start()
-
 ###############################################################################
 # Options Parser
 ###############################################################################
@@ -148,8 +148,6 @@ def parse_options():
                       help="Fusion center address")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
-    parser.add_option("-f", "--rx-freq", type="float", default="2.4e9",
-                      help="Receiver frequency")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
     (options, args) = parser.parse_args()
@@ -172,9 +170,11 @@ if __name__ == "__main__":
 
     try:
         tb.start()
-        time.sleep(1)
         tb.usrp_source.stop()
-        tb.sync_time_nmea()
+
+        tb.timer_register = threading.Thread(target = tb.register_receiver)
+        tb.timer_register.daemon = True
+        tb.timer_register.start()
         # keep the program running when flowgraph is stopped
         while True:
             time.sleep(1)

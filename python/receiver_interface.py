@@ -2,13 +2,14 @@
 from gnuradio import zeromq
 import numpy as np
 import time
+import rpc_manager as rpc_manager_local
 
 class receiver_interface():
 
     def __init__(self, rpc_address, probe_address):
         self.rpc_address = rpc_address
         self.probe_address = probe_address
-        self.rpc_mgr = zeromq.rpc_manager()
+        self.rpc_mgr = rpc_manager_local.rpc_manager()
         self.rpc_mgr.set_request_socket(rpc_address)
 
         self.samples_to_receive = 0
