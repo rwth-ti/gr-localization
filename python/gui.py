@@ -17,6 +17,15 @@ import time
 import threading
 import rpc_manager as rpc_manager_local
 import gui_helpers
+from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg as NavigationToolbar
+import matplotlib.pyplot as plt
+from mpl_toolkits.basemap import Basemap
+import requests
+from StringIO import StringIO
+from PIL import Image
+from pyproj import Proj, transform
+import math
 
 class gui(QtGui.QMainWindow):
     def __init__(self, window_name, options, parent=None):
@@ -62,6 +71,15 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.start_watcher()
 
         self.gui.setWindowTitle(window_name)
+
+        self.figure = plt.figure()
+        self.canvas = FigureCanvas(self.figure)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+
+        self.verticalLayoutMap.addWidget(self.toolbar)
+        self.verticalLayoutMap.addWidget(self.canvas)
+        threading.Thread(target = self.init_map).start()
+
         self.init_plot(self.gui.qwtPlotReceiver1)
         self.init_plot(self.gui.qwtPlotReceiver2)
         self.gui.qwtPlotCorrelation.setTitle("Cross correlation")
@@ -109,6 +127,49 @@ class gui(QtGui.QMainWindow):
         self.timer_register = threading.Thread(target = self.register_gui)
         self.timer_register.daemon = True
         self.timer_register.start()
+
+    def init_map(self):
+        bbox = 6.0600,50.7775,6.0670,50.7810
+
+        inProj = Proj(init='epsg:4326')
+        outProj = Proj(init='epsg:3857')
+        x0, y0 = transform(inProj,outProj,bbox[0],bbox[1])
+        x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
+        x = x1-x0
+        y = y1-y0
+        scale = math.ceil(math.sqrt(x*y/0.3136)) * 2
+
+        r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+
+        if r.status_code == 200:
+            img = Image.open(StringIO(r.content))
+
+        ax = self.figure.add_subplot(111)
+
+        #
+        # create basemap
+        #
+        map = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
+                      urcrnrlon=bbox[2], urcrnrlat=bbox[3],
+                      projection='merc', ax=ax)
+
+        map.imshow(img, interpolation='lanczos', origin='upper')
+        #
+        # plot custom points
+        #
+        x0, y0 = 6.0631, 50.77925 # TI
+        x1, y1 = 6.0653, 50.7790 # UMIC
+        x2, y2 = 6.0612, 50.7782 # Informatik
+        x, y = map((x0, x1, x2), (y0, y1, y2))
+        ax.scatter(x, y, c='red', edgecolor='none', s=50, alpha=0.9)
+
+        x0, y0 = 6.0622, 50.7787 # TX
+        #x0, y0 = 6.06274333333, 50.7792233333 # TX
+        x, y = map(x0, y0)
+        ax.scatter(x, y, c='blue', edgecolor='none', s=100, alpha=0.9)
+
+        self.canvas.draw()
+
 
     def init_plot(self, qwtPlot):
         qwtPlot.setTitle("Signal Scope")
