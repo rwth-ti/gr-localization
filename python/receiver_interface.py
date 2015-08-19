@@ -19,6 +19,8 @@ class receiver_interface():
         self.reception_complete = False
         self.samples = []
 
+        self.coordinates = [0.0, 0.0]
+
     def set_gain(self, gain):
         self.gain = gain
         self.rpc_mgr.request("set_gain",[self.gain])

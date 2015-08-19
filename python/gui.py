@@ -18,7 +18,6 @@ import threading
 import rpc_manager as rpc_manager_local
 import gui_helpers
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg as NavigationToolbar
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 import requests
@@ -66,6 +65,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.set_request_socket(fusion_center_adr)
         self.rpc_manager.add_interface("new_chat",self.new_chat)
+        self.rpc_manager.add_interface("sync_position",self.sync_position)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("register_another_gui",self.register_another_gui)
         self.rpc_manager.add_interface("get_results",self.get_results)
@@ -85,10 +85,13 @@ class gui(QtGui.QMainWindow):
         # map configuration
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
-        self.toolbar = NavigationToolbar(self.canvas, self)
+        self.toolbar = gui_helpers.NavigationToolbar(self.canvas, self)
+
+        self.canvas.mpl_connect("button_release_event", self.set_position)
 
         self.verticalLayoutMap.addWidget(self.toolbar)
         self.verticalLayoutMap.addWidget(self.canvas)
+
         threading.Thread(target = self.init_map).start()
 
         # correlation and signals
@@ -99,6 +102,15 @@ class gui(QtGui.QMainWindow):
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, "Amplitude")
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100, 100)
+
+        # create and set model for receivers position table view
+        self.tmrp = gui_helpers.TableModelReceiversPosition(self)
+        self.gui.tableViewReceiversPosition.setModel(self.tmrp)
+        self.gui.tableViewReceiversPosition.setItemDelegateForColumn(1, gui_helpers.PushButtonPositionDelegate(self))
+        self.set_delegate = False
+        self.setting_pos_receiver = ""
+
+        self.pending_receivers_to_plot = False
 
         # create and set model for receivers table view
         self.tmr = gui_helpers.TableModelReceivers(self)
@@ -143,7 +155,7 @@ class gui(QtGui.QMainWindow):
         self.timer_register.start()
 
     def init_map(self):
-        bbox = 6.0600,50.7775,6.0670,50.7810
+        bbox = 6.0580,50.7775,6.0690,50.7810
 
         inProj = Proj(init='epsg:4326')
         outProj = Proj(init='epsg:3857')
@@ -158,32 +170,25 @@ class gui(QtGui.QMainWindow):
         if r.status_code == 200:
             img = Image.open(StringIO(r.content))
 
-        ax = self.figure.add_subplot(111)
+        self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
         #
         # create basemap
         #
-        map = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
+        self.basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
                       urcrnrlon=bbox[2], urcrnrlat=bbox[3],
-                      projection='merc', ax=ax)
+                      projection='merc', ax=self.ax)
 
-        map.imshow(img, interpolation='lanczos', origin='upper')
-        #
-        # plot custom points
-        #
-        x0, y0 = 6.0631, 50.77925 # TI
-        x1, y1 = 6.0653, 50.7790 # UMIC
-        x2, y2 = 6.0612, 50.7782 # Informatik
-        x, y = map((x0, x1, x2), (y0, y1, y2))
-        ax.scatter(x, y, c='red', edgecolor='none', s=50, alpha=0.9)
+        self.basemap.imshow(img, interpolation='lanczos', origin='upper')
 
-        x0, y0 = 6.0622, 50.7787 # TX
-        #x0, y0 = 6.06274333333, 50.7792233333 # TX
-        x, y = map(x0, y0)
-        ax.scatter(x, y, c='blue', edgecolor='none', s=100, alpha=0.9)
+        self.zp = gui_helpers.ZoomPan()
+        figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
+        figPan = self.zp.pan_factory(self.ax)
 
+        self.figure.tight_layout(pad=0)
+        #self.figure.patch.set_visible(False)
+        self.ax.axis('off')
         self.canvas.draw()
-
 
     def init_plot(self, qwtPlot):
         qwtPlot.setTitle("Signal Scope")
@@ -208,6 +213,32 @@ class gui(QtGui.QMainWindow):
                 print receiver.gain
                 print receiver.antenna
             time.sleep(10)
+
+    def sync_position(self, serial, coordinates):
+        receiver = self.receivers[serial]
+        receiver.coordinates = coordinates[0],coordinates[1]
+        # remove point from map if was set
+        if hasattr(receiver, "scatter"):
+            receiver.scatter.remove()
+            receiver.annotation.remove()
+        if hasattr(self, "ax"):
+            # save scattered point into receiver properties
+            receiver.scatter = self.ax.scatter(coordinates[0], coordinates[1], marker='x', c='red', s=50, alpha=0.9)
+            # set annotation RXx
+            text = "RX" + str(self.receivers.keys().index(serial) + 1)
+            receiver.annotation = self.ax.annotate(text, coordinates)
+            self.canvas.draw()
+        else:
+            # ax not rendered yet, so update position when available
+            self.pending_receivers_to_plot = True
+
+
+    def set_position(self, mouse_event):
+        if self.setting_pos_receiver is not "":
+            receiver = self.receivers[self.setting_pos_receiver]
+            self.rpc_manager.request("sync_position",[self.setting_pos_receiver, [mouse_event.xdata,mouse_event.ydata]])
+            self.setting_pos_receiver = ""
+            self.zp.enabled = True
 
     def new_chat(self, chat):
         self.chat_pending = True
@@ -270,6 +301,18 @@ class gui(QtGui.QMainWindow):
         self.results = results
 
     def process_results(self):
+        if hasattr(self, "ax") and self.pending_receivers_to_plot:
+            for key in self.receivers:
+                receiver = self.receivers[key]
+                # save scattered point into receiver properties
+                receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x', c='red', s=50, alpha=0.9)
+                # set annotation RXx
+                text = "RX" + str(self.receivers.keys().index(key) + 1)
+                receiver.annotation = self.ax.annotate(text, receiver.coordinates)
+
+            self.canvas.draw()
+            self.pending_receivers_to_plot = False
+
         if self.chat_pending:
             self.textEdit.setText(self.chats)
             sb = self.textEdit.verticalScrollBar()
@@ -280,6 +323,8 @@ class gui(QtGui.QMainWindow):
             for row in range(0, self.tmr.rowCount()):
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 1))
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 2))
+                self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 1))
+                self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 2))
             self.set_delegate = False
 
         if len(self.results.items()) > 0:
@@ -293,6 +338,7 @@ class gui(QtGui.QMainWindow):
         if not self.receivers.has_key(serial):
             self.receivers[serial] = gui_helpers.receiver_item(gain, antenna)
             self.tmr.rowsInserted.emit(QtCore.QModelIndex(),0,0)
+            self.tmrp.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.set_delegate = True
             # populate cross-correlation combo boxes
             self.gui.comboBoxReceiver1.addItem(serial)

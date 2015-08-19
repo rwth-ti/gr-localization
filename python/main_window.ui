@@ -20,7 +20,7 @@
    <string>USRP Sync Example</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout_5">
+   <layout class="QHBoxLayout" name="horizontalLayout_5">
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
@@ -31,44 +31,91 @@
         <string>Map</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_7">
-        <item row="0" column="0">
-         <layout class="QVBoxLayout" name="verticalLayoutMap"/>
-        </item>
-        <item row="1" column="0">
-         <widget class="QGroupBox" name="groupBox_10">
-          <property name="maximumSize">
-           <size>
-            <width>16777215</width>
-            <height>200</height>
-           </size>
-          </property>
-          <property name="title">
-           <string>Chat</string>
-          </property>
-          <layout class="QVBoxLayout" name="verticalLayout_7">
-           <item>
-            <widget class="QTextEdit" name="textEdit">
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item row="2" column="1">
+         <layout class="QVBoxLayout" name="verticalLayout_8">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayoutMap"/>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="groupBox_10">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>200</height>
+             </size>
+            </property>
+            <property name="title">
+             <string>Chat</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_7">
              <item>
-              <widget class="QLineEdit" name="lineEdit"/>
-             </item>
-             <item>
-              <widget class="QPushButton" name="pushButtonChat">
-               <property name="text">
-                <string>Send</string>
+              <widget class="QTextEdit" name="textEdit">
+               <property name="readOnly">
+                <bool>true</bool>
                </property>
               </widget>
              </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_4">
+               <item>
+                <widget class="QLineEdit" name="lineEdit"/>
+               </item>
+               <item>
+                <widget class="QPushButton" name="pushButtonChat">
+                 <property name="text">
+                  <string>Send</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
             </layout>
-           </item>
-          </layout>
-         </widget>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="2" column="2">
+         <layout class="QVBoxLayout" name="verticalLayout_9">
+          <item>
+           <widget class="QTableView" name="tableViewReceiversPosition">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>350</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <attribute name="horizontalHeaderMinimumSectionSize">
+             <number>60</number>
+            </attribute>
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>true</bool>
+            </attribute>
+            <attribute name="verticalHeaderStretchLastSection">
+             <bool>false</bool>
+            </attribute>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButtonOnce">
+            <property name="text">
+             <string>Localize!!</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButtonContinuous">
+            <property name="text">
+             <string>Start continuous</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </widget>
@@ -214,7 +261,7 @@
       </widget>
       <widget class="QWidget" name="tab_3">
        <attribute name="title">
-        <string>Registered nodes</string>
+        <string>Setup</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_5">
         <item row="0" column="0">
