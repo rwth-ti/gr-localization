@@ -8,6 +8,7 @@ class receiver_item():
     def __init__(self, gain, antenna):
         self.gain = gain
         self.antenna = antenna
+        self.coordinates = [0.0,0.0,0.0,0.0]
 
 class TableModelGuis(QtCore.QAbstractTableModel):
     def __init__(self, parent=None, *args):
@@ -47,52 +48,44 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
     def __init__(self, parent=None, *args):
         self.parent = parent
         QtCore.QAbstractTableModel.__init__(self, parent, *args)
-        self.receivers = {}
 
-    def rowCount(self, parent=QtCore.QModelIndex()): return len(self.receivers)
+    def rowCount(self, parent=QtCore.QModelIndex()): return len(self.parent.receivers)
     def columnCount(self, parent=QtCore.QModelIndex()): return 3
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         if not index.isValid(): return None
         if not role==QtCore.Qt.DisplayRole: return None
         if index.column() == 0:
-            return self.receivers.keys()[index.row()]
+            return self.parent.receivers.keys()[index.row()]
         elif index.column() == 1:
-            return self.receivers.values()[index.row()].gain
+            return self.parent.receivers.values()[index.row()].gain
         elif index.column() == 2:
-            return self.receivers.values()[index.row()].antenna
+            return self.parent.receivers.values()[index.row()].antenna
 
     def setData(self, index, value, role=QtCore.Qt.DisplayRole):
         if index.column() == 1:
             serial_index = self.index(index.row(),index.column()-1)
             serial = self.data(serial_index)
-            self.receivers[serial].gain = value
+            self.parent.receivers[serial].gain = value
             self.parent.set_gain(value, serial)
         if index.column() == 2:
             str_from_index = {0 : "TX/RX",
                               1 : "RX2",}[value]
             serial_index = self.index(index.row(),index.column()-2)
             serial = self.data(serial_index)
-            self.receivers[serial].antenna = str_from_index
+            self.parent.receivers[serial].antenna = str_from_index
             self.parent.set_antenna(str_from_index, serial)
-
-    def registerReceiver(self, serial, gain, antenna):
-        if not self.receivers.has_key(serial):
-            self.receivers[serial] = receiver_item(gain, antenna)
-            self.rowsInserted.emit(QtCore.QModelIndex(),0,0)
-            return True
-        return False
 
     def set_gain(self, gain, serial):
         print "gain:",gain
-        self.receivers[serial].gain = gain
-        index = self.index(self.receivers.keys().index(serial),1)
+        self.parent.receivers[serial].gain = gain
+        index = self.index(self.parent.receivers.keys().index(serial),1)
         self.dataChanged.emit(index, index)
 
     def set_antenna(self, antenna, serial):
         print "antenna:",antenna
-        self.receivers[serial].antenna = antenna
-        index = self.index(self.receivers.keys().index(serial),2)
+        self.parent.receivers[serial].antenna = antenna
+        index = self.index(self.parent.receivers.keys().index(serial),2)
         self.dataChanged.emit(index, index)
 
     def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):

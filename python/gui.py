@@ -55,6 +55,8 @@ class gui(QtGui.QMainWindow):
 
         self.results = {}
 
+        self.receivers = {}
+
         self.chats = ""
 
         # ZeroMQ
@@ -201,8 +203,8 @@ class gui(QtGui.QMainWindow):
             # register receiver [hostname, usrp_serial, rx_id]
             self.rpc_manager.request("register_gui",[self.hostname, options.id_gui, first])
             first = False
-            print "Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.tmr.receivers
-            for receiver in self.tmr.receivers.values():
+            print "Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.receivers
+            for receiver in self.receivers.values():
                 print receiver.gain
                 print receiver.antenna
             time.sleep(10)
@@ -288,7 +290,9 @@ class gui(QtGui.QMainWindow):
         self.results = {}
 
     def register_receiver(self, serial, gain, antenna):
-        if self.tmr.registerReceiver(serial, gain, antenna):
+        if not self.receivers.has_key(serial):
+            self.receivers[serial] = gui_helpers.receiver_item(gain, antenna)
+            self.tmr.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.set_delegate = True
             # populate cross-correlation combo boxes
             self.gui.comboBoxReceiver1.addItem(serial)
