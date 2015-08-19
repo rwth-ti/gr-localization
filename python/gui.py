@@ -40,6 +40,9 @@ class gui(QtGui.QMainWindow):
 
         self.update_timer = Qt.QTimer()
 
+        self.hostname = os.uname()[1]
+        self.gui_serial = self.hostname + str(options.id_gui)
+
         # socket addresses
         rpc_adr = "tcp://*:" + str(7775 + options.id_gui)
         fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
@@ -52,12 +55,15 @@ class gui(QtGui.QMainWindow):
 
         self.results = {}
 
+        self.chats = ""
+
         # ZeroMQ
         fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
 
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.set_request_socket(fusion_center_adr)
+        self.rpc_manager.add_interface("new_chat",self.new_chat)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("register_another_gui",self.register_another_gui)
         self.rpc_manager.add_interface("get_results",self.get_results)
@@ -72,6 +78,9 @@ class gui(QtGui.QMainWindow):
 
         self.gui.setWindowTitle(window_name)
 
+        self.chat_pending = False
+
+        # map configuration
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self)
@@ -80,6 +89,7 @@ class gui(QtGui.QMainWindow):
         self.verticalLayoutMap.addWidget(self.canvas)
         threading.Thread(target = self.init_map).start()
 
+        # correlation and signals
         self.init_plot(self.gui.qwtPlotReceiver1)
         self.init_plot(self.gui.qwtPlotReceiver2)
         self.gui.qwtPlotCorrelation.setTitle("Cross correlation")
@@ -109,6 +119,8 @@ class gui(QtGui.QMainWindow):
 
         #Signals
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
+        self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
+        self.connect(self.gui.lineEdit, QtCore.SIGNAL("returnPressed()"), self.send_chat)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonResetReceivers, QtCore.SIGNAL("clicked()"), self.reset_receivers)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
@@ -187,13 +199,23 @@ class gui(QtGui.QMainWindow):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_gui",[os.uname()[1], options.id_gui, first])
+            self.rpc_manager.request("register_gui",[self.hostname, options.id_gui, first])
             first = False
             print "Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.tmr.receivers
             for receiver in self.tmr.receivers.values():
                 print receiver.gain
                 print receiver.antenna
             time.sleep(10)
+
+    def new_chat(self, chat):
+        self.chat_pending = True
+        self.chats = self.chats + chat
+
+    def send_chat(self):
+        if len(self.lineEdit.text()) > 0:
+            chat = self.gui_serial + ": " + str(self.lineEdit.text()) + "\n"
+            self.rpc_manager.request("forward_chat", [chat])
+            self.lineEdit.setText("")
 
     def set_frequency(self):
         self.frequency = self.gui.frequencySpin.value()*1e6
@@ -246,6 +268,12 @@ class gui(QtGui.QMainWindow):
         self.results = results
 
     def process_results(self):
+        if self.chat_pending:
+            self.textEdit.setText(self.chats)
+            sb = self.textEdit.verticalScrollBar()
+            sb.setValue(sb.maximum())
+            self.chat_pending = False
+
         if self.set_delegate:
             for row in range(0, self.tmr.rowCount()):
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 1))

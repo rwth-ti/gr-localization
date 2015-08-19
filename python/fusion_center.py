@@ -43,6 +43,7 @@ class fusion_center():
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.add_interface("register_gui",self.register_gui)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
+        self.rpc_manager.add_interface("forward_chat",self.forward_chat)
         self.rpc_manager.add_interface("start_receivers",self.start_receivers)
         self.rpc_manager.add_interface("reset_receivers",self.reset_receivers)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
@@ -55,6 +56,11 @@ class fusion_center():
         self.rpc_manager.add_interface("set_bw",self.set_bw)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.start_watcher()
+
+    def forward_chat(self, chat):
+        for gui in self.guis.values():
+            self.rpc_manager.set_request_socket(gui)
+            self.rpc_manager.request("new_chat",[chat])
 
     def register_gui(self, hostname, id_gui, first):
         was_not_registered = False
