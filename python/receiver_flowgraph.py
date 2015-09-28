@@ -16,7 +16,6 @@ import sys
 import os
 import threading
 import time
-import octoclock
 import rpc_manager as rpc_manager_local
 
 ###############################################################################
@@ -47,8 +46,6 @@ class top_block(gr.top_block):
                 channels=range(1),
              ), False
         )
-        self.usrp_source.set_clock_source("external", 0)
-        self.usrp_source.set_time_source("external", 0)
 
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
@@ -112,8 +109,6 @@ class top_block(gr.top_block):
 
     def sync_time_nmea(self):
         print "Begin time sync"
-        # get octoclock object
-        clock = octoclock.multi_usrp_clock()
         # get time of last pps from USRP
         last_pps_time = self.usrp_source.get_time_last_pps().get_real_secs()
         print "Last pps time before sync:", last_pps_time
@@ -124,7 +119,7 @@ class top_block(gr.top_block):
             print "Check last pps time:", last_pps_time_check
             if last_pps_time_check > last_pps_time:
                 # get pps time from NMEA and set time of next pps
-                time_nmea = clock.get_time_real_secs()
+		time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
                 self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                 print "Set USRP to NMEA time + 1s:", time_nmea + 1
                 synced = True
