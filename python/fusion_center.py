@@ -70,7 +70,7 @@ class fusion_center():
         was_not_registered = False
         gui_serial = hostname + str(id_gui)
         if not self.guis.has_key(gui_serial):
-            gui = gui_interface("tcp://" + ip_addr + ":" + str(7775 + id_gui))
+            gui = gui_interface("tcp://" + ip_addr + ":" + str(7775 + id_gui), hostname)
             self.guis[gui_serial] = gui
             was_not_registered = True
         else:
