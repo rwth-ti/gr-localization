@@ -26,6 +26,7 @@ from StringIO import StringIO
 from PIL import Image
 from pyproj import Proj, transform
 import math
+import socket
 
 class gui(QtGui.QMainWindow):
     def __init__(self, window_name, options, parent=None):
