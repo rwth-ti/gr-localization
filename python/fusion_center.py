@@ -60,37 +60,35 @@ class fusion_center():
 
     def forward_chat(self, chat):
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("new_chat",[chat])
+            gui.rpc_manager.request("new_chat",[chat])
     def sync_position(self, serial, coordinates):
         self.receivers[serial].coordinates = coordinates
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("sync_position",[serial, coordinates])
+            gui.rpc_manager.request("sync_position",[serial, coordinates])
 
-    def register_gui(self, hostname, id_gui, first):
+    def register_gui(self, ip_addr, hostname, id_gui, first):
         was_not_registered = False
-        gui = "tcp://" + hostname + ":" + str(7775 + id_gui)
         gui_serial = hostname + str(id_gui)
         if not self.guis.has_key(gui_serial):
+            gui = gui_interface("tcp://" + ip_addr + ":" + str(7775 + id_gui))
             self.guis[gui_serial] = gui
             was_not_registered = True
+        else:
+            gui = self.guis[gui_serial]
         if first or was_not_registered:
-            self.rpc_manager.set_request_socket(gui)
             for serial in self.receivers:
                 # request registration of each receiver in gui
-                self.rpc_manager.request("register_receiver",[serial, self.receivers[serial].gain, self.receivers[serial].antenna])
-                self.rpc_manager.request("sync_position",[serial, self.receivers[serial].coordinates])
-            self.rpc_manager.request("set_gui_frequency",[self.frequency])
-            self.rpc_manager.request("set_gui_lo_offset",[self.lo_offset])
-            self.rpc_manager.request("set_gui_samples_to_receive",[self.samples_to_receive])
-            self.rpc_manager.request("set_gui_bw",[self.bw])
-            self.rpc_manager.request("set_gui_samp_rate",[self.samp_rate])
+                gui.rpc_manager.request("register_receiver",[serial, self.receivers[serial].gain, self.receivers[serial].antenna])
+                gui.rpc_manager.request("sync_position",[serial, self.receivers[serial].coordinates])
+            gui.rpc_manager.request("set_gui_frequency",[self.frequency])
+            gui.rpc_manager.request("set_gui_lo_offset",[self.lo_offset])
+            gui.rpc_manager.request("set_gui_samples_to_receive",[self.samples_to_receive])
+            gui.rpc_manager.request("set_gui_bw",[self.bw])
+            gui.rpc_manager.request("set_gui_samp_rate",[self.samp_rate])
             for gui in self.guis.values():
-                self.rpc_manager.set_request_socket(gui)
                 for serial in self.guis:
                     # request registration in each gui
-                    self.rpc_manager.request("register_another_gui",[serial])
+                    gui.rpc_manager.request("register_another_gui",[serial])
             print gui_serial, "registered"
 
     def register_receiver(self, hostname, serial, id_rx, first):
@@ -118,8 +116,7 @@ class fusion_center():
             self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
             for gui in self.guis.values():
                 # request registration in each gui
-                self.rpc_manager.set_request_socket(gui)
-                self.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna])
+                gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna])
             self.update_receivers()
             print serial, "registered"
             #threading.Thread(target = self.finish_register(serial)).start()
@@ -169,52 +166,45 @@ class fusion_center():
         for receiver in self.receivers.values():
             receiver.frequency = frequency
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_frequency",[frequency])
+            gui.rpc_manager.request("set_gui_frequency",[frequency])
 
     def set_lo_offset(self, lo_offset):
         self.lo_offset = lo_offset
         for receiver in self.receivers.values():
             receiver.lo_offset = lo_offset
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_lo_offset",[lo_offset])
+            gui.rpc_manager.request("set_gui_lo_offset",[lo_offset])
 
     def set_samples_to_receive(self, samples_to_receive):
         self.samples_to_receive = samples_to_receive
         for receiver in self.receivers.values():
             receiver.samples_to_receive = samples_to_receive
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_samples_to_receive",[samples_to_receive])
+            gui.rpc_manager.request("set_gui_samples_to_receive",[samples_to_receive])
 
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
         for receiver in self.receivers.values():
             receiver.samp_rate = samp_rate
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_samp_rate",[samp_rate])
+            gui.rpc_manager.request("set_gui_samp_rate",[samp_rate])
 
     def set_bw(self, bw):
         self.bw = bw
         for receiver in self.receivers.values():
             receiver.bw = bw
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_bw",[bw])
+            gui.rpc_manager.request("set_gui_bw",[bw])
 
     def set_gain(self, gain, serial):
         self.receivers[serial].gain = gain
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_gain",[gain, serial])
+            gui.rpc_manager.request("set_gui_gain",[gain, serial])
 
     def set_antenna(self, antenna, serial):
         self.receivers[serial].antenna = antenna
         for gui in self.guis.values():
-            self.rpc_manager.set_request_socket(gui)
-            self.rpc_manager.request("set_gui_antenna",[antenna, serial])
+            gui.rpc_manager.request("set_gui_antenna",[antenna, serial])
 
     def process_results(self):
         while True:
@@ -225,8 +215,7 @@ class fusion_center():
                 correlation, delay = self.correlate(receiver1,receiver2)
                 results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay}
                 for gui in self.guis.values():
-                    self.rpc_manager.set_request_socket(gui)
-                    self.rpc_manager.request("get_results",[results])
+                    gui.rpc_manager.request("get_results",[results])
                 for receiver in self.receivers.values():
                     receiver.first_packet = True
                     receiver.reception_complete = False
@@ -243,6 +232,14 @@ class fusion_center():
 #    def send_results:
         # for gui in self.guis
         # data serialize 
+
+class gui_interface():
+    def __init__(self, rpc_address, hostname):
+        self.rpc_address = rpc_address
+        self.hostname = hostname
+        self.rpc_manager = rpc_manager_local.rpc_manager()
+        self.rpc_manager.set_request_socket(rpc_address)
+
 
 ###############################################################################
 # Options Parser

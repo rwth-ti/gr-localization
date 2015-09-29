@@ -222,14 +222,7 @@
              </layout>
             </widget>
            </item>
-           <item row="0" column="1">
-            <widget class="QPushButton" name="pushButtonRunReceivers">
-             <property name="text">
-              <string>Run</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
+           <item row="2" column="0">
             <widget class="QGroupBox" name="groupBox_9">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -247,12 +240,37 @@
              </layout>
             </widget>
            </item>
-           <item row="1" column="1">
+           <item row="2" column="1">
             <widget class="QPushButton" name="pushButtonResetReceivers">
              <property name="text">
               <string>Reset</string>
              </property>
             </widget>
+           </item>
+           <item row="0" column="1">
+            <layout class="QVBoxLayout" name="verticalLayout_5">
+             <item>
+              <widget class="QPushButton" name="pushButtonRunReceivers">
+               <property name="text">
+                <string>Run</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButtonRunReceiversLoop">
+               <property name="text">
+                <string>Run Loop</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButtonStopReceiversLoop">
+               <property name="text">
+                <string>Stop Loop</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
           </layout>
          </widget>

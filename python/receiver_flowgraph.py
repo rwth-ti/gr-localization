@@ -17,6 +17,7 @@ import os
 import threading
 import time
 import rpc_manager as rpc_manager_local
+import socket
 
 ###############################################################################
 # GNU Radio top_block
@@ -62,6 +63,12 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.start_watcher()
 
+
+        # Find out ip address
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect((options.fusion_center,6665))
+        self.ip_addr = s.getsockname()[0]
+
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
         self.sync_time_nmea()
@@ -76,7 +83,7 @@ class top_block(gr.top_block):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_receiver",[os.uname()[1],self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx,first])
+            self.rpc_manager.request("register_receiver",[self.ip_addr, self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx,first])
             first = False
             time.sleep(10)
 

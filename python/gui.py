@@ -3,6 +3,7 @@
 ###############################################################################
 # Imports
 ###############################################################################
+from __future__ import print_function
 from optparse import OptionParser
 from gnuradio.eng_option import eng_option
 import sys
@@ -58,9 +59,10 @@ class gui(QtGui.QMainWindow):
 
         self.chats = ""
 
-        # ZeroMQ
-        fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
+        self.store_results = False
+        self.run_loop = False
 
+        # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.set_request_socket(fusion_center_adr)
@@ -77,6 +79,11 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.start_watcher()
+
+        # Find out ip address
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect((options.fusion_center,6665))
+        self.ip_addr = s.getsockname()[0]
 
         self.gui.setWindowTitle(window_name)
 
@@ -136,6 +143,8 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
         self.connect(self.gui.lineEdit, QtCore.SIGNAL("returnPressed()"), self.send_chat)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
+        self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
+        self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_correlation_loop)
         self.connect(self.gui.pushButtonResetReceivers, QtCore.SIGNAL("clicked()"), self.reset_receivers)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
@@ -206,12 +215,12 @@ class gui(QtGui.QMainWindow):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_gui",[self.hostname, options.id_gui, first])
+            self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
             first = False
-            print "Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.receivers
+            print("Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.receivers)
             for receiver in self.receivers.values():
-                print receiver.gain
-                print receiver.antenna
+                print(receiver.gain)
+                print(receiver.antenna)
             time.sleep(10)
 
     def sync_position(self, serial, coordinates):
@@ -328,7 +337,10 @@ class gui(QtGui.QMainWindow):
             self.set_delegate = False
 
         if len(self.results.items()) > 0:
-            print "Delay:",self.results["delay"]
+            print("Delay:",self.results["delay"])
+            self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
+            if self.store_results:
+                print(str(time.time()) + " Delay: " + str(self.results["delay"]) + " samples", file=open("results.txt","a"))
             self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"])
             self.plot_receiver(self.gui.qwtPlotReceiver1, self.results["receiver1"])
             self.plot_receiver(self.gui.qwtPlotReceiver2, self.results["receiver2"])
@@ -348,9 +360,24 @@ class gui(QtGui.QMainWindow):
         self.tmg.registerGui(serial)
 
     def start_correlation(self):
+        threading.Thread(target = self.send_correlation_command).start()
+
+    def start_correlation_loop(self):
+        self.store_results = True
+        self.run_loop = True
+        threading.Thread(target = self.send_correlation_command).start()
+
+    def stop_correlation_loop(self):
+        self.run_loop = False
+        self.store_results = False
+
+    def send_correlation_command(self):
         receiver1 = str(self.gui.comboBoxReceiver1.currentText())
         receiver2 = str(self.gui.comboBoxReceiver2.currentText())
         self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
+        while self.run_loop:
+            self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
+            time.sleep(1.5)
 
     def reset_receivers(self):
         self.rpc_manager.request("reset_receivers")
