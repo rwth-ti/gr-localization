@@ -83,7 +83,7 @@ class gui(QtGui.QMainWindow):
 
         # Find out ip address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((options.fusion_center,6665))
+        s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
 
         self.gui.setWindowTitle(window_name)

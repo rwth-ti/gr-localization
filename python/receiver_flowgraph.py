@@ -66,7 +66,7 @@ class top_block(gr.top_block):
 
         # Find out ip address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((options.fusion_center,6665))
+        s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
 
     def set_samp_rate(self,samp_rate):
