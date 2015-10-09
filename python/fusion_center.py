@@ -3,6 +3,7 @@
 ###############################################################################
 # Imports
 ###############################################################################
+from __future__ import print_function
 from optparse import OptionParser
 from gnuradio.eng_option import eng_option
 import sys
@@ -37,6 +38,11 @@ class fusion_center():
 
         self.correlation_receivers = ["",""]
 
+        self.delay_history = []
+        self.store_results = False
+        self.results_file = ""
+        self.run_loop = False
+
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
         self.rpc_manager = rpc_manager_local.rpc_manager()
@@ -49,6 +55,8 @@ class fusion_center():
         self.rpc_manager.add_interface("reset_receivers",self.reset_receivers)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
+        self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
+        self.rpc_manager.add_interface("stop_correlation_loop",self.stop_correlation_loop)
         self.rpc_manager.add_interface("set_frequency",self.set_frequency)
         self.rpc_manager.add_interface("set_lo_offset",self.set_lo_offset)
         self.rpc_manager.add_interface("set_samples_to_receive",self.set_samples_to_receive)
@@ -89,7 +97,7 @@ class fusion_center():
                 for serial in self.guis:
                     # request registration in each gui
                     gui.rpc_manager.request("register_another_gui",[serial])
-            print gui_serial, "registered"
+            print(gui_serial, "registered")
 
     def register_receiver(self, hostname, serial, id_rx, first):
         was_not_registered = False
@@ -118,14 +126,14 @@ class fusion_center():
                 # request registration in each gui
                 gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna])
             self.update_receivers()
-            print serial, "registered"
+            print(serial, "registered")
             #threading.Thread(target = self.finish_register(serial)).start()
             #self.reset_receivers()
 
     def finish_register(self, serial):
         time.sleep(5)
         self.reset_receivers()
-        print serial, "registered"
+        print(serial, "registered")
 
     def start_receivers(self, freq, lo_offset, samples_to_receive):
         for receiver in self.receivers.values():
@@ -157,9 +165,27 @@ class fusion_center():
             receiver.samples_to_receive = self.samples_to_receive
 
     def start_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
-        self.start_receivers(freq, lo_offset, samples_to_receive)
-        self.correlation_receivers[0] = receiver1
-        self.correlation_receivers[1] = receiver2
+        threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
+
+    def start_correlation_loop(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
+        self.store_results = True
+        self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        self.run_loop = True
+        threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
+
+    def stop_correlation_loop(self):
+        self.run_loop = False
+        self.store_results = False
+        self.delay_history = []
+
+    def run_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
+	while True:
+            self.start_receivers(freq, lo_offset, samples_to_receive)
+            self.correlation_receivers[0] = receiver1
+            self.correlation_receivers[1] = receiver2
+            if not self.run_loop:
+                break
+            time.sleep(1.5)
 
     def set_frequency(self, frequency):
         self.frequency = frequency
@@ -213,7 +239,12 @@ class fusion_center():
                 receiver1 = self.receivers[self.correlation_receivers[0]]
                 receiver2 = self.receivers[self.correlation_receivers[1]]
                 correlation, delay = self.correlate(receiver1,receiver2)
-                results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay}
+                if delay < 100:
+                    self.delay_history.append(delay)
+                results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
+                if self.store_results:
+                    #print(str(time.time()) + " Delay: " + str(results["delay"]) + " samples", file=open(self.results_file,"a"))
+                    print(str(time.time()) + " Delay: " + str(results["delay"]) + " samples", file=open(self.results_file,"a"))
                 for gui in self.guis.values():
                     gui.rpc_manager.request("get_results",[results])
                 for receiver in self.receivers.values():
@@ -225,8 +256,8 @@ class fusion_center():
     def correlate(self, receiver1, receiver2):
         correlation = np.absolute(np.correlate(receiver1.samples, receiver2.samples, "full", False)).tolist()
         delay = int(correlation.index(np.max(correlation)) - self.samples_to_receive + 1)
-        print "Delay:", delay, "samples"
-        print "Correlation length:", len(correlation)
+        print("Delay:", delay, "samples")
+        print("Correlation length:", len(correlation))
         return correlation, delay
 
 #    def send_results:
@@ -259,7 +290,7 @@ def parse_options():
                       help="Gain in dB")
     parser.add_option("", "--frequency", type="string", default="2.48e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="10e6",
+    parser.add_option("", "--samp-rate", type="string", default="50e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")

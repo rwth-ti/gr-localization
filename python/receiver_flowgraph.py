@@ -18,6 +18,9 @@ import threading
 import time
 import rpc_manager as rpc_manager_local
 import socket
+import serial
+import calendar
+import octoclock
 
 ###############################################################################
 # GNU Radio top_block
@@ -47,6 +50,13 @@ class top_block(gr.top_block):
                 channels=range(1),
              ), False
         )
+
+        self.gps = options.gps
+
+        if self.gps != "lc_xo":
+            print "Using " + self.gps
+            self.usrp_source.set_clock_source("external", 0)
+            self.usrp_source.set_time_source("external", 0)
 
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
@@ -116,23 +126,43 @@ class top_block(gr.top_block):
 
     def sync_time_nmea(self):
         print "Begin time sync"
+        if self.gps == "octoclock":
+            clock = octoclock.multi_usrp_clock()
         # get time of last pps from USRP
         last_pps_time = self.usrp_source.get_time_last_pps().get_real_secs()
         print "Last pps time before sync:", last_pps_time
         synced = False
-        while not synced: 
-            # check for occurence of next pps
-            last_pps_time_check = self.usrp_source.get_time_last_pps().get_real_secs()
-            print "Check last pps time:", last_pps_time_check
-            if last_pps_time_check > last_pps_time:
-                # get pps time from NMEA and set time of next pps
-		time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
+        while not synced:
+            if self.gps == "lte_lite":
+                ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
+                while True:
+                    s = ser.readline()
+                    if "GPRMC" in s:
+                        ser.close()
+                        break
+                t = s.split(",")[1].split(".")[0]
+                d = s.split(",")[9]
+                my_time = time.strptime(t+d,"%H%M%S%d%m%y")
+                time_nmea = calendar.timegm(my_time)
                 self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                 print "Set USRP to NMEA time + 1s:", time_nmea + 1
                 synced = True
             else:
-                # sleep for 100 msec
-                time.sleep(0.1)
+                # check for occurence of next pps
+                last_pps_time_check = self.usrp_source.get_time_last_pps().get_real_secs()
+                print "Check last pps time:", last_pps_time_check
+                if last_pps_time_check > last_pps_time:
+                    # get pps time from NMEA and set time of next pps
+                    if self.gps == "octoclock":
+                        time_nmea = clock.get_time_real_secs()
+                    else:
+                        time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
+                    self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
+                    print "Set USRP to NMEA time + 1s:", time_nmea + 1
+                    synced = True
+                else:
+                    # sleep for 100 msec
+                    time.sleep(0.1)
         print "Just after NMEA sync: ", self.usrp_source.get_time_last_pps().get_real_secs()
         time.sleep(1)
         print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
@@ -148,6 +178,8 @@ def parse_options():
                       help="USRP serial number")
     parser.add_option("", "--fusion-center", type="string", default="localhost",
                       help="Fusion center address")
+    parser.add_option("-g", "--gps", type="string", default="lc_xo",
+                      help="GPS type")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
