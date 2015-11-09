@@ -10,6 +10,7 @@ class receiver_item():
         self.gain = gain
         self.antenna = antenna
         self.coordinates = [0.0,0.0]
+        self.coordinates_gps = [0.0,0.0]
 
 class TableModelReceiversPosition(QtCore.QAbstractTableModel):
     def __init__(self, parent=None, *args):

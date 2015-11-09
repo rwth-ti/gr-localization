@@ -20,6 +20,7 @@ class receiver_interface():
         self.samples = []
 
         self.coordinates = [0.0, 0.0]
+        self.coordinates_gps = [0.0, 0.0]
 
     def set_gain(self, gain):
         self.gain = gain
@@ -49,3 +50,5 @@ class receiver_interface():
             #print "reconstruction"
         if self.samples_to_receive == len(self.samples):
             self.reception_complete = True
+    def get_gps_position(self):
+        return self.rpc_mgr.request("get_gps_position")

@@ -22,6 +22,7 @@
 import zmq
 import pmt
 import threading
+import time
 
 
 class rpc_manager():
@@ -32,6 +33,7 @@ class rpc_manager():
         self.poller_req_out = zmq.Poller()
         self.poller_req_in = zmq.Poller()
         self.interfaces = dict()
+        self.busy = False
 
     def __del__(self):
         self.stop_watcher()
@@ -81,14 +83,25 @@ class rpc_manager():
         self.watcher_thread.join()
 
     def request(self, id_str, args=None):
+        time_waiting = 0
+        while self.busy:
+            sleep = 0.1
+            time_waiting = time_waiting + sleep
+            print "waiting"
+            time.sleep(sleep)
+            if time_waiting > 1:
+                self.busy = False
+            pass
+        self.busy = True
         socks = dict(self.poller_req_out.poll(10))
         if socks.get(self.req_socket) == zmq.POLLOUT:
             self.req_socket.send(pmt.serialize_str(pmt.to_pmt((id_str,args))))
             print "[RPC] request:", id_str, ", args:", args
-        socks = dict(self.poller_req_in.poll(5000))
+        socks = dict(self.poller_req_in.poll(1000))
         if socks.get(self.req_socket) == zmq.POLLIN:
             reply = pmt.to_python(pmt.deserialize_str(self.req_socket.recv()))
             print "[RPC] reply:", reply
+            self.busy = False
             return reply
 
     def callback(self, id_str, args):

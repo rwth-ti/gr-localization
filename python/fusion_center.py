@@ -54,6 +54,7 @@ class fusion_center():
         self.rpc_manager.add_interface("start_receivers",self.start_receivers)
         self.rpc_manager.add_interface("reset_receivers",self.reset_receivers)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
+        self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_correlation_loop",self.stop_correlation_loop)
@@ -66,13 +67,27 @@ class fusion_center():
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.start_watcher()
 
+        threading.Thread(target = self.poll_gps_position).start()
+
     def forward_chat(self, chat):
         for gui in self.guis.values():
             gui.rpc_manager.request("new_chat",[chat])
+
     def sync_position(self, serial, coordinates):
         self.receivers[serial].coordinates = coordinates
+        print(coordinates)
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position",[serial, coordinates])
+
+    def poll_gps_position(self):
+        while True:
+            for receiver in self.receivers.values():
+                receiver.coordinates_gps = receiver.get_gps_position()
+            time.sleep(1)
+
+    def get_gui_gps_position(self, serial):
+        for gui in self.guis.values():
+            threading.Thread(target = gui.rpc_manager.request, args = ("set_gps_position", [serial, self.receivers[serial].coordinates_gps])).start()
 
     def register_gui(self, ip_addr, hostname, id_gui, first):
         was_not_registered = False
@@ -179,7 +194,7 @@ class fusion_center():
         self.delay_history = []
 
     def run_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
-	while True:
+        while True:
             self.start_receivers(freq, lo_offset, samples_to_receive)
             self.correlation_receivers[0] = receiver1
             self.correlation_receivers[1] = receiver2
@@ -239,7 +254,7 @@ class fusion_center():
                 receiver1 = self.receivers[self.correlation_receivers[0]]
                 receiver2 = self.receivers[self.correlation_receivers[1]]
                 correlation, delay = self.correlate(receiver1,receiver2)
-                if delay < 100:
+                if abs(delay) < 100:
                     self.delay_history.append(delay)
                 results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
                 if self.store_results:

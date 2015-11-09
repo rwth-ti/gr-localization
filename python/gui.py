@@ -76,6 +76,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_samples_to_receive",self.set_gui_samples_to_receive)
         self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
+        self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -106,6 +107,7 @@ class gui(QtGui.QMainWindow):
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, "Amplitude")
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100, 100)
+        self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
         self.tmrp = gui_helpers.TableModelReceiversPosition(self)
@@ -168,7 +170,7 @@ class gui(QtGui.QMainWindow):
         x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
         x = x1-x0
         y = y1-y0
-        scale = math.ceil(math.sqrt(x*y/0.3136)) * 2
+        scale = math.ceil(math.sqrt(abs(x*y/0.3136))) * 2
 
         r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
 
@@ -219,6 +221,8 @@ class gui(QtGui.QMainWindow):
             time.sleep(10)
 
     def sync_position(self, serial, coordinates):
+        if serial not in self.receivers.keys():
+            return
         receiver = self.receivers[serial]
         receiver.coordinates = coordinates[0],coordinates[1]
         # remove point from map if was set
@@ -236,11 +240,33 @@ class gui(QtGui.QMainWindow):
             # ax not rendered yet, so update position when available
             self.pending_receivers_to_plot = True
 
+    def set_gps_position(self, serial, coordinates):
+        receiver = self.receivers[serial]
+        receiver.coordinates_gps = self.basemap(coordinates[0],coordinates[1])
+        print(receiver.coordinates)
+        print(receiver.coordinates_gps)
+        # remove point from map if was set
+        if hasattr(receiver, "scatter_gps"):
+            receiver.scatter_gps.remove()
+            receiver.annotation_gps.remove()
+        if hasattr(self, "ax"):
+            # save scattered point into receiver properties
+            receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1], marker='x', c='blue', s=50, alpha=0.9)
+            # set annotation RXx
+            text = "RX" + str(self.receivers.keys().index(serial) + 1)
+            receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps)
+            self.canvas.draw()
+        else:
+            # ax not rendered yet, so update position when available
+            self.pending_receivers_to_plot = True
 
     def set_position(self, mouse_event):
+        print("ahora")
         if self.setting_pos_receiver is not "":
             receiver = self.receivers[self.setting_pos_receiver]
+            print([mouse_event.xdata,mouse_event.ydata])
             self.rpc_manager.request("sync_position",[self.setting_pos_receiver, [mouse_event.xdata,mouse_event.ydata]])
+            self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""
             self.zp.enabled = True
 
@@ -310,9 +336,11 @@ class gui(QtGui.QMainWindow):
                 receiver = self.receivers[key]
                 # save scattered point into receiver properties
                 receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x', c='red', s=50, alpha=0.9)
+                receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1], marker='x', c='blue', s=50, alpha=0.9)
                 # set annotation RXx
                 text = "RX" + str(self.receivers.keys().index(key) + 1)
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates)
+                receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps)
 
             self.canvas.draw()
             self.pending_receivers_to_plot = False
@@ -398,6 +426,8 @@ class gui(QtGui.QMainWindow):
         plot.replot()
 
     def plot_delay_history(self, plot, samples):
+        y_max = np.max(np.abs(samples))
+        self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -y_max-5, y_max+5)
         num_corr_samples = (len(samples) + 1)/2
         x = range(0,len(samples),1)
         y = samples

@@ -40,16 +40,24 @@ class top_block(gr.top_block):
 
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr)
+        self.tag_debug = blocks.tag_debug(gr.sizeof_gr_complex*1, "", ""); self.tag_debug.set_display(True)
 
-
-        self.usrp_source = uhd.usrp_source(
-            #",".join(("", "serial == F571B0")),
-            "serial == " + self.options.serial,
-            uhd.stream_args(
-                cpu_format="fc32",
-                channels=range(1),
-             ), False
-        )
+        if self.options.serial != "":
+            self.usrp_source = uhd.usrp_source(
+                "serial == " + self.options.serial,
+                uhd.stream_args(
+                    cpu_format="fc32",
+                    channels=range(1),
+                 ), False
+            )
+        else:
+            self.usrp_source = uhd.usrp_source(
+                "",
+                uhd.stream_args(
+                    cpu_format="fc32",
+                    channels=range(1),
+                ), False
+            )
 
         self.gps = options.gps
 
@@ -61,6 +69,7 @@ class top_block(gr.top_block):
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
         self.connect(self.usrp_source, self.zmq_probe)
+        self.connect(self.usrp_source, self.tag_debug)
 
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
@@ -71,6 +80,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_samp_rate",self.set_samp_rate)
         self.rpc_manager.add_interface("set_bw",self.set_bw)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
+        self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
         self.rpc_manager.start_watcher()
 
 
@@ -81,7 +91,7 @@ class top_block(gr.top_block):
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
-        self.sync_time_nmea()
+        threading.Thread(target = self.sync_time_nmea).start()
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
     def set_gain(self,gain):
@@ -167,6 +177,36 @@ class top_block(gr.top_block):
         time.sleep(1)
         print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
         print "NMEA time sync complete!"
+
+    def get_gps_gprmc(self):
+        if self.gps == "octoclock":
+            clock = octoclock.multi_usrp_clock()
+            nmea = clock.get_sensor("gps_gprmc")[11:-1]
+        elif self.gps == "lte_lite":
+            ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
+            while True:
+                nmea = ser.readline()
+                if "GPRMC" in nmea:
+                    ser.close()
+                    break
+        else:
+            nmea = self.usrp_source.get_mboard_sensor("gps_gprmc",0).to_pp_string()[11:-1]
+        return nmea
+
+    def get_gps_position(self):
+        nmea = self.get_gps_gprmc()
+        latitude = nmea.split(",")[3:5]
+        if latitude[1] == "N":
+            latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+        else:
+            latitude = -int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+
+        longitude = nmea.split(",")[5:7]
+        if longitude[1] == "E":
+            longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+        else:
+            longitude = -int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+        return [longitude, latitude]
 
 ###############################################################################
 # Options Parser
