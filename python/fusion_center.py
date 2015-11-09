@@ -65,6 +65,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_samp_rate",self.set_samp_rate)
         self.rpc_manager.add_interface("set_bw",self.set_bw)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
+        self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.start_watcher()
 
         threading.Thread(target = self.poll_gps_position).start()
@@ -103,6 +104,7 @@ class fusion_center():
                 # request registration of each receiver in gui
                 gui.rpc_manager.request("register_receiver",[serial, self.receivers[serial].gain, self.receivers[serial].antenna])
                 gui.rpc_manager.request("sync_position",[serial, self.receivers[serial].coordinates])
+                gui.rpc_manager.request("set_gps_position",[serial, self.receivers[serial].coordinates_gps])
             gui.rpc_manager.request("set_gui_frequency",[self.frequency])
             gui.rpc_manager.request("set_gui_lo_offset",[self.lo_offset])
             gui.rpc_manager.request("set_gui_samples_to_receive",[self.samples_to_receive])
@@ -246,6 +248,11 @@ class fusion_center():
         self.receivers[serial].antenna = antenna
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_antenna",[antenna, serial])
+
+    def set_selected_position(self, selected_position, serial):
+        self.receivers[serial].selected_position = selected_position
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_selected_position",[selected_position, serial])
 
     def process_results(self):
         while True:

@@ -9,6 +9,7 @@ class receiver_item():
     def __init__(self, gain, antenna):
         self.gain = gain
         self.antenna = antenna
+        self.selected_position= "manual"
         self.coordinates = [0.0,0.0]
         self.coordinates_gps = [0.0,0.0]
 
@@ -18,13 +19,30 @@ class TableModelReceiversPosition(QtCore.QAbstractTableModel):
         QtCore.QAbstractTableModel.__init__(self, parent, *args)
 
     def rowCount(self, parent=QtCore.QModelIndex()): return len(self.parent.receivers)
-    def columnCount(self, parent=QtCore.QModelIndex()): return 2
+    def columnCount(self, parent=QtCore.QModelIndex()): return 3
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         if not index.isValid(): return None
         if not role==QtCore.Qt.DisplayRole: return None
         if index.column() == 0:
             return self.parent.receivers.keys()[index.row()]
+        if index.column() == 1:
+            return self.parent.receivers.values()[index.row()].selected_position
+
+    def setData(self, index, value, role=QtCore.Qt.DisplayRole):
+        if index.column() == 1:
+            str_from_index = {0 : "manual",
+                              1 : "GPS",}[value]
+            serial_index = self.index(index.row(),index.column()-1)
+            serial = self.data(serial_index)
+            self.parent.receivers[serial].selected_position = str_from_index
+            self.parent.set_selected_position(str_from_index, serial)
+
+    def set_selected_position(self, selected_position, serial):
+        print "selected position:", selected_position
+        self.parent.receivers[serial].selected_position = selected_position
+        index = self.index(self.parent.receivers.keys().index(serial),1)
+        self.dataChanged.emit(index, index)
 
     def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
         if (role != QtCore.Qt.DisplayRole):
@@ -32,6 +50,8 @@ class TableModelReceiversPosition(QtCore.QAbstractTableModel):
         if orientation == QtCore.Qt.Horizontal:
             if section == 0:
                 return "Serial"
+            if section == 1:
+                return "Position"
             else:
                 return ""
         if orientation == QtCore.Qt.Vertical:
@@ -139,6 +159,33 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
             return QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled
         else:
             return QtCore.Qt.ItemIsEnabled
+
+class GpsComboDelegate(QtGui.QItemDelegate):
+    def __init__(self, parent):
+        QtGui.QItemDelegate.__init__(self, parent)
+
+    def createEditor(self, parent, option, index):
+        combo = QtGui.QComboBox(parent)
+        li = []
+        li.append("manual")
+        li.append("GPS")
+        combo.addItems(li)
+        self.connect(combo, QtCore.SIGNAL("currentIndexChanged(int)"), self, QtCore.SLOT("currentIndexChanged()"))
+        return combo
+
+    def setEditorData(self, editor, index):
+        editor.blockSignals(True)
+        n_index = {"manual": 0,
+                    "GPS" : 1,}[index.model().data(index)]
+        editor.setCurrentIndex(n_index)
+        editor.blockSignals(False)
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentIndex())
+
+    @QtCore.pyqtSlot()
+    def currentIndexChanged(self):
+        self.commitData.emit(self.sender())
 
 class ComboDelegate(QtGui.QItemDelegate):
     def __init__(self, parent):

@@ -19,6 +19,7 @@ class receiver_interface():
         self.reception_complete = False
         self.samples = []
 
+        self.selected_position = "manual"
         self.coordinates = [0.0, 0.0]
         self.coordinates_gps = [0.0, 0.0]
 

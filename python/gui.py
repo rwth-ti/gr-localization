@@ -76,6 +76,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_samples_to_receive",self.set_gui_samples_to_receive)
         self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
+        self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
         self.rpc_manager.start_watcher()
 
@@ -112,7 +113,8 @@ class gui(QtGui.QMainWindow):
         # create and set model for receivers position table view
         self.tmrp = gui_helpers.TableModelReceiversPosition(self)
         self.gui.tableViewReceiversPosition.setModel(self.tmrp)
-        self.gui.tableViewReceiversPosition.setItemDelegateForColumn(1, gui_helpers.PushButtonPositionDelegate(self))
+        self.gui.tableViewReceiversPosition.setItemDelegateForColumn(1, gui_helpers.GpsComboDelegate(self))
+        self.gui.tableViewReceiversPosition.setItemDelegateForColumn(2, gui_helpers.PushButtonPositionDelegate(self))
         self.set_delegate = False
         self.setting_pos_receiver = ""
 
@@ -241,6 +243,8 @@ class gui(QtGui.QMainWindow):
             self.pending_receivers_to_plot = True
 
     def set_gps_position(self, serial, coordinates):
+        if not hasattr(self, "basemap"):
+            return
         receiver = self.receivers[serial]
         receiver.coordinates_gps = self.basemap(coordinates[0],coordinates[1])
         print(receiver.coordinates)
@@ -261,7 +265,6 @@ class gui(QtGui.QMainWindow):
             self.pending_receivers_to_plot = True
 
     def set_position(self, mouse_event):
-        print("ahora")
         if self.setting_pos_receiver is not "":
             receiver = self.receivers[self.setting_pos_receiver]
             print([mouse_event.xdata,mouse_event.ydata])
@@ -306,6 +309,9 @@ class gui(QtGui.QMainWindow):
     def set_antenna(self, antenna, serial):
         self.rpc_manager.request("set_antenna",[antenna, serial])
 
+    def set_selected_position(self, selected_position, serial):
+        self.rpc_manager.request("set_selected_position",[selected_position, serial])
+
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)
 
@@ -326,6 +332,9 @@ class gui(QtGui.QMainWindow):
 
     def set_gui_antenna(self, antenna, serial):
         self.tmr.set_antenna(antenna, serial)
+
+    def set_gui_selected_position(self, selected_position, serial):
+        self.tmrp.set_selected_position(selected_position, serial)
 
     def get_results(self, results):
         self.results = results
