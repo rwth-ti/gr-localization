@@ -90,6 +90,7 @@ class gui(QtGui.QMainWindow):
         self.chat_pending = False
 
         # map configuration
+        self.bbox = ()
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = gui_helpers.NavigationToolbar(self.canvas, self)
@@ -99,7 +100,6 @@ class gui(QtGui.QMainWindow):
         self.verticalLayoutMap.addWidget(self.toolbar)
         self.verticalLayoutMap.addWidget(self.canvas)
 
-        threading.Thread(target = self.init_map).start()
 
         # correlation and signals
         self.init_plot(self.gui.qwtPlotReceiver1)
@@ -164,7 +164,7 @@ class gui(QtGui.QMainWindow):
         self.timer_register.start()
 
     def init_map(self):
-        bbox = 6.0580,50.7775,6.0690,50.7810
+        bbox = self.bbox
 
         inProj = Proj(init='epsg:4326')
         outProj = Proj(init='epsg:3857')
@@ -214,8 +214,10 @@ class gui(QtGui.QMainWindow):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
-            first = False
+            self.bbox = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
+            if first and self.bbox != None:
+                threading.Thread(target = self.init_map).start()
+                first = False
             print("Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.receivers)
             for receiver in self.receivers.values():
                 print(receiver.gain)
@@ -246,7 +248,7 @@ class gui(QtGui.QMainWindow):
         if not hasattr(self, "basemap"):
             return
         receiver = self.receivers[serial]
-        receiver.coordinates_gps = self.basemap(coordinates[0],coordinates[1])
+        receiver.coordinates_gps = (coordinates[0],coordinates[1])
         print(receiver.coordinates)
         print(receiver.coordinates_gps)
         # remove point from map if was set
@@ -268,7 +270,7 @@ class gui(QtGui.QMainWindow):
         if self.setting_pos_receiver is not "":
             receiver = self.receivers[self.setting_pos_receiver]
             print([mouse_event.xdata,mouse_event.ydata])
-            self.rpc_manager.request("sync_position",[self.setting_pos_receiver, [mouse_event.xdata,mouse_event.ydata]])
+            self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
             self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""
             self.zp.enabled = True

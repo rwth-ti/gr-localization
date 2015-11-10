@@ -103,7 +103,7 @@ class top_block(gr.top_block):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_receiver",[self.ip_addr, self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx,first])
+            self.rpc_manager.request("register_receiver",[self.ip_addr, self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx, self.gps, first])
             first = False
             time.sleep(10)
 

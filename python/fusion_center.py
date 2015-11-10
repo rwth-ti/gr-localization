@@ -16,6 +16,7 @@ import time
 import threading
 import json
 import rpc_manager as rpc_manager_local
+from mpl_toolkits.basemap import Basemap
 
 class fusion_center():
     def __init__(self, options):
@@ -42,6 +43,11 @@ class fusion_center():
         self.store_results = False
         self.results_file = ""
         self.run_loop = False
+
+        self.bbox = 6.0580,50.7775,6.0690,50.7810
+        self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
+                      urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
+                      projection='merc')
 
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
@@ -83,7 +89,9 @@ class fusion_center():
     def poll_gps_position(self):
         while True:
             for receiver in self.receivers.values():
-                receiver.coordinates_gps = receiver.get_gps_position()
+                coordinates_gps = receiver.get_gps_position()
+                if coordinates_gps != None:
+                    receiver.coordinates_gps = self.basemap(coordinates_gps[0],coordinates_gps[1])
             time.sleep(1)
 
     def get_gui_gps_position(self, serial):
@@ -115,8 +123,9 @@ class fusion_center():
                     # request registration in each gui
                     gui.rpc_manager.request("register_another_gui",[serial])
             print(gui_serial, "registered")
+        return self.bbox
 
-    def register_receiver(self, hostname, serial, id_rx, first):
+    def register_receiver(self, hostname, serial, id_rx, gps, first):
         was_not_registered = False
         rpc_adr = "tcp://" + hostname + ":" + str(6665 + id_rx)
         probe_adr = "tcp://" + hostname + ":" + str(5555 + id_rx)
@@ -138,6 +147,7 @@ class fusion_center():
             receiver.frequency = self.frequency
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
+            receiver.gps = gps
             self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
             for gui in self.guis.values():
                 # request registration in each gui
@@ -187,6 +197,9 @@ class fusion_center():
     def start_correlation_loop(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
         self.store_results = True
         self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+        print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
+        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
 
@@ -265,8 +278,39 @@ class fusion_center():
                     self.delay_history.append(delay)
                 results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
                 if self.store_results:
-                    #print(str(time.time()) + " Delay: " + str(results["delay"]) + " samples", file=open(self.results_file,"a"))
-                    print(str(time.time()) + " Delay: " + str(results["delay"]) + " samples", file=open(self.results_file,"a"))
+                    # build receivers strings
+                    receivers_position = "["
+                    selected_positions = "["
+                    receivers_gps = "["
+                    receivers_antenna = "["
+                    receivers_gain = "["
+                    i = 1
+                    for receiver in self.receivers.values():
+                        if i == 1:
+                            if receiver.selected_position == "manual":
+                                receivers_position = receivers_position + str(receiver.coordinates)
+                            else:
+                                receivers_position = receivers_position + str(receiver.coordinates_gps)
+                            selected_positions = selected_positions + receiver.selected_position
+                            receivers_gps = receivers_gps + receiver.gps
+                            receivers_antenna = receivers_antenna + receiver.antenna
+                            receivers_gain = receivers_gain + str(receiver.gain)
+                        else:
+                            if receiver.selected_position == "manual":
+                                receivers_position = receivers_position + ";" + str(receiver.coordinates)
+                            else:
+                                receivers_position = receivers_position + ";" + str(receiver.coordinates_gps)
+                            selected_positions = selected_positions + ";" + receiver.selected_position
+                            receivers_gps = receivers_gps + ";" + receiver.gps
+                            receivers_antenna = receivers_antenna + ";" + receiver.antenna
+                            receivers_gain = receivers_gain + ";" + str(receiver.gain)
+                    receivers_position = receivers_position + "]"
+                    selected_positions = selected_positions + "]"
+                    receivers_gps = receivers_gps + "]"
+                    receivers_antenna = receivers_antenna + "]"
+                    receivers_gain = receivers_gain + "]"
+
+                    print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "### Estimated position ###", file=open(self.results_file,"a"))
                 for gui in self.guis.values():
                     gui.rpc_manager.request("get_results",[results])
                 for receiver in self.receivers.values():
