@@ -57,6 +57,7 @@ class gui(QtGui.QMainWindow):
         self.results = {}
 
         self.receivers = {}
+        self.transmitter_positions = {}
 
         self.chats = ""
 
@@ -78,6 +79,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
+        self.rpc_manager.add_interface("set_tx_position",self.set_tx_position)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -147,6 +149,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_correlation_loop)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
+        self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
         self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
@@ -235,10 +238,10 @@ class gui(QtGui.QMainWindow):
             receiver.annotation.remove()
         if hasattr(self, "ax"):
             # save scattered point into receiver properties
-            receiver.scatter = self.ax.scatter(coordinates[0], coordinates[1], marker='x', c='red', s=50, alpha=0.9)
+            receiver.scatter = self.ax.scatter(coordinates[0], coordinates[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation RXx
             text = "RX" + str(self.receivers.keys().index(serial) + 1)
-            receiver.annotation = self.ax.annotate(text, coordinates)
+            receiver.annotation = self.ax.annotate(text, coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
             self.canvas.draw()
         else:
             # ax not rendered yet, so update position when available
@@ -257,14 +260,38 @@ class gui(QtGui.QMainWindow):
             receiver.annotation_gps.remove()
         if hasattr(self, "ax"):
             # save scattered point into receiver properties
-            receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1], marker='x', c='blue', s=50, alpha=0.9)
+            receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation RXx
             text = "RX" + str(self.receivers.keys().index(serial) + 1)
-            receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps)
+            receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
             self.canvas.draw()
         else:
             # ax not rendered yet, so update position when available
             self.pending_receivers_to_plot = True
+
+    def set_tx_position(self, transmitter_positions):
+        if not hasattr(self, "basemap"):
+            return
+        # remove point from map if was set
+        for algorithm in transmitter_positions.items():
+            if not self.transmitter_positions.has_key(algorithm[0]):
+                self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1])
+            else:
+                self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]
+            estimated_position = self.transmitter_positions[algorithm[0]]
+            if hasattr(estimated_position, "scatter"):
+                estimated_position.scatter.remove()
+                estimated_position.annotation.remove()
+            if hasattr(self, "ax"):
+                # save scattered point into receiver properties
+                estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9)
+                # set annotation RXx
+                text = algorithm[0]
+                estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+                self.canvas.draw()
+            else:
+                # ax not rendered yet, so update position when available
+                self.pending_receivers_to_plot = True
 
     def set_position(self, mouse_event):
         if self.setting_pos_receiver is not "":
@@ -346,12 +373,12 @@ class gui(QtGui.QMainWindow):
             for key in self.receivers:
                 receiver = self.receivers[key]
                 # save scattered point into receiver properties
-                receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x', c='red', s=50, alpha=0.9)
-                receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1], marker='x', c='blue', s=50, alpha=0.9)
+                receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9)
+                receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
                 # set annotation RXx
                 text = "RX" + str(self.receivers.keys().index(key) + 1)
-                receiver.annotation = self.ax.annotate(text, receiver.coordinates)
-                receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps)
+                receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+                receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
 
             self.canvas.draw()
             self.pending_receivers_to_plot = False
@@ -393,6 +420,9 @@ class gui(QtGui.QMainWindow):
     def register_another_gui(self, serial):
         self.tmg.registerGui(serial)
 
+    def localize(self):
+        self.rpc_manager.request("localize", [self.frequency, self.lo_offset, self.samples_to_receive])
+
     def start_correlation(self):
         receiver1 = str(self.gui.comboBoxReceiver1.currentText())
         receiver2 = str(self.gui.comboBoxReceiver2.currentText())
@@ -404,7 +434,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("start_correlation_loop", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
 
     def stop_correlation_loop(self):
-        self.rpc_manager.request("stop_correlation_loop")
+        self.rpc_manager.request("stop_loop")
 
     def send_correlation_command(self):
         self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
@@ -464,6 +494,10 @@ class gui(QtGui.QMainWindow):
         curve.setData(x, y)
         qwtPlot.replot()
 
+class transmitter_position():
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
+
 ###############################################################################
 # Options Parser
 ###############################################################################
@@ -483,6 +517,6 @@ def parse_options():
 if __name__ == "__main__":
     options = parse_options()
     qapp = Qt.QApplication(sys.argv)
-    qapp.main_window = gui("Remote GNU Radio GUI",options)
+    qapp.main_window = gui("GNU Radio localization GUI",options)
     qapp.main_window.show()
     qapp.exec_()

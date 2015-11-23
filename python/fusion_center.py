@@ -17,6 +17,8 @@ import threading
 import json
 import rpc_manager as rpc_manager_local
 from mpl_toolkits.basemap import Basemap
+import chan94_algorithm
+#import grid_based_algorithm
 
 class fusion_center():
     def __init__(self, options):
@@ -37,12 +39,15 @@ class fusion_center():
         self.receivers = {}
         self.guis = {}
 
+        self.estimated_positions = {}
+
         self.correlation_receivers = ["",""]
 
         self.delay_history = []
         self.store_results = False
         self.results_file = ""
         self.run_loop = False
+        self.localizing = False
 
         self.bbox = 6.0580,50.7775,6.0690,50.7810
         self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
@@ -61,9 +66,10 @@ class fusion_center():
         self.rpc_manager.add_interface("reset_receivers",self.reset_receivers)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
+        self.rpc_manager.add_interface("localize",self.localize)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
-        self.rpc_manager.add_interface("stop_correlation_loop",self.stop_correlation_loop)
+        self.rpc_manager.add_interface("stop_loop",self.stop_loop)
         self.rpc_manager.add_interface("set_frequency",self.set_frequency)
         self.rpc_manager.add_interface("set_lo_offset",self.set_lo_offset)
         self.rpc_manager.add_interface("set_samples_to_receive",self.set_samples_to_receive)
@@ -191,6 +197,11 @@ class fusion_center():
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
 
+    def localize(self, freq, lo_offset, samples_to_receive):
+        if len(self.receivers) > 2:
+            self.localizing = True
+            threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
+
     def start_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
         threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
 
@@ -203,16 +214,24 @@ class fusion_center():
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
 
-    def stop_correlation_loop(self):
+    def stop_loop(self):
         self.run_loop = False
         self.store_results = False
         self.delay_history = []
+        self.localizing = False
 
     def run_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
         while True:
             self.start_receivers(freq, lo_offset, samples_to_receive)
             self.correlation_receivers[0] = receiver1
             self.correlation_receivers[1] = receiver2
+            if not self.run_loop:
+                break
+            time.sleep(1.5)
+
+    def run_localization(self, freq, lo_offset, samples_to_receive):
+        while True:
+            self.start_receivers(freq, lo_offset, samples_to_receive)
             if not self.run_loop:
                 break
             time.sleep(1.5)
@@ -271,6 +290,18 @@ class fusion_center():
         while True:
             time.sleep(0.01)
             if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
+                if self.localizing:
+                    self.estimated_positions["chan"] = chan94_algorithm.localize(self.receivers.values())
+                    for gui in self.guis.values():
+                        threading.Thread(target = gui.rpc_manager.request, args = ("set_tx_position", [self.estimated_positions])).start()
+
+#                    self.estimated_positions["grid_based"] = grid_based_algorithm.localize(self.receivers)
+                    # plot estimated positions
+
+                    self.correlation_receivers[0] = self.receivers.items()[0][0]
+                    self.correlation_receivers[1] = self.receivers.items()[1][0]
+
+
                 receiver1 = self.receivers[self.correlation_receivers[0]]
                 receiver2 = self.receivers[self.correlation_receivers[1]]
                 correlation, delay = self.correlate(receiver1,receiver2)
@@ -278,7 +309,7 @@ class fusion_center():
                     self.delay_history.append(delay)
                 results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
                 if self.store_results:
-                    # build receivers strings
+                    # build receivers strings for log file
                     receivers_position = "["
                     selected_positions = "["
                     receivers_gps = "["
@@ -311,7 +342,10 @@ class fusion_center():
                     receivers_antenna = receivers_antenna + "]"
                     receivers_gain = receivers_gain + "]"
 
-                    print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "### Estimated position ###", file=open(self.results_file,"a"))
+                    if self.localizing:
+                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + self.estimated_positions.items(), file=open(self.results_file,"a"))
+                    else:
+                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
                 for gui in self.guis.values():
                     gui.rpc_manager.request("get_results",[results])
                 for receiver in self.receivers.values():

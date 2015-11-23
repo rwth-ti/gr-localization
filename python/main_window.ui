@@ -117,14 +117,14 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButtonOnce">
+           <widget class="QPushButton" name="pushButtonLocalize">
             <property name="text">
              <string>Localize!!</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButtonContinuous">
+           <widget class="QPushButton" name="pushButtonLocalizeContinuous">
             <property name="text">
              <string>Start continuous</string>
             </property>
