@@ -252,8 +252,6 @@ class gui(QtGui.QMainWindow):
             return
         receiver = self.receivers[serial]
         receiver.coordinates_gps = (coordinates[0],coordinates[1])
-        print(receiver.coordinates)
-        print(receiver.coordinates_gps)
         # remove point from map if was set
         if hasattr(receiver, "scatter_gps"):
             receiver.scatter_gps.remove()
@@ -296,7 +294,6 @@ class gui(QtGui.QMainWindow):
     def set_position(self, mouse_event):
         if self.setting_pos_receiver is not "":
             receiver = self.receivers[self.setting_pos_receiver]
-            print([mouse_event.xdata,mouse_event.ydata])
             self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
             self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""

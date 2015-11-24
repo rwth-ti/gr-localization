@@ -18,7 +18,7 @@ import json
 import rpc_manager as rpc_manager_local
 from mpl_toolkits.basemap import Basemap
 import chan94_algorithm
-#import grid_based_algorithm
+import grid_based_algorithm
 
 class fusion_center():
     def __init__(self, options):
@@ -88,7 +88,6 @@ class fusion_center():
 
     def sync_position(self, serial, coordinates):
         self.receivers[serial].coordinates = coordinates
-        print(coordinates)
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position",[serial, coordinates])
 
@@ -292,6 +291,7 @@ class fusion_center():
             if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
                 if self.localizing:
                     self.estimated_positions["chan"] = chan94_algorithm.localize(self.receivers.values())
+                    self.estimated_positions["grid_based"] = grid_based_algorithm.localize(self.receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])))
                     for gui in self.guis.values():
                         threading.Thread(target = gui.rpc_manager.request, args = ("set_tx_position", [self.estimated_positions])).start()
 
