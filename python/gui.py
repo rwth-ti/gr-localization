@@ -84,7 +84,10 @@ class gui(QtGui.QMainWindow):
 
         # Find out ip address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("www.rwth-aachen.de",80))
+        if not options.fusion_center == "localhost":
+            s.connect((options.fusion_center,22))
+        else:
+            s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
 
         self.gui.setWindowTitle(window_name)
