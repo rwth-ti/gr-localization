@@ -1,8 +1,10 @@
 import numpy as np
 from scipy.signal import resample
+import time
 
 def localize(receivers, roi_size):
 
+    t = time.time()
     y = []
     pos_rx = []
     for receiver in receivers:
@@ -13,20 +15,19 @@ def localize(receivers, roi_size):
             pos_rx.append(receiver.coordinates_gps)
     pos_rx = np.array(pos_rx)
 
-    resolution = 1
+    resolution = 6
     const_c = 300000000
     sample_rate = receivers[0].samp_rate
     channel_model = "free_space"
     num_rx = 3
     num_delayed_samples = receivers[0].samples_to_receive
     num_compressed_samples = num_delayed_samples/10
-    channel_model = "free_space"
 
     (D,mask) = generate_environment_matrices(roi_size, resolution, pos_rx, const_c, sample_rate, channel_model)
     xy = estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask)
-    print "Grid based estimation"
-    print xy
-    return xy
+    t_used = time.time()-t
+    print "Grid based results: ",xy," time: ", t_used
+    return {"coordinates": xy,"t_used":t_used}
 
 def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask):
     M = [0] * num_rx
@@ -48,6 +49,7 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
         # take only unique TDOAs at this stage, resample later
         unique_tdoas = np.arange(np.min(D_masked[rx_idx]),np.max(D_masked[rx_idx])+1)
         # create matrices of shifted normalized signals related to reference sensor
+        print "size M:", np.array(M[rx_idx]).shape, " size shift: ", np.array(shift_matrix(y[0]/sigma_1,unique_tdoas,2)).shape
         S[rx_idx] = np.dot(M[rx_idx],shift_matrix(y[0]/sigma_1,unique_tdoas,2))
         # compressive sampling of CS sensors
         r[rx_idx] = np.dot(M[rx_idx],y[rx_idx])

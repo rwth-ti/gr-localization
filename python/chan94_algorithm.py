@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 
 def correlate(y1, y2):
@@ -9,6 +10,7 @@ def correlate(y1, y2):
 
 def localize(receivers):
 
+    t = time.time()
     sample_rate = receivers[0].samp_rate
     y = []
     pos_rx = []
@@ -61,5 +63,6 @@ def localize(receivers):
     r1 = [(-beta+np.sqrt(pow(beta,2)-4*alpha*gamma))/(2*alpha),(-beta-np.sqrt(pow(beta,2)-4*alpha*gamma))/(2*alpha)]
     # Calculate position with the solution in the roi
     xy = (max(r1)*A+B,max(r1)*C+D)
-    print xy
-    return xy
+    t_used = time.time()-t
+    print "Chan results: ",xy," time: ", t_used
+    return {"coordinates": xy,"t_used":t_used}

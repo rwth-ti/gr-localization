@@ -17,6 +17,7 @@ import threading
 import json
 import rpc_manager as rpc_manager_local
 from mpl_toolkits.basemap import Basemap
+import copy
 import chan94_algorithm
 import grid_based_algorithm
 
@@ -67,6 +68,7 @@ class fusion_center():
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
         self.rpc_manager.add_interface("localize",self.localize)
+        self.rpc_manager.add_interface("localize_loop",self.localize_loop)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_loop",self.stop_loop)
@@ -196,11 +198,6 @@ class fusion_center():
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
 
-    def localize(self, freq, lo_offset, samples_to_receive):
-        if len(self.receivers) > 2:
-            self.localizing = True
-            threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
-
     def start_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
         threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
 
@@ -213,12 +210,6 @@ class fusion_center():
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
 
-    def stop_loop(self):
-        self.run_loop = False
-        self.store_results = False
-        self.delay_history = []
-        self.localizing = False
-
     def run_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
         while True:
             self.start_receivers(freq, lo_offset, samples_to_receive)
@@ -228,12 +219,32 @@ class fusion_center():
                 break
             time.sleep(1.5)
 
+    def localize(self, freq, lo_offset, samples_to_receive):
+        if len(self.receivers) > 2:
+            self.localizing = True
+            threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
+
+    def localize_loop(self, freq, lo_offset, samples_to_receive):
+        self.store_results = True
+        self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+        print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
+        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+        self.run_loop = True
+        threading.Thread(target = self.localize, args = (freq, lo_offset, samples_to_receive)).start()
+
     def run_localization(self, freq, lo_offset, samples_to_receive):
         while True:
             self.start_receivers(freq, lo_offset, samples_to_receive)
             if not self.run_loop:
                 break
             time.sleep(1.5)
+
+    def stop_loop(self):
+        self.run_loop = False
+        self.store_results = False
+        self.delay_history = []
+        self.localizing = False
 
     def set_frequency(self, frequency):
         self.frequency = frequency
@@ -289,21 +300,19 @@ class fusion_center():
         while True:
             time.sleep(0.01)
             if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
+                receivers = copy.deepcopy(self.receivers)
                 if self.localizing:
-                    self.estimated_positions["chan"] = chan94_algorithm.localize(self.receivers.values())
-                    self.estimated_positions["grid_based"] = grid_based_algorithm.localize(self.receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                    self.estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
+                    self.estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])))
                     for gui in self.guis.values():
                         threading.Thread(target = gui.rpc_manager.request, args = ("set_tx_position", [self.estimated_positions])).start()
 
-#                    self.estimated_positions["grid_based"] = grid_based_algorithm.localize(self.receivers)
-                    # plot estimated positions
-
-                    self.correlation_receivers[0] = self.receivers.items()[0][0]
-                    self.correlation_receivers[1] = self.receivers.items()[1][0]
+                    self.correlation_receivers[0] = receivers.items()[0][0]
+                    self.correlation_receivers[1] = receivers.items()[1][0]
 
 
-                receiver1 = self.receivers[self.correlation_receivers[0]]
-                receiver2 = self.receivers[self.correlation_receivers[1]]
+                receiver1 = receivers[self.correlation_receivers[0]]
+                receiver2 = receivers[self.correlation_receivers[1]]
                 correlation, delay = self.correlate(receiver1,receiver2)
                 if abs(delay) < 100:
                     self.delay_history.append(delay)
@@ -316,7 +325,7 @@ class fusion_center():
                     receivers_antenna = "["
                     receivers_gain = "["
                     i = 1
-                    for receiver in self.receivers.values():
+                    for receiver in receivers.values():
                         if i == 1:
                             if receiver.selected_position == "manual":
                                 receivers_position = receivers_position + str(receiver.coordinates)
@@ -343,7 +352,7 @@ class fusion_center():
                     receivers_gain = receivers_gain + "]"
 
                     if self.localizing:
-                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + self.estimated_positions.items(), file=open(self.results_file,"a"))
+                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(self.estimated_positions.items()), file=open(self.results_file,"a"))
                     else:
                         print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
                 for gui in self.guis.values():

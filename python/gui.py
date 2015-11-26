@@ -153,6 +153,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_correlation_loop)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
+        self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
         self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
@@ -276,9 +277,9 @@ class gui(QtGui.QMainWindow):
         # remove point from map if was set
         for algorithm in transmitter_positions.items():
             if not self.transmitter_positions.has_key(algorithm[0]):
-                self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1])
+                self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
             else:
-                self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]
+                self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]
             estimated_position = self.transmitter_positions[algorithm[0]]
             if hasattr(estimated_position, "scatter"):
                 estimated_position.scatter.remove()
@@ -422,6 +423,9 @@ class gui(QtGui.QMainWindow):
 
     def localize(self):
         self.rpc_manager.request("localize", [self.frequency, self.lo_offset, self.samples_to_receive])
+
+    def localize_loop(self):
+        self.rpc_manager.request("localize_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def start_correlation(self):
         receiver1 = str(self.gui.comboBoxReceiver1.currentText())
