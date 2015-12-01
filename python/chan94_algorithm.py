@@ -21,7 +21,7 @@ def localize(receivers):
         else:
             pos_rx.append(receiver.coordinates)
 
-    c = 300000000
+    c = 299700000
 
     #cross correlations
     d12 = float(correlate(receivers[1].samples,receivers[0].samples))/sample_rate

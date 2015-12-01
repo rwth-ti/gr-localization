@@ -16,7 +16,7 @@ def localize(receivers, roi_size):
     pos_rx = np.array(pos_rx)
 
     resolution = 6
-    const_c = 300000000
+    const_c = 299700000
     sample_rate = receivers[0].samp_rate
     channel_model = "free_space"
     num_rx = 3
