@@ -42,8 +42,6 @@ class fusion_center():
 
         self.estimated_positions = {}
 
-        self.correlation_receivers = ["",""]
-
         self.delay_history = []
         self.store_results = False
         self.results_file = ""
@@ -51,6 +49,8 @@ class fusion_center():
         self.localizing = False
 
         self.bbox = 6.0580,50.7775,6.0690,50.7810
+        #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
+        #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
         self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
                       urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
                       projection='merc')
@@ -198,23 +198,21 @@ class fusion_center():
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
 
-    def start_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
-        threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
+    def start_correlation(self, freq, lo_offset, samples_to_receive):
+        threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
 
-    def start_correlation_loop(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
+    def start_correlation_loop(self, freq, lo_offset, samples_to_receive):
         self.store_results = True
         self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
-        threading.Thread(target = self.run_correlation, args = (receiver1, receiver2, freq, lo_offset, samples_to_receive)).start()
+        threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
 
-    def run_correlation(self, receiver1, receiver2, freq, lo_offset, samples_to_receive):
+    def run_correlation(self, freq, lo_offset, samples_to_receive):
         while True:
             self.start_receivers(freq, lo_offset, samples_to_receive)
-            self.correlation_receivers[0] = receiver1
-            self.correlation_receivers[1] = receiver2
             if not self.run_loop:
                 break
             time.sleep(1.5)
@@ -307,16 +305,19 @@ class fusion_center():
                     for gui in self.guis.values():
                         threading.Thread(target = gui.rpc_manager.request, args = ("set_tx_position", [self.estimated_positions])).start()
 
-                    self.correlation_receivers[0] = receivers.items()[0][0]
-                    self.correlation_receivers[1] = receivers.items()[1][0]
-
-
-                receiver1 = receivers[self.correlation_receivers[0]]
-                receiver2 = receivers[self.correlation_receivers[1]]
-                correlation, delay = self.correlate(receiver1,receiver2)
-                if abs(delay) < 100:
-                    self.delay_history.append(delay)
-                results = {"receiver1":receiver1.samples,"receiver2":receiver2.samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
+                self.ref_receiver = self.receivers.keys()[0]
+                correlation, delay = self.correlate()
+                if all(abs(d) < 100 for d in delay):
+                    if len(self.delay_history) < len(delay):
+                        self.delay_history = []
+                        for i in range(0,len(delay)):
+                            self.delay_history.append([])
+                    for i in range(0,len(delay)):
+                        self.delay_history[i].append(delay[i])
+                receivers_samples = []
+                for receiver in self.receivers.values():
+                    receivers_samples.append(receiver.samples)
+                results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
                 if self.store_results:
                     # build receivers strings for log file
                     receivers_position = "["
@@ -363,16 +364,16 @@ class fusion_center():
             else:
                 self.probe_manager.watcher()
 
-    def correlate(self, receiver1, receiver2):
-        correlation = np.absolute(np.correlate(receiver1.samples, receiver2.samples, "full", False)).tolist()
-        delay = int(correlation.index(np.max(correlation)) - self.samples_to_receive + 1)
+    def correlate(self):
+        correlation = []
+        for receiver in self.receivers:
+            if not self.ref_receiver == receiver:
+                print(receiver,self.ref_receiver)
+                correlation.append(np.absolute(np.correlate(self.receivers[self.ref_receiver].samples, self.receivers[receiver].samples, "full", False)).tolist())
+        delay = (np.argmax(correlation, axis=1) - self.samples_to_receive + 1).tolist()
+        #delay = correlation.index(np.max(correlation) - self.samples_to_receive + 1)
         print("Delay:", delay, "samples")
-        print("Correlation length:", len(correlation))
         return correlation, delay
-
-#    def send_results:
-        # for gui in self.guis
-        # data serialize 
 
 class gui_interface():
     def __init__(self, rpc_address, hostname):

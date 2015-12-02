@@ -27,6 +27,7 @@ from PIL import Image
 from pyproj import Proj, transform
 import math
 import socket
+from functools import partial
 
 class gui(QtGui.QMainWindow):
     def __init__(self, window_name, options, parent=None):
@@ -55,6 +56,7 @@ class gui(QtGui.QMainWindow):
         self.lo_offset = 0
 
         self.results = {}
+        self.new_results = False
 
         self.receivers = {}
         self.transmitter_positions = {}
@@ -109,8 +111,13 @@ class gui(QtGui.QMainWindow):
         # correlation and signals
         self.init_plot(self.gui.qwtPlotReceiver1)
         self.init_plot(self.gui.qwtPlotReceiver2)
-        self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay")
-        self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, "Amplitude")
+        self.init_plot(self.gui.qwtPlotReceiver3)
+        title = Qwt.QwtText("Delay")
+        title.setFont(Qt.QFont("Helvetica", 14, Qt.QFont.Bold))
+        self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, title)
+        title = Qwt.QwtText("Amplitude")
+        title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
+        self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100, 100)
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
@@ -150,10 +157,14 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.lineEdit, QtCore.SIGNAL("returnPressed()"), self.send_chat)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
-        self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_correlation_loop)
+        self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_loop)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
+        self.connect(self.gui.pushButtonLocalizeStop, QtCore.SIGNAL("clicked()"), self.stop_loop)
+        self.connect(self.gui.checkBoxFFT1, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,1))
+        self.connect(self.gui.checkBoxFFT2, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,2))
+        self.connect(self.gui.checkBoxFFT3, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,3))
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
         self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
@@ -186,6 +197,8 @@ class gui(QtGui.QMainWindow):
         if r.status_code == 200:
             img = Image.open(StringIO(r.content))
 
+        #img = Image.open("ict_cubes.png")
+
         self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
         #
@@ -207,8 +220,12 @@ class gui(QtGui.QMainWindow):
         self.canvas.draw()
 
     def init_plot(self, qwtPlot):
-        qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, "Samples")
-        qwtPlot.setAxisTitle(Qwt.QwtPlot.yLeft, "Amplitude")
+        title = Qwt.QwtText("Samples")
+        title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
+        qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
+        title = Qwt.QwtText("Amplitude")
+        title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
+        qwtPlot.setAxisTitle(Qwt.QwtPlot.yLeft, title)
         qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive)
         pen = Qt.QPen(Qt.Qt.DotLine)
         pen.setColor(Qt.Qt.black)
@@ -368,6 +385,7 @@ class gui(QtGui.QMainWindow):
 
     def get_results(self, results):
         self.results = results
+        self.new_results = True
 
     def process_results(self):
         if hasattr(self, "ax") and self.pending_receivers_to_plot:
@@ -398,15 +416,26 @@ class gui(QtGui.QMainWindow):
                 self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 2))
             self.set_delegate = False
 
-        if len(self.results.items()) > 0:
+        if self.new_results:
             print("Delay:",self.results["delay"])
             self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
             self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
-            self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"])
-            self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"])
-            self.plot_receiver(self.gui.qwtPlotReceiver1, self.results["receiver1"])
-            self.plot_receiver(self.gui.qwtPlotReceiver2, self.results["receiver2"])
-        self.results = {}
+            # clear the previous points from the plot
+            self.gui.qwtPlotCorrelation.clear()
+            self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][0],Qt.Qt.blue)
+            if len(self.results["correlation"]) > 1:
+                self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][1],Qt.Qt.red)
+            print(self.results["delay_history"])
+            # clear the previous points from the plot
+            self.gui.qwtPlotDelayHistory.clear()
+            if len(self.results["delay_history"]) > 0:
+                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
+                if len(self.results["delay_history"]) > 1:
+                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
+            self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
+            self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][1])
+            self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][2])
+        self.new_results = False
 
     def register_receiver(self, serial, gain, antenna):
         if not self.receivers.has_key(serial):
@@ -415,8 +444,7 @@ class gui(QtGui.QMainWindow):
             self.tmrp.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.set_delegate = True
             # populate cross-correlation combo boxes
-            self.gui.comboBoxReceiver1.addItem(serial)
-            self.gui.comboBoxReceiver2.addItem(serial)
+            self.gui.comboBoxRefReceiver.addItem(serial)
 
     def register_another_gui(self, serial):
         self.tmg.registerGui(serial)
@@ -428,16 +456,12 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("localize_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def start_correlation(self):
-        receiver1 = str(self.gui.comboBoxReceiver1.currentText())
-        receiver2 = str(self.gui.comboBoxReceiver2.currentText())
-        self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
+        self.rpc_manager.request("start_correlation", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def start_correlation_loop(self):
-        receiver1 = str(self.gui.comboBoxReceiver1.currentText())
-        receiver2 = str(self.gui.comboBoxReceiver2.currentText())
-        self.rpc_manager.request("start_correlation_loop", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
+        self.rpc_manager.request("start_correlation_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
-    def stop_correlation_loop(self):
+    def stop_loop(self):
         self.rpc_manager.request("stop_loop")
 
     def send_correlation_command(self):
@@ -457,46 +481,63 @@ class gui(QtGui.QMainWindow):
         threading.Thread(target=runit).start()
 
     # plot cross correlation
-    def plot_correlation(self, plot, samples):
+    def plot_correlation(self, plot, samples, colour):
         num_corr_samples = (len(samples) + 1)/2
         x = range(-num_corr_samples+1,num_corr_samples,1)
         y = samples
-        # clear the previous points from the plot
-        plot.clear()
         # draw curve with new points and plot
         curve = Qwt.QwtPlotCurve()
-        curve.setPen(Qt.QPen(Qt.Qt.blue, 2))
+        curve.setPen(Qt.QPen(colour, 2))
         curve.attach(plot)
         curve.setData(x, y)
         plot.replot()
 
-    def plot_delay_history(self, plot, samples):
-        y_max = np.max(np.abs(samples))
-        self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -y_max-5, y_max+5)
-        num_corr_samples = (len(samples) + 1)/2
-        x = range(0,len(samples),1)
-        y = samples
-        # clear the previous points from the plot
-        plot.clear()
-        # draw curve with new points and plot
-        curve = Qwt.QwtPlotCurve()
-        curve.setPen(Qt.QPen(Qt.Qt.blue, 2))
-        curve.attach(plot)
-        curve.setData(x, y)
-        plot.replot()
+    def plot_delay_history(self, plot, samples, colour):
+        if len(samples) > 0:
+            y_max = np.max(np.abs(samples))
+            self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -y_max-5, y_max+5)
+            num_corr_samples = (len(samples) + 1)/2
+            x = range(0,len(samples),1)
+            y = samples
+            # draw curve with new points and plot
+            curve = Qwt.QwtPlotCurve()
+            curve.setPen(Qt.QPen(colour, 2))
+            curve.attach(plot)
+            curve.setData(x, y)
+            plot.replot()
 
-    def plot_receiver(self, qwtPlot, samples):
-        x = range(0,len(samples),1)
-        y = np.absolute(samples)
-        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive)
+    def plot_receiver(self, qwtPlot, checkBoxFFT, samples):
+        if checkBoxFFT.isChecked():
+            y = 10*np.log10(np.absolute(np.fft.fftshift(np.fft.fft(samples))))
+            x = np.linspace((self.frequency-self.samp_rate/2)/1000000000,(self.frequency+self.samp_rate/2)/1000000000,len(y))
+            title = Qwt.QwtText("Frequency [GHz]")
+            title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
+            qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
+            qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, (self.frequency-self.samp_rate/2)/1000000000, (self.frequency+self.samp_rate/2)/1000000000)
+        else:
+            y = np.absolute(samples)
+            x = range(0,len(y),1)
+            title = Qwt.QwtText("Samples")
+            title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
+            qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
+            qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, len(x))
+
         # clear the previous points from the plot
         qwtPlot.clear()
-        # draw curve with new points and plot
+        # draw curve wicth new points and plot
         curve = Qwt.QwtPlotCurve()
         curve.setPen(Qt.QPen(Qt.Qt.blue, 2))
         curve.attach(qwtPlot)
         curve.setData(x, y)
         qwtPlot.replot()
+
+    def refresh_plot(self, receiver):
+        if receiver == 1 and self.results.has_key("receivers") and len(self.results["receivers"]) > 0:
+            self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
+        if receiver == 2 and self.results.has_key("receivers") and len(self.results["receivers"]) > 1:
+            self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][1])
+        if receiver == 3 and self.results.has_key("receivers") and len(self.results["receivers"]) > 2:
+            self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][2])
 
 class transmitter_position():
     def __init__(self, coordinates):

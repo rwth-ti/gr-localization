@@ -65,6 +65,11 @@ class top_block(gr.top_block):
             print "Using " + self.gps
             self.usrp_source.set_clock_source("external", 0)
             self.usrp_source.set_time_source("external", 0)
+        if self.gps == "lte_lite":
+            self.ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
+            self.nmea_lte_lite = ""
+            self.nmea_lte_lite_lock = threading.Lock()
+            threading.Thread(target = self.poll_lte_lite).start()
 
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
@@ -96,7 +101,8 @@ class top_block(gr.top_block):
         self.usrp_source.set_samp_rate(samp_rate)
         threading.Thread(target = self.sync_time_nmea).start()
     def set_bw(self,bw):
-        self.usrp_source.set_bandwidth(bw,0)
+        #self.usrp_source.set_bandwidth(bw,0)
+        return
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)
     def set_antenna(self,antenna):
@@ -147,12 +153,11 @@ class top_block(gr.top_block):
         synced = False
         while not synced:
             if self.gps == "lte_lite":
-                ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
-                while True:
-                    s = ser.readline()
-                    if "GPRMC" in s:
-                        ser.close()
-                        break
+                while self.nmea_lte_lite is "":
+                    time.sleep(0.1)
+                self.nmea_lte_lite_lock.acquire()
+                s = self.nmea_lte_lite
+                self.nmea_lte_lite_lock.release()
                 t = s.split(",")[1].split(".")[0]
                 d = s.split(",")[9]
                 my_time = time.strptime(t+d,"%H%M%S%d%m%y")
@@ -181,17 +186,26 @@ class top_block(gr.top_block):
         print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
         print "NMEA time sync complete!"
 
+    def poll_lte_lite(self):
+        while True:
+            nmea = self.ser.readline().replace("\x00","").replace("\n","")
+            if "GPRMC" in nmea and len(nmea.split(",")) ==13 :
+                self.nmea_lte_lite_lock.acquire()
+                self.nmea_lte_lite = nmea
+                self.nmea_lte_lite_lock.release()
+
+            time.sleep(0.3)
+
     def get_gps_gprmc(self):
         if self.gps == "octoclock":
             clock = octoclock.multi_usrp_clock()
             nmea = clock.get_sensor("gps_gprmc")[11:-1]
         elif self.gps == "lte_lite":
-            ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
-            while True:
-                nmea = ser.readline()
-                if "GPRMC" in nmea:
-                    ser.close()
-                    break
+            while self.nmea_lte_lite is "":
+                time.sleep(0.1)
+            self.nmea_lte_lite_lock.acquire()
+            nmea = self.nmea_lte_lite
+            self.nmea_lte_lite_lock.release()
         else:
             nmea = self.usrp_source.get_mboard_sensor("gps_gprmc",0).to_pp_string()[11:-1]
         return nmea
@@ -261,4 +275,5 @@ if __name__ == "__main__":
     tb.rpc_manager.stop_watcher()
     tb.stop()
     tb.wait()
+    tb.ser.close()
     tb = None
