@@ -307,10 +307,18 @@ class gui(QtGui.QMainWindow):
                 # set annotation RXx
                 text = algorithm[0]
                 estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+                if algorithm[0] == "grid_based":
+                    self.plot_grid(algorithm[1]["grid"])
                 self.canvas.draw()
             else:
                 # ax not rendered yet, so update position when available
                 self.pending_receivers_to_plot = True
+
+    def plot_grid(self, s):
+        if hasattr(self,"grid"):
+            self.grid.remove()
+        self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.5)
+
 
     def set_position(self, mouse_event):
         if self.setting_pos_receiver is not "":

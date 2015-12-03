@@ -21,18 +21,18 @@ def localize(receivers, roi_size):
     channel_model = "free_space"
     num_rx = 3
     num_delayed_samples = receivers[0].samples_to_receive
-    num_compressed_samples = num_delayed_samples/10
+    num_compressed_samples = num_delayed_samples
 
     (D,mask) = generate_environment_matrices(roi_size, resolution, pos_rx, const_c, sample_rate, channel_model)
-    xy = estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask)
+    (xy,grid) = estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask)
     t_used = time.time()-t
     print "Grid based results: ",xy," time: ", t_used
-    return {"coordinates": xy,"t_used":t_used}
+    return {"coordinates": xy,"t_used":t_used,"grid":grid}
 
 def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask):
     M = [0] * num_rx
     for rx_idx in range(0,num_rx):
-        M[rx_idx] = generate_measurement_matrix(num_compressed_samples,num_delayed_samples,"gaussian")
+        M[rx_idx] = generate_measurement_matrix(num_compressed_samples,num_delayed_samples,"rand")
 
     # for normalization
     sigma_1 = np.sqrt(np.sum(np.power(np.abs(y[0]),2)))
@@ -52,7 +52,7 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
         print "size M:", np.array(M[rx_idx]).shape, " size shift: ", np.array(shift_matrix(y[0]/sigma_1,unique_tdoas,2)).shape
         S[rx_idx] = np.dot(M[rx_idx],shift_matrix(y[0]/sigma_1,unique_tdoas,2))
         # compressive sampling of CS sensors
-        r[rx_idx] = np.dot(M[rx_idx],y[rx_idx])
+        r[rx_idx] = np.dot(M[rx_idx],y[rx_idx]).T
 
     b_joint = np.zeros(len(D_masked[1]))
 
@@ -75,9 +75,19 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
     m_idx_unmasked = masking_idxs[m_idx]
 
     # note: flip from matrix subscripts to geometric coordinates
-    (pos_x, pos_y) = np.unravel_index(m_idx_unmasked,np.ceil(np.divide(roi_size,float(resolution))))
+    (pos_x, pos_y) = np.unravel_index(m_idx_unmasked,np.ceil((roi_size - float(resolution)/2)/resolution))
     tx_pos_hat = (pos_x*resolution+float(resolution)/2,pos_y*resolution+float(resolution)/2)
-    return tx_pos_hat
+
+    # unmask to get back all grid bins
+    #b_joint_unmasked = np.zeros(len(D[1]))
+    #b_joint_unmasked(mask==false) = b_joint;
+
+    # plotting
+    plot_x = np.arange(0,roi_size[0]+resolution/2.,resolution)
+    plot_y = np.arange(0,roi_size[1]+resolution/2.,resolution)
+    plot_z = (abs(np.reshape(b_joint,(np.ceil((roi_size - float(resolution)/2)/resolution)))).T).tolist()
+
+    return (tx_pos_hat,[plot_x,plot_y,plot_z])
 
 def generate_measurement_matrix(m, n, selection_type):
     if selection_type == "first":
