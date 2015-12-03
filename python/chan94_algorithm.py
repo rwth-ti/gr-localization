@@ -19,7 +19,7 @@ def localize(receivers):
         if receiver.selected_position == "manual":
             pos_rx.append(receiver.coordinates)
         else:
-            pos_rx.append(receiver.coordinates)
+            pos_rx.append(receiver.coordinates_gps)
 
     c = 299700000
 
