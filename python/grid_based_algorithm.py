@@ -49,7 +49,6 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
         # take only unique TDOAs at this stage, resample later
         unique_tdoas = np.arange(np.min(D_masked[rx_idx]),np.max(D_masked[rx_idx])+1)
         # create matrices of shifted normalized signals related to reference sensor
-        print "size M:", np.array(M[rx_idx]).shape, " size shift: ", np.array(shift_matrix(y[0]/sigma_1,unique_tdoas,2)).shape
         S[rx_idx] = np.dot(M[rx_idx],shift_matrix(y[0]/sigma_1,unique_tdoas,2))
         # compressive sampling of CS sensors
         r[rx_idx] = np.dot(M[rx_idx],y[rx_idx]).T

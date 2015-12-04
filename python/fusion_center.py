@@ -40,8 +40,6 @@ class fusion_center():
         self.receivers = {}
         self.guis = {}
 
-        self.estimated_positions = {}
-
         self.delay_history = []
         self.store_results = False
         self.results_file = ""
@@ -53,7 +51,7 @@ class fusion_center():
         #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
         self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
                       urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
-                      projection='merc')
+                      projection='tmerc', lon_0 = 6, lat_0 = 48)
 
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
@@ -223,13 +221,15 @@ class fusion_center():
             threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
 
     def localize_loop(self, freq, lo_offset, samples_to_receive):
-        self.store_results = True
-        self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
-        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        self.run_loop = True
-        threading.Thread(target = self.localize, args = (freq, lo_offset, samples_to_receive)).start()
+        if len(self.receivers) > 2:
+            self.localizing = True
+            self.store_results = True
+            self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+            print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+            print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
+            print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+            self.run_loop = True
+            threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
 
     def run_localization(self, freq, lo_offset, samples_to_receive):
         while True:
@@ -298,26 +298,29 @@ class fusion_center():
         while True:
             time.sleep(0.01)
             if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
+                estimated_positions = {}
                 receivers = copy.deepcopy(self.receivers)
                 if self.localizing:
-                    self.estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
-                    self.estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])))
-                    for gui in self.guis.values():
-                        threading.Thread(target = gui.rpc_manager.request, args = ("set_tx_position", [self.estimated_positions])).start()
+                    estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
+                    estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                    if not self.run_loop:
+                        self.localizing = False
 
-                self.ref_receiver = self.receivers.keys()[0]
-                correlation, delay = self.correlate()
-                if all(abs(d) < 100 for d in delay):
-                    if len(self.delay_history) < len(delay):
-                        self.delay_history = []
+                self.ref_receiver = receivers.keys()[0]
+                correlation, delay = None,None
+                if len(receivers) > 1:
+                    correlation, delay = self.correlate(receivers)
+                    if all(abs(d) < 100 for d in delay):
+                        if len(self.delay_history) < len(delay):
+                            self.delay_history = []
+                            for i in range(0,len(delay)):
+                                self.delay_history.append([])
                         for i in range(0,len(delay)):
-                            self.delay_history.append([])
-                    for i in range(0,len(delay)):
-                        self.delay_history[i].append(delay[i])
+                            self.delay_history[i].append(delay[i])
                 receivers_samples = []
-                for receiver in self.receivers.values():
+                for receiver in receivers.values():
                     receivers_samples.append(receiver.samples)
-                results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history}
+                results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions}
                 if self.store_results:
                     # build receivers strings for log file
                     receivers_position = "["
@@ -353,7 +356,7 @@ class fusion_center():
                     receivers_gain = receivers_gain + "]"
 
                     if self.localizing:
-                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(self.estimated_positions.items()), file=open(self.results_file,"a"))
+                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(estimated_positions.items()), file=open(self.results_file,"a"))
                     else:
                         print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
                 for gui in self.guis.values():
@@ -364,12 +367,11 @@ class fusion_center():
             else:
                 self.probe_manager.watcher()
 
-    def correlate(self):
+    def correlate(self, receivers):
         correlation = []
-        for receiver in self.receivers:
+        for receiver in receivers:
             if not self.ref_receiver == receiver:
-                print(receiver,self.ref_receiver)
-                correlation.append(np.absolute(np.correlate(self.receivers[self.ref_receiver].samples, self.receivers[receiver].samples, "full", False)).tolist())
+                correlation.append(np.absolute(np.correlate(receivers[self.ref_receiver].samples, receivers[receiver].samples, "full", False)).tolist())
         delay = (np.argmax(correlation, axis=1) - self.samples_to_receive + 1).tolist()
         #delay = correlation.index(np.max(correlation) - self.samples_to_receive + 1)
         print("Delay:", delay, "samples")

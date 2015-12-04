@@ -3,7 +3,6 @@
 ###############################################################################
 # Imports
 ###############################################################################
-from __future__ import print_function
 from optparse import OptionParser
 from gnuradio.eng_option import eng_option
 import sys
@@ -81,7 +80,6 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
-        self.rpc_manager.add_interface("set_tx_position",self.set_tx_position)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -206,7 +204,7 @@ class gui(QtGui.QMainWindow):
         #
         self.basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
                       urcrnrlon=bbox[2], urcrnrlat=bbox[3],
-                      projection='merc', ax=self.ax)
+                      projection='tmerc', ax=self.ax, lon_0 = 6, lat_0 = 48)
 
         self.basemap.imshow(img, interpolation='lanczos', origin='upper')
 
@@ -242,10 +240,6 @@ class gui(QtGui.QMainWindow):
             if first and self.bbox != None:
                 threading.Thread(target = self.init_map).start()
                 first = False
-            print("Parameters:",self.frequency, self.samp_rate, self.bw, self.samples_to_receive, self.lo_offset, self.receivers)
-            for receiver in self.receivers.values():
-                print(receiver.gain)
-                print(receiver.antenna)
             time.sleep(10)
 
     def sync_position(self, serial, coordinates):
@@ -425,24 +419,29 @@ class gui(QtGui.QMainWindow):
             self.set_delegate = False
 
         if self.new_results:
-            print("Delay:",self.results["delay"])
-            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
-            self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
-            # clear the previous points from the plot
-            self.gui.qwtPlotCorrelation.clear()
-            self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][0],Qt.Qt.blue)
-            if len(self.results["correlation"]) > 1:
-                self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][1],Qt.Qt.red)
-            print(self.results["delay_history"])
-            # clear the previous points from the plot
-            self.gui.qwtPlotDelayHistory.clear()
-            if len(self.results["delay_history"]) > 0:
-                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
-                if len(self.results["delay_history"]) > 1:
-                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
-            self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
-            self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][1])
-            self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][2])
+            if self.results["correlation"] != None:
+                print "Delay:",self.results["delay"]
+                self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+                self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
+                # clear the previous points from the plot
+                self.gui.qwtPlotCorrelation.clear()
+                self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][0],Qt.Qt.blue)
+                if len(self.results["correlation"]) > 1:
+                    self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][1],Qt.Qt.red)
+                # clear the previous points from the plot
+                self.gui.qwtPlotDelayHistory.clear()
+                if len(self.results["delay_history"]) > 0:
+                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
+                    if len(self.results["delay_history"]) > 1:
+                        self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
+            if len(self.results["receivers"]) > 0:
+                self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
+            if len(self.results["receivers"]) > 1:
+                self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][1])
+            if len(self.results["receivers"]) > 2:
+                self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][2])
+            if self.results["estimated_positions"] != None:
+                self.set_tx_position(self.results["estimated_positions"])
         self.new_results = False
 
     def register_receiver(self, serial, gain, antenna):
