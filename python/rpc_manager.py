@@ -27,13 +27,13 @@ import time
 
 class rpc_manager():
     def __init__(self):
-        print "imported"
         self.zmq_context = zmq.Context()
         self.poller_rep = zmq.Poller()
         self.poller_req_out = zmq.Poller()
         self.poller_req_in = zmq.Poller()
         self.interfaces = dict()
         self.busy = False
+        self.debug = False
 
     def __del__(self):
         self.stop_watcher()
@@ -42,22 +42,26 @@ class rpc_manager():
     def set_reply_socket(self, address):
         self.rep_socket = self.zmq_context.socket(zmq.REP)
         self.rep_socket.bind(address)
-        print "[RPC] reply socket bound to: ", address
+        if self.debug:
+            print "[RPC] reply socket bound to: ", address
         self.poller_rep.register(self.rep_socket, zmq.POLLIN)
 
     def set_request_socket(self, address):
         self.req_socket = self.zmq_context.socket(zmq.REQ)
         self.req_socket.connect(address)
-        print "[RPC] request socket connected to: ", address
+        if self.debug:
+            print "[RPC] request socket connected to: ", address
         self.poller_req_out.register(self.req_socket, zmq.POLLOUT)
         self.poller_req_in.register(self.req_socket, zmq.POLLIN)
 
     def add_interface(self, id_str, callback_func):
         if not self.interfaces.has_key(id_str):
             self.interfaces[id_str] = callback_func
-            print "[RPC] added reply interface:", id_str
+            if self.debug:
+                print "[RPC] added reply interface:", id_str
         else:
-            print "ERROR: duplicate id_str"
+            if self.debug:
+                print "ERROR: duplicate id_str"
 
     def watcher(self):
         self.keep_running = True
@@ -68,10 +72,12 @@ class rpc_manager():
                 # receive call
                 msg = self.rep_socket.recv()
                 (id_str, args) = pmt.to_python(pmt.deserialize_str(msg))
-                print "[RPC] request:", id_str, ", args:", args
+                if self.debug:
+                    print "[RPC] request:", id_str, ", args:", args
                 reply = self.callback(id_str, args)
                 self.rep_socket.send(pmt.serialize_str(pmt.to_pmt(reply)))
-                print "[RPC] reply:", reply
+                if self.debug:
+                    print "[RPC] reply:", reply
 
     def start_watcher(self):
         self.watcher_thread = threading.Thread(target=self.watcher,args=())
@@ -87,7 +93,8 @@ class rpc_manager():
         while self.busy:
             sleep = 0.1
             time_waiting = time_waiting + sleep
-            print "waiting"
+            if self.debug:
+                print "waiting"
             time.sleep(sleep)
             if time_waiting > 1:
                 self.busy = False
@@ -96,11 +103,13 @@ class rpc_manager():
         socks = dict(self.poller_req_out.poll(10))
         if socks.get(self.req_socket) == zmq.POLLOUT:
             self.req_socket.send(pmt.serialize_str(pmt.to_pmt((id_str,args))))
-            print "[RPC] request:", id_str, ", args:", args
+            if self.debug:
+                print "[RPC] request:", id_str, ", args:", args
         socks = dict(self.poller_req_in.poll(1000))
         if socks.get(self.req_socket) == zmq.POLLIN:
             reply = pmt.to_python(pmt.deserialize_str(self.req_socket.recv()))
-            print "[RPC] reply:", reply
+            if self.debug:
+                print "[RPC] reply:", reply
             self.busy = False
             return reply
 
@@ -113,5 +122,6 @@ class rpc_manager():
             else:
                 return(callback_func())
         else:
-            print "[RPC] ERROR: id_str not found"
+            if self.debug:
+                print "[RPC] ERROR: id_str not found"
             return None
