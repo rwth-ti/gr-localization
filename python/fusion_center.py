@@ -49,9 +49,37 @@ class fusion_center():
         self.bbox = 6.0580,50.7775,6.0690,50.7810
         #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
         #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
+
+        # get reference UTM grid
+        lon = self.bbox[0]
+        lat = self.bbox[1]
+        if lat>=72:
+            lat_0 = 72
+            if 0<=lon and lon<= 9:
+                lon_0 = 0
+            elif 9<=lon and lon<= 21:
+                lon_0 = 9
+            elif 21<=lon and lon<= 33:
+                lon_0 = 21
+            elif 33<=lon and lon<= 42:
+                lon_0 = 33
+            else:
+                lon_0 = int(lon/6)*6
+
+        elif 56<=lat and lat<= 64:
+            lat_0 = 56
+            if 3<=lon and lon<=12:
+                lon_0 = 3
+            else:
+                lon_0 = int(lon/6)*6
+
+        else:
+            lat_0 = int(lat/8)*8
+            lon_0 = int(lon/6)*6
+
         self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
                       urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
-                      projection='tmerc', lon_0 = 6, lat_0 = 48)
+                      projection='tmerc', lon_0=lon_0, lat_0=lat_0)
 
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
