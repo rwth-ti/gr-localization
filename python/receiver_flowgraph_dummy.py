@@ -135,7 +135,7 @@ class top_block(gr.top_block):
         	),
         	payload_length=0,
         )
-        self.head = blocks.head(gr.sizeof_gr_complex*1, 5100)
+        self.head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 100)
         self.skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,self.options.delay)
 
         self.connect((self.vector_source, 0), (self.ofdm_mod, 0))
