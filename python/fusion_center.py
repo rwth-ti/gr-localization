@@ -390,6 +390,7 @@ class fusion_center():
                 for gui in self.guis.values():
                     gui.rpc_manager.request("get_results",[results])
                 for receiver in self.receivers.values():
+                    receiver.samples = []
                     receiver.first_packet = True
                     receiver.reception_complete = False
             else:

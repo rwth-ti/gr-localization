@@ -61,13 +61,15 @@ class top_block(gr.top_block):
         	payload_length=0,
         )
         self.head = blocks.head(gr.sizeof_gr_complex*1, 5100)
+        self.skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,options.delay)
 
 
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
         self.connect((self.vector_source, 0), (self.ofdm_mod, 0))
         self.connect((self.ofdm_mod, 0), (self.throttle, 0))
-        self.connect(self.throttle, self.head)
+        self.connect(self.throttle, self.skiphead)
+        self.connect(self.skiphead, self.head)
         self.connect(self.head, self.zmq_probe)
 
         # ZeroMQ
@@ -111,11 +113,37 @@ class top_block(gr.top_block):
     def start_fg(self, samples_to_receive, freq, lo_offset):
         self.stop()
         self.wait()
-        self.disconnect(self.throttle, self.head)
+
+        self.disconnect((self.vector_source, 0), (self.ofdm_mod, 0))
+        self.disconnect((self.ofdm_mod, 0), (self.throttle, 0))
+        self.disconnect(self.throttle, self.skiphead)
+        self.disconnect(self.skiphead, self.head)
         self.disconnect(self.head, self.zmq_probe)
-        self.head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 100)
+
+        self.vector_source = blocks.vector_source_f(([0,0,0,1,1,0,1,0,1,1,1]), True, 1, [])
+        self.throttle = blocks.throttle(gr.sizeof_gr_complex*1, self.samp_rate,True)
+        self.ofdm_mod = grc_blks2.packet_mod_f(digital.ofdm_mod(
+        		options=grc_blks2.options(
+        			modulation="qpsk",
+        			fft_length=8192,
+        			occupied_tones=200,
+        			cp_length=0,
+        			pad_for_usrp=False,
+        			log=None,
+        			verbose=None,
+        		),
+        	),
+        	payload_length=0,
+        )
+        self.head = blocks.head(gr.sizeof_gr_complex*1, 5100)
+        self.skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,self.options.delay)
+
+        self.connect((self.vector_source, 0), (self.ofdm_mod, 0))
+        self.connect((self.ofdm_mod, 0), (self.throttle, 0))
+        self.connect(self.throttle, self.skiphead)
+        self.connect(self.skiphead, self.head)
         self.connect(self.head, self.zmq_probe)
-        self.connect(self.throttle, self.head)
+
         self.start()
 
     def get_gps_position(self):
@@ -137,6 +165,8 @@ def parse_options():
                       help="GPS type")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
+    parser.add_option("-d", "--delay", type="int", default="0",
+                      help="Delay")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
     (options, args) = parser.parse_args()
