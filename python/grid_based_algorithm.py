@@ -2,7 +2,7 @@ import numpy as np
 from scipy.signal import resample
 import time
 
-def localize(receivers, roi_size):
+def localize(receivers, roi_size, resolution, num_compressed_samples):
 
     t = time.time()
     y = []
@@ -15,24 +15,23 @@ def localize(receivers, roi_size):
             pos_rx.append(receiver.coordinates_gps)
     pos_rx = np.array(pos_rx)
 
-    resolution = 6
     const_c = 299700000
     sample_rate = receivers[0].samp_rate
     channel_model = "free_space"
     num_rx = 3
     num_delayed_samples = receivers[0].samples_to_receive
-    num_compressed_samples = num_delayed_samples
+    measurement_type = "rand"
 
     (D,mask) = generate_environment_matrices(roi_size, resolution, pos_rx, const_c, sample_rate, channel_model)
-    (xy,grid) = estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask)
+    (xy,grid) = estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, measurement_type, mask)
     t_used = time.time()-t
     print "Grid based results: ",xy," time: ", t_used
-    return {"coordinates": xy,"t_used":t_used,"grid":grid}
+    return {"coordinates": xy,"t_used":t_used,"grid":grid,"resolution":resolution,"num_compressed_samples":num_compressed_samples,"measurement_type":measurement_type}
 
-def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, mask):
+def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample_rate, num_compressed_samples, num_delayed_samples, y, D, measurement_type,mask):
     M = [0] * num_rx
     for rx_idx in range(0,num_rx):
-        M[rx_idx] = generate_measurement_matrix(num_compressed_samples,num_delayed_samples,"rand")
+        M[rx_idx] = generate_measurement_matrix(num_compressed_samples,num_delayed_samples,measurement_type)
 
     # for normalization
     sigma_1 = np.sqrt(np.sum(np.power(np.abs(y[0]),2)))

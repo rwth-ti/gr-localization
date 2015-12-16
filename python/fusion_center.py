@@ -40,6 +40,8 @@ class fusion_center():
         self.receivers = {}
         self.guis = {}
 
+        self.grid_based = {"resolution":6,"num_samples":self.samples_to_receive}
+
         self.delay_history = []
         self.store_results = False
         self.results_file = ""
@@ -47,6 +49,7 @@ class fusion_center():
         self.localizing = False
 
         self.bbox = 6.0580,50.7775,6.0690,50.7810
+        #self.bbox = 6.06429,50.77697,6.07271,50.78033
         #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
         #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
 
@@ -106,6 +109,8 @@ class fusion_center():
         self.rpc_manager.add_interface("set_bw",self.set_bw)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
+        self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
+        self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
         self.rpc_manager.start_watcher()
 
         threading.Thread(target = self.poll_gps_position).start()
@@ -151,6 +156,9 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_samples_to_receive",[self.samples_to_receive])
             gui.rpc_manager.request("set_gui_bw",[self.bw])
             gui.rpc_manager.request("set_gui_samp_rate",[self.samp_rate])
+            gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[self.grid_based["resolution"]])
+            gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
+
             for gui in self.guis.values():
                 for serial in self.guis:
                     # request registration in each gui
@@ -322,19 +330,31 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_selected_position",[selected_position, serial])
 
+    def set_TDOA_grid_based_resolution(self, resolution):
+        self.grid_based["resolution"] = resolution
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[resolution])
+
+    def set_TDOA_grid_based_num_samples(self, num_samples):
+        num_samples = min(num_samples,self.samples_to_receive)
+        self.grid_based["num_samples"] = num_samples
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[num_samples])
+
     def process_results(self):
         while True:
             time.sleep(0.01)
             if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
                 estimated_positions = {}
                 receivers = copy.deepcopy(self.receivers)
+                self.ref_receiver = receivers.keys()[0]
+                #receivers[self.ref_receiver].samples = np.roll(receivers[self.ref_receiver].samples,7)
                 if self.localizing:
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
-                    estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                    estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"])
                     if not self.run_loop:
                         self.localizing = False
 
-                self.ref_receiver = receivers.keys()[0]
                 correlation, delay = None,None
                 if len(receivers) > 1:
                     correlation, delay = self.correlate(receivers)
@@ -400,7 +420,7 @@ class fusion_center():
         correlation = []
         for receiver in receivers:
             if not self.ref_receiver == receiver:
-                correlation.append(np.absolute(np.correlate(receivers[self.ref_receiver].samples, receivers[receiver].samples, "full", False)).tolist())
+                correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full", False)).tolist())
         delay = (np.argmax(correlation, axis=1) - self.samples_to_receive + 1).tolist()
         #delay = correlation.index(np.max(correlation) - self.samples_to_receive + 1)
         print("Delay:", delay, "samples")

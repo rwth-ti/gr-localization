@@ -2,9 +2,9 @@ import numpy as np
 import time
 
 
-def correlate(y1, y2):
+def estimate_delay(y1, y2):
     correlation = np.absolute(np.correlate(y1, y2, "full", False)).tolist()
-    delay = int(correlation.index(np.max(correlation)) - len(y1) + 1)
+    delay = (np.argmax(correlation) - len(y1) + 1).tolist()
     return delay
 
 
@@ -24,8 +24,8 @@ def localize(receivers):
     c = 299700000
 
     #cross correlations
-    d12 = float(correlate(receivers[1].samples,receivers[0].samples))/sample_rate
-    d13 = float(correlate(receivers[2].samples,receivers[0].samples))/sample_rate
+    d12 = float(estimate_delay(receivers[1].samples,receivers[0].samples))/sample_rate
+    d13 = float(estimate_delay(receivers[2].samples,receivers[0].samples))/sample_rate
 
     # Set receivers position.
     x1 = pos_rx[0][0]
@@ -60,9 +60,9 @@ def localize(receivers):
     beta = 2*(A*B+C*D-A*x1-C*y1)
     gamma = pow(x1,2)+pow(y1,2)-2*x1*B-2*y1*D+pow(B,2)+pow(D,2)
 
-    r1 = [(-beta+np.sqrt(pow(beta,2)-4*alpha*gamma))/(2*alpha),(-beta-np.sqrt(pow(beta,2)-4*alpha*gamma))/(2*alpha)]
+    r1 = [(-beta+np.sqrt(pow(beta,2)-4*alpha*gamma+0j))/(2*alpha),(-beta-np.sqrt(pow(beta,2)-4*alpha*gamma+0j))/(2*alpha)]
     # Calculate position with the solution in the roi
-    xy = (max(r1)*A+B,max(r1)*C+D)
+    xy = np.real((max(r1)*A+B,max(r1)*C+D))
     t_used = time.time()-t
     print "Chan results: ",xy," time: ", t_used
     return {"coordinates": xy,"t_used":t_used}

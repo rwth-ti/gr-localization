@@ -80,6 +80,10 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
+        self.rpc_manager.add_interface("set_gui_TDOA_grid_based_resolution",self.set_gui_TDOA_grid_based_resolution)
+        self.rpc_manager.add_interface("set_gui_TDOA_grid_based_num_samples",self.set_gui_TDOA_grid_based_num_samples)
+        self.rpc_manager.add_interface("set_gui_TDOA_grid_based_channel_model",self.set_gui_TDOA_grid_based_channel_model)
+        self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -173,6 +177,10 @@ class gui(QtGui.QMainWindow):
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
         self.connect(self.shortcut_exit, QtCore.SIGNAL("activated()"), self.gui.close)
 
+        # Grid based signals
+        self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(int)"), self.set_TDOA_grid_based_resolution)
+        self.connect(self.gui.spinGridNumCompSamps, QtCore.SIGNAL("valueChanged(int)"), self.set_TDOA_grid_based_num_samples)
+
         # start update timer
         self.update_timer.start(33)
         self.timer_register = threading.Thread(target = self.register_gui)
@@ -194,6 +202,7 @@ class gui(QtGui.QMainWindow):
 
         if r.status_code == 200:
             img = Image.open(StringIO(r.content))
+            img.save("map.png")
 
         #img = Image.open("ict_cubes.png")
 
@@ -244,6 +253,7 @@ class gui(QtGui.QMainWindow):
         #self.figure.patch.set_visible(False)
         self.ax.axis('off')
         self.canvas.draw()
+        self.hyperbolas = {}
 
     def init_plot(self, qwtPlot):
         title = Qwt.QwtText("Samples")
@@ -313,7 +323,10 @@ class gui(QtGui.QMainWindow):
     def set_tx_position(self, transmitter_positions):
         if not hasattr(self, "basemap"):
             return
-        # remove point from map if was set
+        if self.hyperbolas.has_key("tdoa"):
+            for h in self.hyperbolas["tdoa"]:
+                h.remove()
+        self.hyperbolas["tdoa"] = self.plot_hyperbolas()
         for algorithm in transmitter_positions.items():
             if not self.transmitter_positions.has_key(algorithm[0]):
                 self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
@@ -325,16 +338,90 @@ class gui(QtGui.QMainWindow):
                 estimated_position.annotation.remove()
             if hasattr(self, "ax"):
                 # save scattered point into receiver properties
-                estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9)
+                estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9, zorder=20)
                 # set annotation RXx
                 text = algorithm[0]
-                estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+                estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9), zorder=20)
+                if algorithm[0] == "chan":
+                    if self.hyperbolas.has_key("chan"):
+                        for h in self.hyperbolas["chan"]:
+                            h.remove()
+                    self.hyperbolas["chan"] = self.plot_hyperbolas(algorithm[1]["coordinates"],"blue")
                 if algorithm[0] == "grid_based":
+                    if self.hyperbolas.has_key("grid_based"):
+                        for h in self.hyperbolas["grid_based"]:
+                            h.remove()
                     self.plot_grid(algorithm[1]["grid"])
+                    self.hyperbolas["grid_based"] = self.plot_hyperbolas(algorithm[1]["coordinates"],"green")
                 self.canvas.draw()
             else:
                 # ax not rendered yet, so update position when available
                 self.pending_receivers_to_plot = True
+
+    def plot_hyperbolas(self, pos_tx=None, c="red"):
+        pos_rx = []
+        hyperbolas = []
+        for receiver in self.receivers.values():
+            if receiver.selected_position == "manual":
+                pos_rx.append(receiver.coordinates)
+            else:
+                pos_rx.append(receiver.coordinates_gps)
+        for i in range(1,len(pos_rx)):
+            if pos_tx is None:
+                hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx, self.results["delay"][i-1])
+            else:
+                hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx)
+
+            if len(hyperbolas) < i:
+                h = self.ax.scatter(hyperbola[0],hyperbola[1],c=c,zorder=10,edgecolors='none')
+                hyperbolas.append(h)
+            else:
+                hyperbolas[i-1] = self.ax.scatter(hyperbola[0],hyperbola[1],c=c,zorder=10,edgecolors='none')
+        return hyperbolas
+
+
+    def get_hyperbola(self, pos_rx, pos_tx=None, delay=None):
+        # Redefine receivers position and signals so that the signal arrives first
+        # to the nearest receiver.
+        pos_rx = np.array(pos_rx)
+        if pos_tx is not None:
+            pos_tx = np.array(pos_tx)
+            d1 = np.linalg.norm(pos_rx[0]-pos_tx)
+            d2 = np.linalg.norm(pos_rx[1]-pos_tx)
+
+        if delay is not None:
+            if delay<0:
+                pos_rx = np.flipud(pos_rx)
+        else:
+            if d1>d2:
+                pos_rx = np.flipud(pos_rx)
+
+        # Baseline distance between sensors
+        B = np.linalg.norm(pos_rx[1]-pos_rx[0])
+
+        # Asign alpha0 angle depending on the sensors relative position
+        if pos_rx[1][0]>pos_rx[0][0]:
+            alpha0 = -np.arcsin((pos_rx[1][1]-pos_rx[0][1])/B)
+        else:
+            alpha0 = np.arcsin((pos_rx[1][1]-pos_rx[0][1])/B)+np.pi
+
+        # Calculate parametric points of the hyperbola
+        Hx = []
+        Hy = []
+        if delay is not None:
+            delta_rx1_rx2 = delay / self.samp_rate * 299700000
+        else:
+            delta_rx1_rx2 = np.linalg.norm(pos_tx-pos_rx[0])-np.linalg.norm(pos_tx-pos_rx[1])
+        for alpha in np.arange(0,2*np.pi,0.005):
+            h = np.array(pos_rx[0])-(B*B-delta_rx1_rx2*delta_rx1_rx2)/(2*(-delta_rx1_rx2-B*np.cos(alpha)))*np.array([np.cos(alpha-alpha0),np.sin(alpha-alpha0)])
+            # Get only points in the region of interest
+            distance_1 = np.linalg.norm(h-pos_rx[0])
+            distance_2 = np.linalg.norm(h-pos_rx[1])
+            [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
+            if ((distance_1 <= distance_2) and (0 < h[0] < max_x) and (0 < h[1] < max_y)):
+                Hx.append(h[0])
+                Hy.append(h[1])
+        return [Hx,Hy]
 
     def plot_grid(self, s):
         if hasattr(self,"grid"):
@@ -413,6 +500,26 @@ class gui(QtGui.QMainWindow):
     def set_gui_selected_position(self, selected_position, serial):
         self.tmrp.set_selected_position(selected_position, serial)
 
+    def set_TDOA_grid_based_resolution(self, resolution):
+        self.rpc_manager.request("set_TDOA_grid_based_resolution", [resolution])
+
+    def set_TDOA_grid_based_num_samples(self, num_samples):
+        self.rpc_manager.request("set_TDOA_grid_based_num_samples", [num_samples])
+
+    def set_gui_TDOA_grid_based_resolution(self, resolution):
+        self.gui.spinGridResolution.setValue(resolution)
+
+    def set_gui_TDOA_grid_based_num_samples(self, num_samples):
+        self.gui.spinGridNumCompSamps.setValue(num_samples)
+
+    def set_gui_TDOA_grid_based_measurement_type(self, measurement_type):
+        return
+        #self.gui.comboBoxGridMeasMatrixType
+
+    def set_gui_TDOA_grid_based_channel_model(self, channel_model):
+        return
+        #self.gui.comboBoxGridMeasMatrixType
+
     def get_results(self, results):
         self.results = results
         self.new_results = True
@@ -422,12 +529,12 @@ class gui(QtGui.QMainWindow):
             for key in self.receivers:
                 receiver = self.receivers[key]
                 # save scattered point into receiver properties
-                receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9)
-                receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
+                receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9, zorder=20)
+                receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9, zorder=20)
                 # set annotation RXx
                 text = "RX" + str(self.receivers.keys().index(key) + 1)
-                receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
-                receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
+                receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
+                receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
 
             self.canvas.draw()
             self.pending_receivers_to_plot = False
