@@ -43,8 +43,10 @@ class fusion_center():
         self.grid_based = {"resolution":6,"num_samples":self.samples_to_receive}
 
         self.delay_history = []
+        self.delay_calibration = []
         self.store_results = False
         self.results_file = ""
+        self.results = None
         self.run_loop = False
         self.localizing = False
 
@@ -98,6 +100,8 @@ class fusion_center():
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
         self.rpc_manager.add_interface("localize",self.localize)
         self.rpc_manager.add_interface("localize_loop",self.localize_loop)
+        self.rpc_manager.add_interface("calibrate",self.calibrate)
+        self.rpc_manager.add_interface("remove_calibration",self.remove_calibration)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_loop",self.stop_loop)
@@ -114,6 +118,33 @@ class fusion_center():
         self.rpc_manager.start_watcher()
 
         threading.Thread(target = self.poll_gps_position).start()
+
+    def calibrate(self, coordinates):
+        if self.results is not None:
+            if self.results["delay"] is not None:
+                if len(self.results["delay"]) > 0:
+                    ref_receiver = self.receivers[self.ref_receiver]
+                    if ref_receiver.selected_position == "manual":
+                        pos_ref = ref_receiver.coordinates
+                    else:
+                        pos_ref = ref_receiver.coordinates_gps
+                    for i in range(0,len(self.results["delay"])):
+                        receiver = self.receivers.values()[i+1]
+                        if receiver.selected_position == "manual":
+                            pos_receiver = receiver.coordinates
+                        else:
+                            pos_receiver = receiver.coordinates_gps
+                        d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
+                        d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
+                        delay_true = (d_ref-d_receiver) * self.samp_rate / 299700000
+                        if len(self.delay_calibration) < len(self.results["delay"]):
+                            self.delay_calibration.append(int(self.results["delay"][i]-np.floor(delay_true)))
+                        else:
+                            self.delay_calibration[i] = int(self.results["delay"][i]-np.floor(delay_true))-self.delay_calibration[i]
+        print (self.delay_calibration)
+
+    def remove_calibration(self):
+        self.delay_calibration = []
 
     def forward_chat(self, chat):
         for gui in self.guis.values():
@@ -348,7 +379,9 @@ class fusion_center():
                 estimated_positions = {}
                 receivers = copy.deepcopy(self.receivers)
                 self.ref_receiver = receivers.keys()[0]
-                #receivers[self.ref_receiver].samples = np.roll(receivers[self.ref_receiver].samples,7)
+                if len(self.delay_calibration) > 0:
+                    for i in range(0,len(self.delay_calibration)):
+                        receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_calibration[i])
                 if self.localizing:
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
                     estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"])
@@ -368,7 +401,7 @@ class fusion_center():
                 receivers_samples = []
                 for receiver in receivers.values():
                     receivers_samples.append(receiver.samples)
-                results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions}
+                self.results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions}
                 if self.store_results:
                     # build receivers strings for log file
                     receivers_position = "["
@@ -404,11 +437,11 @@ class fusion_center():
                     receivers_gain = receivers_gain + "]"
 
                     if self.localizing:
-                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(estimated_positions.items()), file=open(self.results_file,"a"))
+                        print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(estimated_positions.items()), file=open(self.results_file,"a"))
                     else:
-                        print(str(time.time()) + ";" + str(results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
+                        print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
                 for gui in self.guis.values():
-                    gui.rpc_manager.request("get_results",[results])
+                    gui.rpc_manager.request("get_results",[self.results])
                 for receiver in self.receivers.values():
                     receiver.samples = []
                     receiver.first_packet = True

@@ -105,6 +105,7 @@ class gui(QtGui.QMainWindow):
         self.toolbar = gui_helpers.NavigationToolbar(self.canvas, self)
 
         self.canvas.mpl_connect("button_release_event", self.set_position)
+        self.canvas.mpl_connect("button_release_event", self.calibrate)
 
         self.verticalLayoutMap.addWidget(self.toolbar)
         self.verticalLayoutMap.addWidget(self.canvas)
@@ -131,6 +132,7 @@ class gui(QtGui.QMainWindow):
         self.gui.tableViewReceiversPosition.setItemDelegateForColumn(2, gui_helpers.PushButtonPositionDelegate(self))
         self.set_delegate = False
         self.setting_pos_receiver = ""
+        self.setting_calibration = False
 
         self.pending_receivers_to_plot = False
 
@@ -160,6 +162,8 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_loop)
+        self.connect(self.gui.pushButtonSetCalibration, QtCore.SIGNAL("clicked()"), self.set_calibration)
+        self.connect(self.gui.pushButtonRemoveCalibration, QtCore.SIGNAL("clicked()"), self.remove_calibration)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
@@ -186,6 +190,14 @@ class gui(QtGui.QMainWindow):
         self.timer_register = threading.Thread(target = self.register_gui)
         self.timer_register.daemon = True
         self.timer_register.start()
+
+    def set_calibration(self):
+        if hasattr(self, "zp"):
+            self.setting_calibration = True
+            self.zp.enabled = False
+
+    def remove_calibration(self):
+        self.rpc_manager.request("remove_calibration")
 
     def init_map(self):
         bbox = self.bbox
@@ -412,12 +424,12 @@ class gui(QtGui.QMainWindow):
             delta_rx1_rx2 = delay / self.samp_rate * 299700000
         else:
             delta_rx1_rx2 = np.linalg.norm(pos_tx-pos_rx[0])-np.linalg.norm(pos_tx-pos_rx[1])
+        [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
         for alpha in np.arange(0,2*np.pi,0.005):
             h = np.array(pos_rx[0])-(B*B-delta_rx1_rx2*delta_rx1_rx2)/(2*(-delta_rx1_rx2-B*np.cos(alpha)))*np.array([np.cos(alpha-alpha0),np.sin(alpha-alpha0)])
             # Get only points in the region of interest
             distance_1 = np.linalg.norm(h-pos_rx[0])
             distance_2 = np.linalg.norm(h-pos_rx[1])
-            [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
             if ((distance_1 <= distance_2) and (0 < h[0] < max_x) and (0 < h[1] < max_y)):
                 Hx.append(h[0])
                 Hy.append(h[1])
@@ -428,6 +440,11 @@ class gui(QtGui.QMainWindow):
             self.grid.remove()
         self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.5)
 
+    def calibrate(self,mouse_event):
+        if self.setting_calibration:
+            self.rpc_manager.request("calibrate",[(mouse_event.xdata,mouse_event.ydata)])
+            self.setting_calibration = False
+            self.zp.enabled = True
 
     def set_position(self, mouse_event):
         if self.setting_pos_receiver is not "":

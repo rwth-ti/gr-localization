@@ -39,7 +39,7 @@
           <property name="childrenCollapsible">
            <bool>false</bool>
           </property>
-          <widget class="QWidget" name="">
+          <widget class="QWidget" name="layoutWidget">
            <layout class="QVBoxLayout" name="verticalLayout_8">
             <item>
              <layout class="QVBoxLayout" name="verticalLayoutMap"/>
@@ -82,7 +82,7 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="">
+          <widget class="QWidget" name="layoutWidget">
            <layout class="QVBoxLayout" name="verticalLayout_9">
             <property name="sizeConstraint">
              <enum>QLayout::SetMaximumSize</enum>
@@ -132,6 +132,24 @@
                <bool>false</bool>
               </attribute>
              </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_5">
+              <item>
+               <widget class="QPushButton" name="pushButtonSetCalibration">
+                <property name="text">
+                 <string>Calibrate TX</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButtonRemoveCalibration">
+                <property name="text">
+                 <string>Remove Calibration</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
             <item>
              <widget class="QPushButton" name="pushButtonLocalize">
