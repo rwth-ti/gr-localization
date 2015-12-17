@@ -44,7 +44,8 @@ class top_block(gr.top_block):
 
         if self.options.serial != "":
             self.usrp_source = uhd.usrp_source(
-                "serial == " + self.options.serial,
+                "serial == " + self.options.serial
+                + ",master == " + str(self.options.mcr),
                 uhd.stream_args(
                     cpu_format="fc32",
                     channels=range(1),
@@ -52,7 +53,7 @@ class top_block(gr.top_block):
             )
         else:
             self.usrp_source = uhd.usrp_source(
-                "",
+                "master == " + str(self.options.mcr),
                 uhd.stream_args(
                     cpu_format="fc32",
                     channels=range(1),
@@ -116,14 +117,17 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset):
+    def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv):
         print "Start Flowgraph"
         try:
             # get times from USRP
             time_now = self.usrp_source.get_time_now().get_real_secs()
             time_last_pps = self.usrp_source.get_time_last_pps().get_real_secs()
             time_to_sync = uhd.time_spec(time_last_pps + 0.1)
-            time_to_recv = uhd.time_spec(time_last_pps + 1)
+            if time_to_recv is None:
+                time_to_recv = uhd.time_spec(time_last_pps + 1)
+            else:
+                time_to_recv = uhd.time_spec(float(time_to_recv))
             # synchronize LOs
             self.usrp_source.set_command_time(time_to_sync)
             self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
@@ -162,6 +166,9 @@ class top_block(gr.top_block):
                 d = s.split(",")[9]
                 my_time = time.strptime(t+d,"%H%M%S%d%m%y")
                 time_nmea = calendar.timegm(my_time)
+                if self.options.ntp_server:
+                    os.system("sudo date +%s -s @"+str(time_nmea))
+                    print "System time set to:", str(time_nmea)
                 self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                 print "Set USRP to NMEA time + 1s:", time_nmea + 1
                 synced = True
@@ -175,6 +182,11 @@ class top_block(gr.top_block):
                         time_nmea = clock.get_time_real_secs()
                     else:
                         time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
+                    # set system time if ntp server option activated
+                    if self.options.ntp_server:
+                        os.system("sudo date +%s -s @"+str(time_nmea))
+                        print "System time set to:", str(time_nmea)
+                    # set internal time registers in USRP
                     self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                     print "Set USRP to NMEA time + 1s:", time_nmea + 1
                     synced = True
@@ -185,6 +197,7 @@ class top_block(gr.top_block):
         time.sleep(1)
         print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
         print "NMEA time sync complete!"
+        self.rpc_manager.request("sync_success",[self.ip_addr, self.options.ntp_server])
 
     def poll_lte_lite(self):
         while True:
@@ -239,8 +252,12 @@ def parse_options():
                       help="GPS type")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
+    parser.add_option("--mcr", type="float", default="10e6",
+                      help="Master clock rate")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
+    parser.add_option("", "--ntp-server", action="store_true", default=False,
+                      help="Activate ntp server")
     (options, args) = parser.parse_args()
     return options
 

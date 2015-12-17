@@ -49,6 +49,7 @@ class fusion_center():
         self.results = None
         self.run_loop = False
         self.localizing = False
+        self.ntp_sync = False
 
         self.bbox = 6.0580,50.7775,6.0690,50.7810
         #self.bbox = 6.06429,50.77697,6.07271,50.78033
@@ -115,6 +116,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
+        self.rpc_manager.add_interface("sync_success",self.sync_ntp)
         self.rpc_manager.start_watcher()
 
         threading.Thread(target = self.poll_gps_position).start()
@@ -235,11 +237,15 @@ class fusion_center():
         print(serial, "registered")
 
     def start_receivers(self, freq, lo_offset, samples_to_receive):
+        time_to_receive = time.time()+1
         for receiver in self.receivers.values():
             receiver.frequency = freq
             receiver.lo_offset = lo_offset
             receiver.samples_to_receive = samples_to_receive
-            receiver.request_samples()
+            if self.ntp_sync:
+                receiver.request_samples(self.ntp_sync, str(time_to_receive))
+            else:
+                receiver.request_samples(self.ntp_sync, None)
 
     def reset_receivers(self):
         #self.update_timer.stop()
@@ -371,6 +377,13 @@ class fusion_center():
         self.grid_based["num_samples"] = num_samples
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[num_samples])
+
+    def sync_ntp(self, ip_address, is_ntp_server):
+        if is_ntp_server:
+            print("Synchronize time to receiver NTP server ",ip_address)
+            os.system("sudo ntpdate " + ip_address)
+            self.ntp_sync = True
+            print("NTP synchronization done")
 
     def process_results(self):
         while True:

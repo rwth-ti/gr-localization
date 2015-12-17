@@ -49,11 +49,11 @@ class receiver_interface():
         self.antenna = antenna
         self.rpc_mgr.request("set_antenna",[self.antenna])
 
-    def request_samples(self):
+    def request_samples(self, ntp_sync, time_to_receive):
         self.samples = []
         self.first_packet = True
         self.reception_complete = False
-        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset])
+        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, time_to_receive])
 
     def receive_samples(self, samples):
         if self.first_packet:
