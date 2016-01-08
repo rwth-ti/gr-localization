@@ -139,10 +139,11 @@ class fusion_center():
                         d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                         d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
                         delay_true = (d_ref-d_receiver) * self.samp_rate / 299700000
+                        print(delay_true)
                         if len(self.delay_calibration) < len(self.results["delay"]):
-                            self.delay_calibration.append(int(self.results["delay"][i]-np.floor(delay_true)))
+                            self.delay_calibration.append(int(self.results["delay"][i]+np.floor(delay_true)))
                         else:
-                            self.delay_calibration[i] = int(self.results["delay"][i]-np.floor(delay_true))-self.delay_calibration[i]
+                            self.delay_calibration[i] = int(self.results["delay"][i]+np.floor(delay_true))+self.delay_calibration[i]
         print (self.delay_calibration)
 
     def remove_calibration(self):
@@ -394,7 +395,7 @@ class fusion_center():
                 self.ref_receiver = receivers.keys()[0]
                 if len(self.delay_calibration) > 0:
                     for i in range(0,len(self.delay_calibration)):
-                        receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_calibration[i])
+                        receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,-self.delay_calibration[i])
                 if self.localizing:
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
                     estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"])
