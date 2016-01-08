@@ -502,7 +502,7 @@ def parse_options():
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
-    parser.add_option("", "--bandwidth", type="string", default="1e6",
+    parser.add_option("", "--bandwidth", type="string", default="56e6",
                       help="Bandwidth")
     (options, args) = parser.parse_args()
     return options

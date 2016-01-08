@@ -43,22 +43,41 @@ class top_block(gr.top_block):
         self.tag_debug = blocks.tag_debug(gr.sizeof_gr_complex*1, "", ""); self.tag_debug.set_display(True)
 
         if self.options.serial != "":
-            self.usrp_source = uhd.usrp_source(
-                "serial == " + self.options.serial
-                + ",master == " + str(self.options.mcr),
-                uhd.stream_args(
-                    cpu_format="fc32",
-                    channels=range(1),
-                 ), False
-            )
+            if self.options.mcr != 0:
+                self.usrp_source = uhd.usrp_source(
+                    "serial == " + self.options.serial
+                    + ",master_clock_rate == " + str(self.options.mcr),
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                     ), False
+                )
+            else:
+                self.usrp_source = uhd.usrp_source(
+                    "serial == " + self.options.serial,
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                     ), False
+                )
+
         else:
-            self.usrp_source = uhd.usrp_source(
-                "master == " + str(self.options.mcr),
-                uhd.stream_args(
-                    cpu_format="fc32",
-                    channels=range(1),
-                ), False
-            )
+            if self.options.mcr != 0:
+                self.usrp_source = uhd.usrp_source(
+                    "master_clock_rate == " + str(self.options.mcr),
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                    ), False
+                )
+            else:
+                self.usrp_source = uhd.usrp_source(
+                    "",
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                    ), False
+                )
 
         self.gps = options.gps
 
@@ -102,8 +121,7 @@ class top_block(gr.top_block):
         self.usrp_source.set_samp_rate(samp_rate)
         threading.Thread(target = self.sync_time_nmea).start()
     def set_bw(self,bw):
-        #self.usrp_source.set_bandwidth(bw,0)
-        return
+        self.usrp_source.set_bandwidth(bw,0)
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)
     def set_antenna(self,antenna):
@@ -252,7 +270,7 @@ def parse_options():
                       help="GPS type")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
-    parser.add_option("--mcr", type="float", default="10e6",
+    parser.add_option("--mcr", type="float", default="0",
                       help="Master clock rate")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
