@@ -326,6 +326,13 @@
               </property>
               <layout class="QVBoxLayout" name="verticalLayout">
                <item>
+                <widget class="QCheckBox" name="checkBoxCorrelation">
+                 <property name="text">
+                  <string>Zoom</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <widget class="QwtPlot" name="qwtPlotCorrelation"/>
                </item>
               </layout>

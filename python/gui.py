@@ -122,7 +122,6 @@ class gui(QtGui.QMainWindow):
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
-        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100, 100)
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
@@ -171,6 +170,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.checkBoxFFT1, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,1))
         self.connect(self.gui.checkBoxFFT2, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,2))
         self.connect(self.gui.checkBoxFFT3, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,3))
+        self.connect(self.gui.checkBoxCorrelation, QtCore.SIGNAL("clicked()"), self.refresh_correlation)
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
         self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
@@ -439,7 +439,7 @@ class gui(QtGui.QMainWindow):
     def plot_grid(self, s):
         if hasattr(self,"grid"):
             self.grid.remove()
-        self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.5)
+        self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.7)
 
     def calibrate(self,mouse_event):
         if self.setting_calibration:
@@ -574,7 +574,10 @@ class gui(QtGui.QMainWindow):
         if self.new_results:
             if self.results["correlation"] != None:
                 print "Delay:",self.results["delay"]
-                self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+                if self.gui.checkBoxCorrelation.isChecked():
+                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
+                else:
+                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
                 self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()
@@ -675,7 +678,7 @@ class gui(QtGui.QMainWindow):
             qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
             qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, (self.frequency-self.samp_rate/2)/1000000000, (self.frequency+self.samp_rate/2)/1000000000)
         else:
-            y = np.absolute(samples)
+            y = np.real(samples)
             x = range(0,len(y),1)
             title = Qwt.QwtText("Samples")
             title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
@@ -690,6 +693,13 @@ class gui(QtGui.QMainWindow):
         curve.attach(qwtPlot)
         curve.setData(x, y)
         qwtPlot.replot()
+
+    def refresh_correlation(self):
+        if self.gui.checkBoxCorrelation.isChecked():
+            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
+        else:
+            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+        self.gui.qwtPlotCorrelation.replot()
 
     def refresh_plot(self, receiver):
         if receiver == 1 and self.results.has_key("receivers") and len(self.results["receivers"]) > 0:
