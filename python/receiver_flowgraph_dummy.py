@@ -11,7 +11,7 @@ from gnuradio import eng_notation
 from gnuradio import uhd
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
-import numpy
+import numpy as np
 import sys
 import os
 import threading
@@ -34,7 +34,11 @@ class top_block(gr.top_block):
         self.samp_rate = 50000000
         self.hostname = os.uname()[1]
         self.gps = "dummy"
-
+        self.id_rx = options.id_rx
+        self.noise_amp = 1/np.sqrt(np.power(10,options.snr/10))
+        self.modulation = options.modulation
+        self.seed = 10
+        self.delay = options.delay
 
         # socket addresses
         rpc_port = 6665 + options.id_rx
@@ -45,32 +49,11 @@ class top_block(gr.top_block):
 
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr)
-        self.vector_source = blocks.vector_source_f(([0,0,0,1,1,0,1,0,1,1,1]), True, 1, [])
-        self.throttle = blocks.throttle(gr.sizeof_gr_complex*1, self.samp_rate,True)
-        self.ofdm_mod = grc_blks2.packet_mod_f(digital.ofdm_mod(
-        		options=grc_blks2.options(
-        			modulation="qpsk",
-        			fft_length=4096,
-        			occupied_tones=200,
-        			cp_length=0,
-        			pad_for_usrp=False,
-        			log=None,
-        			verbose=None,
-        		),
-        	),
-        	payload_length=0,
-        )
-        self.head = blocks.head(gr.sizeof_gr_complex*1, 5100)
-        self.skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,options.delay)
-
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.id_rx, self.modulation, self.delay)
+        self.seed += 1
 
         # connects
-        #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
-        self.connect((self.vector_source, 0), (self.ofdm_mod, 0))
-        self.connect((self.ofdm_mod, 0), (self.throttle, 0))
-        self.connect(self.throttle, self.skiphead)
-        self.connect(self.skiphead, self.head)
-        self.connect(self.head, self.zmq_probe)
+        self.connect(self.mod_block, self.zmq_probe)
 
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
@@ -110,39 +93,18 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset):
+    def start_fg(self, samples_to_receive, freq, lo_offset,time_to_recv):
         self.stop()
         self.wait()
 
-        self.disconnect((self.vector_source, 0), (self.ofdm_mod, 0))
-        self.disconnect((self.ofdm_mod, 0), (self.throttle, 0))
-        self.disconnect(self.throttle, self.skiphead)
-        self.disconnect(self.skiphead, self.head)
-        self.disconnect(self.head, self.zmq_probe)
+        self.disconnect(self.mod_block, self.zmq_probe)
 
-        self.vector_source = blocks.vector_source_f(([0,0,0,1,1,0,1,0,1,1,1]), True, 1, [])
-        self.throttle = blocks.throttle(gr.sizeof_gr_complex*1, self.samp_rate,True)
-        self.ofdm_mod = grc_blks2.packet_mod_f(digital.ofdm_mod(
-        		options=grc_blks2.options(
-        			modulation="qpsk",
-        			fft_length=8192,
-        			occupied_tones=200,
-        			cp_length=0,
-        			pad_for_usrp=False,
-        			log=None,
-        			verbose=None,
-        		),
-        	),
-        	payload_length=0,
-        )
-        self.head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 100)
-        self.skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,self.options.delay)
+        # blocks
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.id_rx, self.modulation, self.delay)
+        self.seed += 1
 
-        self.connect((self.vector_source, 0), (self.ofdm_mod, 0))
-        self.connect((self.ofdm_mod, 0), (self.throttle, 0))
-        self.connect(self.throttle, self.skiphead)
-        self.connect(self.skiphead, self.head)
-        self.connect(self.head, self.zmq_probe)
+        # connects
+        self.connect(self.mod_block, self.zmq_probe)
 
         self.start()
 
@@ -150,6 +112,52 @@ class top_block(gr.top_block):
         longitude = 6.062
         latitude = 50.7795
         return [longitude, latitude]
+
+class ModulatorBlock(gr.hier_block2):
+    def __init__(self, seed, samp_rate, noise_amp, id_rx, modulation, delay):
+        gr.hier_block2.__init__(self, "ModulatorBlock",
+                       gr.io_signature(0, 0, 0),
+                       gr.io_signature(1, 1, gr.sizeof_gr_complex))
+
+        np.random.seed(seed=seed)
+        v = np.random.randint(0,2,1000)
+        vector_source = blocks.vector_source_b((v), True, 1, [])
+        throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
+        noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -id_rx)
+        add = blocks.add_vcc(1)
+
+        if modulation == "bpsk":
+            mod = digital.psk.psk_mod(
+              constellation_points=2,
+              mod_code="none",
+              differential=True,
+              samples_per_symbol=2,
+              excess_bw=0.1,
+              verbose=False,
+              log=False,
+              )
+        else:
+            mod = grc_blks2.packet_mod_b(digital.ofdm_mod(
+                            options=grc_blks2.options(
+                                    modulation="qpsk",
+                                    fft_length=4096,
+                                    occupied_tones=200,
+                                    cp_length=0,
+                                    pad_for_usrp=False,
+                                    log=None,
+                                    verbose=None,
+                            ),
+                    ),
+                    payload_length=0,
+            )
+        head = blocks.head(gr.sizeof_gr_complex*1, 5100)
+        skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
+
+
+        # connects
+        self.connect(vector_source, mod, (add,0))
+        self.connect(noise, (add,1))
+        self.connect(add, throttle, skiphead, head, self)
 
 ###############################################################################
 # Options Parser
@@ -167,6 +175,10 @@ def parse_options():
                       help="Receiver ID")
     parser.add_option("-d", "--delay", type="int", default="0",
                       help="Delay")
+    parser.add_option("", "--snr", type="float", default="20",
+                      help="SNR")
+    parser.add_option("-m", "--modulation", type="string", default="bpsk",
+                      help="Modulation type (BPSK/OFDM)")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
     (options, args) = parser.parse_args()
@@ -203,3 +215,5 @@ if __name__ == "__main__":
     tb.stop()
     tb.wait()
     tb = None
+
+
