@@ -287,7 +287,7 @@ class gui(QtGui.QMainWindow):
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
             bbox = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
-            if first and self.bbox != None:
+            if first and bbox != None:
                 self.bbox = bbox
                 threading.Thread(target = self.init_map).start()
                 first = False
