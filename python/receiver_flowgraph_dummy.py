@@ -49,7 +49,7 @@ class top_block(gr.top_block):
 
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr)
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.id_rx, self.modulation, self.delay)
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay)
         self.seed += 1
 
         # connects
@@ -100,7 +100,7 @@ class top_block(gr.top_block):
         self.disconnect(self.mod_block, self.zmq_probe)
 
         # blocks
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.id_rx, self.modulation, self.delay)
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay)
         self.seed += 1
 
         # connects
@@ -114,7 +114,7 @@ class top_block(gr.top_block):
         return [longitude, latitude]
 
 class ModulatorBlock(gr.hier_block2):
-    def __init__(self, seed, samp_rate, noise_amp, id_rx, modulation, delay):
+    def __init__(self, seed, samp_rate, noise_amp, modulation, delay):
         gr.hier_block2.__init__(self, "ModulatorBlock",
                        gr.io_signature(0, 0, 0),
                        gr.io_signature(1, 1, gr.sizeof_gr_complex))
@@ -123,7 +123,7 @@ class ModulatorBlock(gr.hier_block2):
         v = np.random.randint(0,2,1000)
         vector_source = blocks.vector_source_b((v), True, 1, [])
         throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
-        noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -id_rx)
+        noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
         add = blocks.add_vcc(1)
 
         if modulation == "bpsk":
