@@ -5,10 +5,11 @@ import time
 def localize(receivers, roi_size, resolution, num_compressed_samples):
 
     t = time.time()
-    y = []
+    y = np.empty(shape=(len(receivers),receivers[0].samples_to_receive),dtype=complex)
     pos_rx = []
-    for receiver in receivers:
-        y.append(receiver.samples)
+    for i in range(0,len(receivers)):
+        receiver = receivers[i]
+        y[i] = receiver.samples
         if receiver.selected_position == "manual":
             pos_rx.append(receiver.coordinates)
         else:
@@ -34,7 +35,7 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
         M[rx_idx] = generate_measurement_matrix(num_compressed_samples,num_delayed_samples,measurement_type)
 
     # for normalization
-    sigma_1 = np.sqrt(np.sum(np.power(np.abs(y[0]),2)))
+    y = y/np.linalg.norm(y,axis=1)[:, None]*np.shape(y)[1]
 
     D_masked = [0] * num_rx
     S = [0] * num_rx
@@ -48,7 +49,7 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
         # take only unique TDOAs at this stage, resample later
         unique_tdoas = np.arange(np.min(D_masked[rx_idx]),np.max(D_masked[rx_idx])+1)
         # create matrices of shifted normalized signals related to reference sensor
-        S[rx_idx] = np.dot(M[rx_idx],shift_matrix(y[0]/sigma_1,unique_tdoas,2))
+        S[rx_idx] = np.dot(M[rx_idx],shift_matrix(y[0],unique_tdoas,2))
         # compressive sampling of CS sensors
         r[rx_idx] = np.dot(M[rx_idx],y[rx_idx]).T
 
@@ -60,7 +61,7 @@ def estimate_location_fast(num_rx, pos_rx, roi_size, const_c, resolution, sample
 
     for rx_idx in range(1,num_rx):
         # correlate compressed signal
-        phi[rx_idx] = np.dot(S[rx_idx].T,r[rx_idx])
+        phi[rx_idx] = np.dot(S[rx_idx].conj().T,r[rx_idx])
 
         # resample according to TDOA for each possible position
         b[rx_idx] = phi[rx_idx][(D_masked[rx_idx]-np.min(D_masked[rx_idx])).astype(int)]
