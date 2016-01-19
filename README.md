@@ -38,7 +38,7 @@ How to run the app
 
 First make sure all the computers are reachable and firewalls are not blocking the connection.
 
-To run a basic scenario with one fusion center, one gui and several receivers and integrated LCXO disciplined oscilators do:
+To run a basic scenario with one fusion center, one GUI and several receivers and integrated LCXO disciplined oscilators run the following from the apps folder:
 
 Computer 1 (Fusion center, GUI and receiver):
 
