@@ -1,20 +1,20 @@
 gr-localization GNU Radio based localization framework
-=============================
-Application to run localization experiments using SDR. Includes software for the receivers, fusion center and GUI.
+======================================================
+Application to perform localization experiments using SDR. Includes software for the receivers, fusion center and GUI.
 
 
 Dependencies
 ------------------
 In order to execute the gr-localization you will need to install the following prerequisites
-- ZeroMQ including the C++ and Python bindings (http://zeromq.org/)
-- UHD Driver for USRP hardware
 - GNU Radio (http://gnuradio.org/)
-- ITPP (http://itpp.sourceforge.net/)
+- UHD Driver for USRP hardware
+- ZeroMQ including the C++ and Python bindings (http://zeromq.org/)
 - python-qwt5-qt4
 - python-scipy
 - python-pyproj
 - python-matplotlib
 - python-mpltoolkits.basemap
+
 
 Optional
 --------------
@@ -27,12 +27,10 @@ Add these lines to /etc/ntp.conf
     fudge 127.127.1.0 stratum 10
     broadcast 192.168.10.255 #system network
 
-
 Add the following lines to /etc/sudoers in order to allow the user to change the system time:
 
     "username" ALL=(ALL) NOPASSWD: /bin/date
     "username" ALL=(ALL) NOPASSWD: /usr/sbin/ntpdate
-
 
 
 How to run the app
