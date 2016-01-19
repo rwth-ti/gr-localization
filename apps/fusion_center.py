@@ -11,13 +11,14 @@ import os
 from gnuradio import zeromq
 import signal
 import numpy as np
-import receiver_interface
 import time
 import threading
 import json
-import rpc_manager as rpc_manager_local
 from mpl_toolkits.basemap import Basemap
 import copy
+sys.path.append("../python")
+import rpc_manager as rpc_manager_local
+import receiver_interface
 import chan94_algorithm
 import grid_based_algorithm
 
@@ -46,6 +47,8 @@ class fusion_center():
         self.delay_calibration = []
         self.store_results = False
         self.results_file = ""
+        if not os.path.exists("../log"):
+                os.makedirs("../log")
         self.results = None
         self.run_loop = False
         self.localizing = False
@@ -275,7 +278,7 @@ class fusion_center():
 
     def start_correlation_loop(self, freq, lo_offset, samples_to_receive):
         self.store_results = True
-        self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
@@ -298,7 +301,7 @@ class fusion_center():
         if len(self.receivers) > 2:
             self.localizing = True
             self.store_results = True
-            self.results_file = "results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+            self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))

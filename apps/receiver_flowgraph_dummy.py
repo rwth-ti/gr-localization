@@ -16,10 +16,11 @@ import sys
 import os
 import threading
 import time
-import rpc_manager as rpc_manager_local
 import socket
 from grc_gnuradio import blks2 as grc_blks2
 from gnuradio import digital
+sys.path.append("../python")
+import rpc_manager as rpc_manager_local
 
 
 ###############################################################################

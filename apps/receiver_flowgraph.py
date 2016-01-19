@@ -16,11 +16,12 @@ import sys
 import os
 import threading
 import time
-import rpc_manager as rpc_manager_local
 import socket
 import serial
 import calendar
 import octoclock
+sys.path.append("../python")
+import rpc_manager as rpc_manager_local
 
 ###############################################################################
 # GNU Radio top_block

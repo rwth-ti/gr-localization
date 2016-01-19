@@ -12,11 +12,8 @@ import PyQt4.Qwt5 as Qwt
 from gnuradio import zeromq
 import signal
 import numpy as np
-import receiver_interface
 import time
 import threading
-import rpc_manager as rpc_manager_local
-import gui_helpers
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
@@ -27,6 +24,10 @@ from pyproj import Proj, transform
 import math
 import socket
 from functools import partial
+sys.path.append("../python")
+import receiver_interface
+import rpc_manager as rpc_manager_local
+import gui_helpers
 
 class gui(QtGui.QMainWindow):
     def __init__(self, window_name, options, parent=None):
@@ -37,7 +38,7 @@ class gui(QtGui.QMainWindow):
         # give Ctrl+C back to system
         signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-        self.gui = uic.loadUi(os.path.join(os.path.dirname(__file__),'main_window.ui'), self)
+        self.gui = uic.loadUi(os.path.join(os.path.dirname(__file__),'../gui/main_window.ui'), self)
 
         self.update_timer = Qt.QTimer()
 
@@ -214,9 +215,11 @@ class gui(QtGui.QMainWindow):
 
         if r.status_code == 200:
             img = Image.open(StringIO(r.content))
-            img.save("map.png")
+            if not os.path.exists("../maps"):
+                    os.makedirs("../maps")
+            img.save("../maps/map.png")
 
-        #img = Image.open("ict_cubes.png")
+        #img = Image.open("../maps/ict_cubes.png")
 
         self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
