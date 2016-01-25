@@ -45,6 +45,7 @@ class fusion_center():
 
         self.delay_history = []
         self.delay_calibration = []
+        self.delay_auto_calibration = []
         self.store_results = False
         self.results_file = ""
         if not os.path.exists("../log"):
@@ -145,12 +146,13 @@ class fusion_center():
                             pos_receiver = receiver.coordinates_gps
                         d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                         d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                        delay_true = (d_ref-d_receiver) * self.samp_rate / 299700000
+                        delay_true = (d_receiver-d_ref) * self.samp_rate / 299700000
                         print("True delay: ",delay_true)
                         if len(self.delay_calibration) < len(self.results["delay"]):
-                            self.delay_calibration.append(int(self.results["delay"][i]+np.floor(delay_true)))
+                            self.delay_calibration.append(int(np.floor(delay_true)-self.results["delay"][i]))
                         else:
-                            self.delay_calibration[i] = int(self.results["delay"][i]+np.floor(delay_true))+self.delay_calibration[i]
+                            self.delay_calibration[i] = int(np.floor(delay_true)-self.results["delay"][i])+self.delay_calibration[i]
+            print ("Delay calibration: ", self.delay_calibration)
         else:
             ref_receiver = self.receivers[self.ref_receiver]
             if ref_receiver.selected_position == "manual":
@@ -165,16 +167,17 @@ class fusion_center():
                     pos_receiver = receiver.coordinates_gps
                 d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                 d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                delay_true = (d_ref-d_receiver) * self.samp_rate / 299700000
+                delay_true = (d_receiver-d_ref) * self.samp_rate / 299700000
                 print("True delay: ",delay_true)
-                if len(self.delay_calibration) < len(delays):
-                    self.delay_calibration.append(int(delays[i]+np.floor(delay_true)))
+                if len(self.delay_auto_calibration) < len(delays):
+                    self.delay_auto_calibration.append(int(np.floor(delay_true)-delays[i]))
                 else:
-                    self.delay_calibration[i] = int(delays[i]+np.floor(delay_true))
-        print ("Delay calibration: ", self.delay_calibration)
+                    self.delay_auto_calibration[i] = int(np.floor(delay_true)-delays[i])
+            print ("Delay auto calibration: ", self.delay_auto_calibration)
 
     def remove_calibration(self):
         self.delay_calibration = []
+        self.delay_auto_calibration = []
 
     def forward_chat(self, chat):
         for gui in self.guis.values():
@@ -344,7 +347,7 @@ class fusion_center():
             self.store_results = True
             self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("time;delays(1-2,1-3,1-X...);delays_calibration(1-2,1-3,1-X...;sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
+            print("time;delays(1-2,1-3,1-X...);delays_calibration(1-2,1-3,1-X...);delays_auto_calibration(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
@@ -438,9 +441,14 @@ class fusion_center():
             correlation, delay = self.correlate(receivers, True)
             self.calibrate(self.coordinates_calibration, delay)
 
+        if len(self.delay_auto_calibration) > 0 and self.auto_calibrate:
+            for i in range(0,len(self.delay_auto_calibration)):
+                receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_auto_calibration[i])
+
         if len(self.delay_calibration) > 0:
             for i in range(0,len(self.delay_calibration)):
-                receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,-self.delay_calibration[i])
+                receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_calibration[i])
+
         if self.localizing:
             estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
             estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"])
@@ -503,9 +511,9 @@ class fusion_center():
                 for key in estimated_positions.keys():
                     if key == "grid_based":
                         estimated_positions[key].pop("grid")
-                print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.delay_calibration) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(estimated_positions.items()), file=open(self.results_file,"a"))
+                print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.delay_calibration) + ";" + str(self.delay_auto_calibration) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(estimated_positions.items()), file=open(self.results_file,"a"))
             else:
-                print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.delay_calibration) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
+                print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.delay_calibration) + ";" + str(self.delay_calibration) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
 
     def main_loop(self):
         while True:
@@ -552,7 +560,7 @@ def parse_options():
                       help="Server hostname")
     parser.add_option("-c", "--clientname", type="string", default="localhost",
                       help="Server hostname")
-    parser.add_option("", "--num-samples", type="string", default="5000",
+    parser.add_option("", "--num-samples", type="string", default="2000",
                       help="Number of samples in burst")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")
