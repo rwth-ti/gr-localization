@@ -19,6 +19,8 @@ class receiver_interface():
         self.lo_offset = 0
         self.first_packet = True
         self.reception_complete = False
+        self.auto_calibrate = False
+        self.samples_calibration = []
         self.samples = []
         self.bw = 0
 
@@ -49,20 +51,29 @@ class receiver_interface():
         self.antenna = antenna
         self.rpc_mgr.request("set_antenna",[self.antenna])
 
-    def request_samples(self, ntp_sync, time_to_receive):
+    def request_samples(self, time_to_receive, freq_calibration):
         self.samples = []
         self.first_packet = True
         self.reception_complete = False
-        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, time_to_receive])
+        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, time_to_receive, freq_calibration])
 
     def receive_samples(self, samples):
         if self.first_packet:
             self.samples = samples[100:]
             self.first_packet = False
-        elif not self.reception_complete:
+        elif len(self.samples) < self.samples_to_receive:
             self.samples = np.concatenate((self.samples, samples), axis=1)
             #print "reconstruction"
+        elif len(self.samples) == self.samples_to_receive > len(self.samples_calibration) and self.auto_calibrate:
+            if len(self.samples_calibration) == 0:
+                self.samples_calibration = samples[100:]
+            else:
+                self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
         if self.samples_to_receive == len(self.samples):
-            self.reception_complete = True
+            if self.samples_to_receive == len(self.samples_calibration) and self.auto_calibrate:
+                self.reception_complete = True
+            elif not self.auto_calibrate:
+                self.reception_complete = True
+
     def get_gps_position(self):
         return self.rpc_mgr.request("get_gps_position")

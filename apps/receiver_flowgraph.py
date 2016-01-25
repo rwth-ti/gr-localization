@@ -136,17 +136,24 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv):
+    def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
+        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration)).start()
+
+    def start_reception(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
         print "Start Flowgraph"
         try:
             # get times from USRP
-            time_now = self.usrp_source.get_time_now().get_real_secs()
+            time_begin = self.usrp_source.get_time_now().get_real_secs()
             time_last_pps = self.usrp_source.get_time_last_pps().get_real_secs()
-            time_to_sync = uhd.time_spec(time_last_pps + 0.1)
             if time_to_recv is None:
-                time_to_recv = uhd.time_spec(time_last_pps + 1)
+                time_to_recv = time_last_pps + 1
             else:
-                time_to_recv = uhd.time_spec(float(time_to_recv))
+                time_to_recv = float(time_to_recv)
+            time_to_sync = uhd.time_spec(time_to_recv)
+            time_to_sample = uhd.time_spec(time_to_recv + 0.1)
+            if freq_calibration is not None:
+                time_to_calibrate_sync = uhd.time_spec(time_to_recv + 0.2)
+                time_to_calibrate = uhd.time_spec(time_to_recv + 0.6)
             # synchronize LOs
             self.usrp_source.set_command_time(time_to_sync)
             self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
@@ -156,11 +163,27 @@ class top_block(gr.top_block):
             # add 100 samples to the burst to get rid of transient
             stream_cmd.num_samps = samples_to_receive + 100
             stream_cmd.stream_now = False
-            stream_cmd.time_spec = time_to_recv
+            stream_cmd.time_spec = time_to_sample
             self.usrp_source.issue_stream_cmd(stream_cmd)
-            print "Time now:", time_now
+            time_now = self.usrp_source.get_time_now().get_real_secs()
+            time.sleep(abs(time_to_recv - time_now) + 0.1)
+            if freq_calibration is not None:
+                # synchronize LOs
+                self.usrp_source.set_command_time(time_to_calibrate_sync)
+                self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset), 0)
+                self.usrp_source.clear_command_time()
+                # ask for samples at a specific time
+                stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                # add 100 samples to the burst to get rid of transient
+                stream_cmd.num_samps = samples_to_receive + 100
+                stream_cmd.stream_now = False
+                stream_cmd.time_spec = time_to_calibrate
+                self.usrp_source.issue_stream_cmd(stream_cmd)
+            print "Time begin:", time_begin
             print "Time last pps:", time_last_pps
-            print "Time to receive:", time_to_recv.get_real_secs()
+            print "Time to sample:", time_to_sample.get_real_secs()
+            if freq_calibration is not None:
+                print "Time to calibrate:", time_to_calibrate.get_real_secs()
             usrp = self.usrp_source
             print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
         except RuntimeError:
