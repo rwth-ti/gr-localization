@@ -4,6 +4,8 @@ import numpy as np
 import time
 import rpc_manager as rpc_manager_local
 from copy import deepcopy
+#from scipy.signal import resample
+from scipy import interpolate
 
 class receiver_interface():
 
@@ -23,6 +25,8 @@ class receiver_interface():
         self.samples_calibration = []
         self.samples = []
         self.bw = 0
+
+        self.oversample_factor = 1
 
         self.selected_position = "manual"
         self.gps = ""
@@ -71,8 +75,25 @@ class receiver_interface():
                 self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
         if self.samples_to_receive == len(self.samples):
             if self.samples_to_receive == len(self.samples_calibration) and self.auto_calibrate:
+                #x = np.arange(0,len(self.samples))
+                x = np.linspace(0,len(self.samples),len(self.samples))
+                f = interpolate.interp1d(x, self.samples)
+                x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.oversample_factor)
+                #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.oversample_factor)
+                self.samples = f(x_interpolated)
+                f = interpolate.interp1d(x, self.samples_calibration)
+                self.samples_calibration = f(x_interpolated)
+                #self.samples = resample(self.samples, self.oversample_factor * len(self.samples))
+                #self.samples_calibration = resample(self.samples_calibration, self.oversample_factor * len(self.samples_calibration))
                 self.reception_complete = True
             elif not self.auto_calibrate:
+                #self.samples = resample(self.samples, self.oversample_factor * len(self.samples))
+                x = np.linspace(0,len(self.samples),len(self.samples))
+                #x = np.arange(0,len(self.samples))
+                f = interpolate.interp1d(x, self.samples)
+                x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.oversample_factor)
+                #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.oversample_factor)
+                self.samples = f(x_interpolated)
                 self.reception_complete = True
 
     def get_gps_position(self):

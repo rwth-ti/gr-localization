@@ -54,6 +54,7 @@ class gui(QtGui.QMainWindow):
         self.samp_rate = 10e6
         self.bw = 1e6
         self.lo_offset = 0
+        self.oversample_factor = 10
 
         self.results = {}
         self.new_results = False
@@ -122,7 +123,7 @@ class gui(QtGui.QMainWindow):
         title = Qwt.QwtText("Amplitude")
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
-        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.oversample_factor, self.samples_to_receive * self.oversample_factor)
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
@@ -219,7 +220,7 @@ class gui(QtGui.QMainWindow):
                     os.makedirs("../maps")
             img.save("../maps/map.png")
 
-        #img = Image.open("../maps/ict_cubes.png")
+        img = Image.open("../maps/ict_cubes.png")
 
         self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
@@ -277,7 +278,7 @@ class gui(QtGui.QMainWindow):
         title = Qwt.QwtText("Amplitude")
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         qwtPlot.setAxisTitle(Qwt.QwtPlot.yLeft, title)
-        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive)
+        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive * self.oversample_factor)
         pen = Qt.QPen(Qt.Qt.DotLine)
         pen.setColor(Qt.Qt.black)
         pen.setWidth(0)
@@ -425,7 +426,7 @@ class gui(QtGui.QMainWindow):
         Hx = []
         Hy = []
         if delay is not None:
-            delta_rx1_rx2 = delay / self.samp_rate * 299700000
+            delta_rx1_rx2 = delay / (self.samp_rate * self.oversample_factor) * 299700000
         else:
             delta_rx1_rx2 = np.linalg.norm(pos_tx-pos_rx[0])-np.linalg.norm(pos_tx-pos_rx[1])
         [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
@@ -580,7 +581,7 @@ class gui(QtGui.QMainWindow):
                 if self.gui.checkBoxCorrelation.isChecked():
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
                 else:
-                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.oversample_factor, self.samples_to_receive * self.oversample_factor)
                 self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()
@@ -701,7 +702,7 @@ class gui(QtGui.QMainWindow):
         if self.gui.checkBoxCorrelation.isChecked():
             self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
         else:
-            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive, self.samples_to_receive)
+            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.oversample_factor, self.samples_to_receive * self.oversample_factor)
         self.gui.qwtPlotCorrelation.replot()
 
     def refresh_plot(self, receiver):
