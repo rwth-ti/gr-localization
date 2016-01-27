@@ -152,7 +152,7 @@ class top_block(gr.top_block):
             time_to_sync = uhd.time_spec(time_to_recv)
             time_to_sample = uhd.time_spec(time_to_recv + 0.1)
             if freq_calibration is not None:
-                time_to_calibrate_sync = uhd.time_spec(time_to_recv + 0.2)
+                time_to_calibrate_sync = uhd.time_spec(time_to_recv + 0.15)
                 time_to_calibrate = uhd.time_spec(time_to_recv + 0.6)
             # synchronize LOs
             self.usrp_source.set_command_time(time_to_sync)
@@ -208,10 +208,10 @@ class top_block(gr.top_block):
                 d = s.split(",")[9]
                 my_time = time.strptime(t+d,"%H%M%S%d%m%y")
                 time_nmea = calendar.timegm(my_time)
+                self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                 if self.options.ntp_server:
                     os.system("sudo date +%s -s @"+str(time_nmea))
                     print "System time set to:", str(time_nmea)
-                self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                 print "Set USRP to NMEA time + 1s:", time_nmea + 1
                 synced = True
             else:
@@ -224,12 +224,12 @@ class top_block(gr.top_block):
                         time_nmea = clock.get_time_real_secs()
                     else:
                         time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
+                    # set internal time registers in USRP
+                    self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                     # set system time if ntp server option activated
                     if self.options.ntp_server:
                         os.system("sudo date +%s -s @"+str(time_nmea))
                         print "System time set to:", str(time_nmea)
-                    # set internal time registers in USRP
-                    self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                     print "Set USRP to NMEA time + 1s:", time_nmea + 1
                     synced = True
                 else:
