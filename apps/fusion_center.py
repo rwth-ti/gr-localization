@@ -8,6 +8,7 @@ from optparse import OptionParser
 from gnuradio.eng_option import eng_option
 import sys
 import os
+import pprint
 from gnuradio import zeromq
 import signal
 import numpy as np
@@ -43,7 +44,7 @@ class fusion_center():
         self.receivers = {}
         self.guis = {}
 
-        self.grid_based = {"resolution":6,"num_samples":self.samples_to_receive * self.oversample_factor}
+        self.grid_based = {"resolution":1,"num_samples":self.samples_to_receive * self.oversample_factor}
 
         self.delay_history = []
         self.delay_calibration = []
@@ -332,7 +333,7 @@ class fusion_center():
         self.store_results = True
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        print("time;delays(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
+        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,oversample_factor,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
@@ -355,7 +356,7 @@ class fusion_center():
             self.store_results = True
             self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("time;delays(1-2,1-3,1-X...);delays_calibration(1-2,1-3,1-X...);delays_auto_calibration(1-2,1-3,1-X...);sampling_rate;frequency;samples_to_receive;lo_offset;receivers_positions;selected_positions;receivers_gps;receivers_antenna;receivers_gain;estimated_positions", file=open(self.results_file,"a"))
+            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,oversample_factor,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
@@ -495,19 +496,19 @@ class fusion_center():
                         receivers_position = receivers_position + str(receiver.coordinates)
                     else:
                         receivers_position = receivers_position + str(receiver.coordinates_gps)
-                    selected_positions = selected_positions + receiver.selected_position
-                    receivers_gps = receivers_gps + receiver.gps
-                    receivers_antenna = receivers_antenna + receiver.antenna
+                    selected_positions = selected_positions + "'" + receiver.selected_position + "'"
+                    receivers_gps = receivers_gps + "'" + receiver.gps + "'"
+                    receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
                     receivers_gain = receivers_gain + str(receiver.gain)
                 else:
                     if receiver.selected_position == "manual":
-                        receivers_position = receivers_position + ";" + str(receiver.coordinates)
+                        receivers_position = receivers_position + "," + str(receiver.coordinates)
                     else:
-                        receivers_position = receivers_position + ";" + str(receiver.coordinates_gps)
-                    selected_positions = selected_positions + ";" + receiver.selected_position
-                    receivers_gps = receivers_gps + ";" + receiver.gps
-                    receivers_antenna = receivers_antenna + ";" + receiver.antenna
-                    receivers_gain = receivers_gain + ";" + str(receiver.gain)
+                        receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
+                    selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
+                    receivers_gps = receivers_gps + "," + "'" + receiver.gps + "'"
+                    receivers_antenna = receivers_antenna + "," + "'" + receiver.antenna + "'"
+                    receivers_gain = receivers_gain + "," + str(receiver.gain)
                 i = i + 1
             receivers_position = receivers_position + "]"
             selected_positions = selected_positions + "]"
@@ -519,9 +520,15 @@ class fusion_center():
                 for key in estimated_positions.keys():
                     if key == "grid_based":
                         estimated_positions[key].pop("grid")
-                print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.delay_calibration) + ";" + str(self.delay_auto_calibration) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + str(estimated_positions.items()), file=open(self.results_file,"a"))
+                line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.oversample_factor) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "]"
+                f = open(self.results_file,"a")
+                pprint.pprint(line,f,width=9000)
+                f.close()
             else:
-                print(str(time.time()) + ";" + str(self.results["delay"]) + ";" + str(self.delay_calibration) + ";" + str(self.delay_calibration) + ";" + str(self.samp_rate) + ";" + str(self.frequency) + ";" + str(self.samples_to_receive) + ";" + str(self.lo_offset) + ";" + receivers_position + ";" + selected_positions + ";" + receivers_gps + ";" + receivers_antenna + ";" + receivers_gain + ";" + "{}", file=open(self.results_file,"a"))
+                line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.oversample_factor) + "," + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + "{}]"
+                f = open(self.results_file,"a")
+                pprint.pprint(line,f,width=9000)
+                f.close()
 
     def main_loop(self):
         while True:

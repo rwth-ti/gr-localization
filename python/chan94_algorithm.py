@@ -64,6 +64,7 @@ def localize(receivers):
         r1 = [(-beta+np.sqrt(pow(beta,2)-4*alpha*gamma+0j))/(2*alpha),(-beta-np.sqrt(pow(beta,2)-4*alpha*gamma+0j))/(2*alpha)]
         # Calculate position with the solution in the roi
         xy = np.real((max(r1)*A+B,max(r1)*C+D))
+        xy = (xy[0],xy[1])
     except:
         xy = (0,0)
     t_used = time.time()-t
