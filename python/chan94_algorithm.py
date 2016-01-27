@@ -11,7 +11,7 @@ def estimate_delay(y1, y2):
 def localize(receivers):
 
     t = time.time()
-    sample_rate = receivers[0].samp_rate * receivers[0].oversample_factor
+    sample_rate = receivers[0].samp_rate * receivers[0].interpolation
     y = []
     pos_rx = []
     for receiver in receivers:

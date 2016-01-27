@@ -53,8 +53,8 @@ class gui(QtGui.QMainWindow):
         self.frequency = 2.4e9
         self.samp_rate = 10e6
         self.bw = 1e6
+        self.interpolation = 10
         self.lo_offset = 0
-        self.oversample_factor = 10
 
         self.results = {}
         self.new_results = False
@@ -76,6 +76,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_frequency",self.set_gui_frequency)
         self.rpc_manager.add_interface("set_gui_samp_rate",self.set_gui_samp_rate)
         self.rpc_manager.add_interface("set_gui_bw",self.set_gui_bw)
+        self.rpc_manager.add_interface("set_gui_interpolation",self.set_gui_interpolation)
         self.rpc_manager.add_interface("set_gui_lo_offset",self.set_gui_lo_offset)
         self.rpc_manager.add_interface("set_gui_samples_to_receive",self.set_gui_samples_to_receive)
         self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
@@ -123,7 +124,7 @@ class gui(QtGui.QMainWindow):
         title = Qwt.QwtText("Amplitude")
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
-        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.oversample_factor, self.samples_to_receive * self.oversample_factor)
+        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
@@ -175,7 +176,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.checkBoxCorrelation, QtCore.SIGNAL("clicked()"), self.refresh_correlation)
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
-        self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
+        self.connect(self.gui.interpolationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_interpolation)
         self.connect(self.gui.loOffsetSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset)
         self.connect(self.gui.samplesToReceiveSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
@@ -278,7 +279,7 @@ class gui(QtGui.QMainWindow):
         title = Qwt.QwtText("Amplitude")
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         qwtPlot.setAxisTitle(Qwt.QwtPlot.yLeft, title)
-        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive * self.oversample_factor)
+        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive * self.interpolation)
         pen = Qt.QPen(Qt.Qt.DotLine)
         pen.setColor(Qt.Qt.black)
         pen.setWidth(0)
@@ -426,7 +427,7 @@ class gui(QtGui.QMainWindow):
         Hx = []
         Hy = []
         if delay is not None:
-            delta_rx1_rx2 = delay / (self.samp_rate * self.oversample_factor) * 299700000
+            delta_rx1_rx2 = delay / (self.samp_rate * self.interpolation) * 299700000
         else:
             delta_rx1_rx2 = np.linalg.norm(pos_tx-pos_rx[0])-np.linalg.norm(pos_tx-pos_rx[1])
         [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
@@ -489,6 +490,10 @@ class gui(QtGui.QMainWindow):
         self.bw = self.gui.bwSpin.value()*1e6
         self.rpc_manager.request("set_bw",[self.bw])
 
+    def set_interpolation(self):
+        self.interpolation = self.gui.interpolationSpin.value()
+        self.rpc_manager.request("set_interpolation",[self.interpolation])
+
     def set_gain(self, gain, serial):
         self.rpc_manager.request("set_gain",[gain, serial])
 
@@ -512,6 +517,9 @@ class gui(QtGui.QMainWindow):
 
     def set_gui_bw(self, bw):
         self.gui.bwSpin.setValue(bw/1e6)
+
+    def set_gui_interpolation(self, interpolation):
+        self.gui.interpolationSpin.setValue(interpolation)
 
     def set_gui_gain(self, gain, serial):
         self.tmr.set_gain(gain, serial)
@@ -581,7 +589,7 @@ class gui(QtGui.QMainWindow):
                 if self.gui.checkBoxCorrelation.isChecked():
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
                 else:
-                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.oversample_factor, self.samples_to_receive * self.oversample_factor)
+                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
                 self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()
@@ -702,7 +710,7 @@ class gui(QtGui.QMainWindow):
         if self.gui.checkBoxCorrelation.isChecked():
             self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
         else:
-            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.oversample_factor, self.samples_to_receive * self.oversample_factor)
+            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
         self.gui.qwtPlotCorrelation.replot()
 
     def refresh_plot(self, receiver):

@@ -36,15 +36,14 @@ class fusion_center():
         self.frequency = float(options.frequency)
         self.samp_rate = float(options.samp_rate)
         self.bw = float(options.bandwidth)
+        self.interpolation = int(options.interpolation)
         self.lo_offset = float(options.lo_offset)
         self.antenna = options.antenna
-
-        self.oversample_factor = 10
 
         self.receivers = {}
         self.guis = {}
 
-        self.grid_based = {"resolution":1,"num_samples":self.samples_to_receive * self.oversample_factor}
+        self.grid_based = {"resolution":1,"num_samples":self.samples_to_receive * self.interpolation}
 
         self.delay_history = []
         self.delay_calibration = []
@@ -128,6 +127,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_gain",self.set_gain)
         self.rpc_manager.add_interface("set_samp_rate",self.set_samp_rate)
         self.rpc_manager.add_interface("set_bw",self.set_bw)
+        self.rpc_manager.add_interface("set_interpolation",self.set_interpolation)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
@@ -154,7 +154,7 @@ class fusion_center():
                             pos_receiver = receiver.coordinates_gps
                         d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                         d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                        delay_true = (d_receiver-d_ref) * self.samp_rate * self.oversample_factor / 299700000
+                        delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
                         print("True delay: ",delay_true)
                         if len(self.delay_calibration) < len(self.results["delay"]):
                             self.delay_calibration.append(int(np.floor(delay_true)-self.results["delay"][i]))
@@ -175,7 +175,7 @@ class fusion_center():
                     pos_receiver = receiver.coordinates_gps
                 d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                 d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                delay_true = (d_receiver-d_ref) * self.samp_rate * self.oversample_factor / 299700000
+                delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
                 print("True delay: ",delay_true)
                 if len(self.delay_auto_calibration) < len(delays):
                     self.delay_auto_calibration.append(int(np.floor(delay_true)-delays[i]))
@@ -227,6 +227,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_lo_offset",[self.lo_offset])
             gui.rpc_manager.request("set_gui_samples_to_receive",[self.samples_to_receive])
             gui.rpc_manager.request("set_gui_bw",[self.bw])
+            gui.rpc_manager.request("set_gui_interpolation",[self.interpolation])
             gui.rpc_manager.request("set_gui_samp_rate",[self.samp_rate])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[self.grid_based["resolution"]])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
@@ -255,13 +256,13 @@ class fusion_center():
             receiver = self.receivers[serial]
             receiver.set_gain(self.gain)
             receiver.set_bw(self.bw)
+            receiver.interpolation = self.interpolation
             receiver.set_samp_rate(self.samp_rate)
             receiver.set_antenna(self.antenna)
             receiver.frequency = self.frequency
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
             receiver.gps = gps
-            receiver.oversample_factor = self.oversample_factor
             self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
             for gui in self.guis.values():
                 # request registration in each gui
@@ -320,6 +321,7 @@ class fusion_center():
         for receiver in self.receivers.values():
             receiver.set_gain(receiver.gain)
             receiver.set_bw(self.bw)
+            receiver.set_interpolation(self.interpolation)
             receiver.set_samp_rate(self.samp_rate)
             receiver.set_antenna(receiver.antenna)
             receiver.frequency = self.frequency
@@ -333,7 +335,7 @@ class fusion_center():
         self.store_results = True
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,oversample_factor,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
+        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
@@ -356,7 +358,7 @@ class fusion_center():
             self.store_results = True
             self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,oversample_factor,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
+            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
@@ -409,6 +411,13 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_bw",[bw])
 
+    def set_interpolation(self, interpolation):
+        self.interpolation = interpolation
+        for receiver in self.receivers.values():
+            receiver.interpolation = interpolation
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_interpolation",[interpolation])
+
     def set_gain(self, gain, serial):
         self.receivers[serial].gain = gain
         for gui in self.guis.values():
@@ -430,7 +439,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[resolution])
 
     def set_TDOA_grid_based_num_samples(self, num_samples):
-        num_samples = min(num_samples,self.samples_to_receive * self.oversample_factor)
+        num_samples = min(num_samples,self.samples_to_receive * self.interpolation)
         self.grid_based["num_samples"] = num_samples
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[num_samples])
@@ -520,12 +529,12 @@ class fusion_center():
                 for key in estimated_positions.keys():
                     if key == "grid_based":
                         estimated_positions[key].pop("grid")
-                line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.oversample_factor) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "]"
+                line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "]"
                 f = open(self.results_file,"a")
                 pprint.pprint(line,f,width=9000)
                 f.close()
             else:
-                line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.oversample_factor) + "," + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + "{}]"
+                line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + "{}]"
                 f = open(self.results_file,"a")
                 pprint.pprint(line,f,width=9000)
                 f.close()
@@ -552,7 +561,7 @@ class fusion_center():
                     correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full", False)).tolist())
                 else:
                     correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full", False)).tolist())
-        delay = (np.argmax(correlation, axis=1) - self.samples_to_receive * self.oversample_factor + 1).tolist()
+        delay = (np.argmax(correlation, axis=1) - self.samples_to_receive * self.interpolation + 1).tolist()
         print("Delay:", delay, "samples")
         return correlation, delay
 
@@ -574,8 +583,10 @@ def parse_options():
                       help="Server hostname")
     parser.add_option("-c", "--clientname", type="string", default="localhost",
                       help="Server hostname")
-    parser.add_option("", "--num-samples", type="string", default="1000",
+    parser.add_option("", "--num-samples", type="string", default="300",
                       help="Number of samples in burst")
+    parser.add_option("", "--interpolation", type="string", default="10",
+                      help="Interpolation factor")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")
     parser.add_option("", "--gain", type="float", default="30",

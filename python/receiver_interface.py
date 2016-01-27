@@ -25,8 +25,7 @@ class receiver_interface():
         self.samples_calibration = []
         self.samples = []
         self.bw = 0
-
-        self.oversample_factor = 1
+        self.interpolation = 1
 
         self.selected_position = "manual"
         self.gps = ""
@@ -51,6 +50,9 @@ class receiver_interface():
     def set_bw(self, bw):
         self.bw = bw
         self.rpc_mgr.request("set_bw",[self.bw])
+    def set_interpolation(self, interpolation):
+        self.interpolation = interpolation
+        self.rpc_mgr.request("set_interpolation",[self.interpolation])
     def set_antenna(self, antenna):
         self.antenna = antenna
         self.rpc_mgr.request("set_antenna",[self.antenna])
@@ -78,21 +80,21 @@ class receiver_interface():
                 #x = np.arange(0,len(self.samples))
                 x = np.linspace(0,len(self.samples),len(self.samples))
                 f = interpolate.interp1d(x, self.samples)
-                x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.oversample_factor)
-                #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.oversample_factor)
+                x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.interpolation)
+                #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.interpolation)
                 self.samples = f(x_interpolated)
                 f = interpolate.interp1d(x, self.samples_calibration)
                 self.samples_calibration = f(x_interpolated)
-                #self.samples = resample(self.samples, self.oversample_factor * len(self.samples))
-                #self.samples_calibration = resample(self.samples_calibration, self.oversample_factor * len(self.samples_calibration))
+                #self.samples = resample(self.samples, self.interpolation * len(self.samples))
+                #self.samples_calibration = resample(self.samples_calibration, self.interpolation * len(self.samples_calibration))
                 self.reception_complete = True
             elif not self.auto_calibrate:
-                #self.samples = resample(self.samples, self.oversample_factor * len(self.samples))
+                #self.samples = resample(self.samples, self.interpolation * len(self.samples))
                 x = np.linspace(0,len(self.samples),len(self.samples))
                 #x = np.arange(0,len(self.samples))
                 f = interpolate.interp1d(x, self.samples)
-                x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.oversample_factor)
-                #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.oversample_factor)
+                x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.interpolation)
+                #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.interpolation)
                 self.samples = f(x_interpolated)
                 self.reception_complete = True
 

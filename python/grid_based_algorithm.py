@@ -5,7 +5,7 @@ import time
 def localize(receivers, roi_size, resolution, num_compressed_samples):
 
     t = time.time()
-    y = np.empty(shape=(len(receivers),receivers[0].samples_to_receive * receivers[0].oversample_factor),dtype=complex)
+    y = np.empty(shape=(len(receivers),receivers[0].samples_to_receive * receivers[0].interpolation),dtype=complex)
     pos_rx = []
     for i in range(0,len(receivers)):
         receiver = receivers[i]
@@ -17,10 +17,10 @@ def localize(receivers, roi_size, resolution, num_compressed_samples):
     pos_rx = np.array(pos_rx)
 
     const_c = 299700000
-    sample_rate = receivers[0].samp_rate * receivers[0].oversample_factor
+    sample_rate = receivers[0].samp_rate * receivers[0].interpolation
     channel_model = "free_space"
     num_rx = 3
-    num_delayed_samples = receivers[0].samples_to_receive * receivers[0].oversample_factor
+    num_delayed_samples = receivers[0].samples_to_receive * receivers[0].interpolation
     measurement_type = "rand"
 
     (D,mask) = generate_environment_matrices(roi_size, resolution, pos_rx, const_c, sample_rate, channel_model)
