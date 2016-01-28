@@ -41,9 +41,10 @@ class fusion_center():
         self.antenna = options.antenna
 
         self.receivers = {}
+        self.ref_receiver = ""
         self.guis = {}
 
-        self.grid_based = {"resolution":1,"num_samples":self.samples_to_receive * self.interpolation}
+        self.grid_based = {"resolution":10,"num_samples":self.samples_to_receive * self.interpolation}
 
         self.delay_history = []
         self.delay_calibration = []
@@ -58,12 +59,12 @@ class fusion_center():
         self.ntp_sync = False
 
         # ICT + surroundings
-        #self.bbox = 6.0580,50.7775,6.0690,50.7810
+        self.bbox = 6.0580,50.7775,6.0690,50.7810
         # Football court
         #self.bbox = 6.06429,50.77697,6.07271,50.78033
         # ICT indoor
         #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
-        self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
+        #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
 
         # get reference UTM grid
         lon = self.bbox[0]
@@ -130,6 +131,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_interpolation",self.set_interpolation)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
+        self.rpc_manager.add_interface("set_ref_receiver",self.set_ref_receiver)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
         self.rpc_manager.add_interface("sync_success",self.sync_ntp)
@@ -146,20 +148,23 @@ class fusion_center():
                         pos_ref = ref_receiver.coordinates
                     else:
                         pos_ref = ref_receiver.coordinates_gps
-                    for i in range(0,len(self.results["delay"])):
-                        receiver = self.receivers.values()[i+1]
-                        if receiver.selected_position == "manual":
-                            pos_receiver = receiver.coordinates
-                        else:
-                            pos_receiver = receiver.coordinates_gps
-                        d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
-                        d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                        delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
-                        print("True delay: ",delay_true)
-                        if len(self.delay_calibration) < len(self.results["delay"]):
-                            self.delay_calibration.append(int(np.floor(delay_true)-self.results["delay"][i]))
-                        else:
-                            self.delay_calibration[i] = int(np.floor(delay_true)-self.results["delay"][i])+self.delay_calibration[i]
+                    index_delay = 0
+                    for i in range(0,len(receivers)):
+                        if not self.ref_receiver == receivers.keys()[i]:
+                            receiver = self.receivers.values()[i]
+                            if receiver.selected_position == "manual":
+                                pos_receiver = receiver.coordinates
+                            else:
+                                pos_receiver = receiver.coordinates_gps
+                            d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
+                            d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
+                            delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
+                            print("True delay: ",delay_true)
+                            if len(self.delay_calibration) < len(self.results["delay"]):
+                                self.delay_calibration.append(int(np.floor(delay_true)-self.results["delay"][index_delay]))
+                            else:
+                                self.delay_calibration[index_delay] = int(np.floor(delay_true)-self.results["delay"][index_delay])+self.delay_calibration[index_delay]
+                            index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
         else:
             ref_receiver = self.receivers[self.ref_receiver]
@@ -167,20 +172,23 @@ class fusion_center():
                 pos_ref = ref_receiver.coordinates
             else:
                 pos_ref = ref_receiver.coordinates_gps
-            for i in range(0,len(delays)):
-                receiver = self.receivers.values()[i+1]
-                if receiver.selected_position == "manual":
-                    pos_receiver = receiver.coordinates
-                else:
-                    pos_receiver = receiver.coordinates_gps
-                d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
-                d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
-                print("True delay: ",delay_true)
-                if len(self.delay_auto_calibration) < len(delays):
-                    self.delay_auto_calibration.append(int(np.floor(delay_true)-delays[i]))
-                else:
-                    self.delay_auto_calibration[i] = int(np.floor(delay_true)-delays[i])
+            index_delay_auto = 0
+            for i in range(0,len(receivers)):
+                if not self.ref_receiver == receivers.keys()[i]:
+                    receiver = self.receivers.values()[i]
+                    if receiver.selected_position == "manual":
+                        pos_receiver = receiver.coordinates
+                    else:
+                        pos_receiver = receiver.coordinates_gps
+                    d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
+                    d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
+                    delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
+                    print("True delay: ",delay_true)
+                    if len(self.delay_auto_calibration) < len(delays):
+                        self.delay_auto_calibration.append(int(np.floor(delay_true)-delays[index_delay_auto]))
+                    else:
+                        self.delay_auto_calibration[index_delay_auto] = int(np.floor(delay_true)-delays[index_delay_auto])
+                    index_delay_auto += 1
             print ("Delay auto calibration: ", self.delay_auto_calibration)
 
     def remove_calibration(self):
@@ -433,6 +441,11 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_selected_position",[selected_position, serial])
 
+    def set_ref_receiver(self, ref_receiver):
+        self.ref_receiver = ref_receiver
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_ref_receiver",[ref_receiver])
+
     def set_TDOA_grid_based_resolution(self, resolution):
         self.grid_based["resolution"] = resolution
         for gui in self.guis.values():
@@ -453,23 +466,32 @@ class fusion_center():
 
     def process_results(self, receivers):
         estimated_positions = {}
-        self.ref_receiver = receivers.keys()[0]
 
         if self.auto_calibrate:
             correlation, delay = self.correlate(receivers, True)
             self.calibrate(self.coordinates_calibration, delay)
 
         if len(self.delay_auto_calibration) > 0 and self.auto_calibrate:
-            for i in range(0,len(self.delay_auto_calibration)):
-                receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_auto_calibration[i])
+            #for i in range(0,len(self.delay_auto_calibration)):
+            #    receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_auto_calibration[i])
+            index_delay_auto = 0
+            for i in range(0,len(receivers)):
+                if not self.ref_receiver == receivers.keys()[i]:
+                    receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_auto_calibration[index_delay_auto])
+                    index_delay_auto += 1
 
         if len(self.delay_calibration) > 0:
-            for i in range(0,len(self.delay_calibration)):
-                receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_calibration[i])
+            #for i in range(0,len(self.delay_calibration)):
+            #    receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_calibration[i])
+            index_delay = 0
+            for i in range(0,len(receivers)):
+                if not self.ref_receiver == receivers.keys()[i]:
+                    receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
+                    index_delay += 1
 
         if self.localizing:
-            estimated_positions["chan"] = chan94_algorithm.localize(receivers.values())
-            estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers.values(),np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"])
+            estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver)
+            estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
             if not self.run_loop:
                 self.localizing = False
 
@@ -542,7 +564,7 @@ class fusion_center():
     def main_loop(self):
         while True:
             time.sleep(0.01)
-            if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers.items()) > 0:
+            if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers) > 0:
                 receivers = copy.deepcopy(self.receivers)
                 threading.Thread(target = self.process_results, args = (receivers,)).start()
                 for receiver in self.receivers.values():

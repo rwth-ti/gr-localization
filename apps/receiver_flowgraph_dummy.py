@@ -40,6 +40,7 @@ class top_block(gr.top_block):
         self.modulation = options.modulation
         self.seed = 10
         self.delay = options.delay
+        self.samples_to_receive = 1000
 
         # socket addresses
         rpc_port = 6665 + options.id_rx
@@ -50,7 +51,7 @@ class top_block(gr.top_block):
 
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr)
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay)
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive)
         self.seed += 1
 
         # connects
@@ -94,14 +95,15 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset,time_to_recv):
+    def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
+        self.samples_to_receive = samples_to_receive
         self.stop()
         self.wait()
 
         self.disconnect(self.mod_block, self.zmq_probe)
 
         # blocks
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay)
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive)
         self.seed += 1
 
         # connects
@@ -115,7 +117,7 @@ class top_block(gr.top_block):
         return [longitude, latitude]
 
 class ModulatorBlock(gr.hier_block2):
-    def __init__(self, seed, samp_rate, noise_amp, modulation, delay):
+    def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive):
         gr.hier_block2.__init__(self, "ModulatorBlock",
                        gr.io_signature(0, 0, 0),
                        gr.io_signature(1, 1, gr.sizeof_gr_complex))
@@ -151,7 +153,7 @@ class ModulatorBlock(gr.hier_block2):
                     ),
                     payload_length=0,
             )
-        head = blocks.head(gr.sizeof_gr_complex*1, 5100)
+        head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 100)
         skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
 
 

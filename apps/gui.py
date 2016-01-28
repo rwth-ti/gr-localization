@@ -60,6 +60,7 @@ class gui(QtGui.QMainWindow):
         self.new_results = False
 
         self.receivers = {}
+        self.ref_receiver = ""
         self.transmitter_positions = {}
 
         self.chats = ""
@@ -87,6 +88,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_num_samples",self.set_gui_TDOA_grid_based_num_samples)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_channel_model",self.set_gui_TDOA_grid_based_channel_model)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
+        self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -179,6 +181,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.interpolationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_interpolation)
         self.connect(self.gui.loOffsetSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset)
         self.connect(self.gui.samplesToReceiveSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive)
+        self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
@@ -221,7 +224,7 @@ class gui(QtGui.QMainWindow):
                     os.makedirs("../maps")
             img.save("../maps/map.png")
 
-        img = Image.open("../maps/ict_cubes.png")
+        #img = Image.open("../maps/ict_cubes.png")
 
         self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
@@ -379,11 +382,17 @@ class gui(QtGui.QMainWindow):
     def plot_hyperbolas(self, pos_tx=None, c="red"):
         pos_rx = []
         hyperbolas = []
-        for receiver in self.receivers.values():
-            if receiver.selected_position == "manual":
-                pos_rx.append(receiver.coordinates)
+        for receiver in self.receivers:
+            if self.receivers[receiver].selected_position == "manual":
+                if receiver == self.ref_receiver:
+                    pos_rx.insert(0,self.receivers[receiver].coordinates)
+                else:
+                    pos_rx.append(self.receivers[receiver].coordinates)
             else:
-                pos_rx.append(receiver.coordinates_gps)
+                if receiver == self.ref_receiver:
+                    pos_rx.insert(0,self.receivers[receiver].coordinates_gps)
+                else:
+                    pos_rx.append(self.receivers[receiver].coordinates_gps)
         for i in range(1,len(pos_rx)):
             if pos_tx is None:
                 hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx, self.results["delay"][i-1])
@@ -503,6 +512,16 @@ class gui(QtGui.QMainWindow):
     def set_selected_position(self, selected_position, serial):
         self.rpc_manager.request("set_selected_position",[selected_position, serial])
 
+    def set_ref_receiver(self):
+        self.ref_receiver = self.gui.comboBoxRefReceiver.currentText()
+        self.rpc_manager.request("set_ref_receiver",[str(self.ref_receiver)])
+
+    def set_TDOA_grid_based_resolution(self, resolution):
+        self.rpc_manager.request("set_TDOA_grid_based_resolution", [resolution])
+
+    def set_TDOA_grid_based_num_samples(self, num_samples):
+        self.rpc_manager.request("set_TDOA_grid_based_num_samples", [num_samples])
+
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)
 
@@ -530,11 +549,8 @@ class gui(QtGui.QMainWindow):
     def set_gui_selected_position(self, selected_position, serial):
         self.tmrp.set_selected_position(selected_position, serial)
 
-    def set_TDOA_grid_based_resolution(self, resolution):
-        self.rpc_manager.request("set_TDOA_grid_based_resolution", [resolution])
-
-    def set_TDOA_grid_based_num_samples(self, num_samples):
-        self.rpc_manager.request("set_TDOA_grid_based_num_samples", [num_samples])
+    def set_gui_ref_receiver(self, ref_receiver):
+        return
 
     def set_gui_TDOA_grid_based_resolution(self, resolution):
         self.gui.spinGridResolution.setValue(resolution)
@@ -618,8 +634,9 @@ class gui(QtGui.QMainWindow):
             self.tmr.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.tmrp.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.set_delegate = True
-            # populate cross-correlation combo boxes
+            # populate Reference receiver combo box
             self.gui.comboBoxRefReceiver.addItem(serial)
+            self.gui.comboBoxRefReceiver.setCurrentIndex(0)
 
     def register_another_gui(self, serial):
         self.tmg.registerGui(serial)
@@ -690,7 +707,7 @@ class gui(QtGui.QMainWindow):
             qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
             qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, (self.frequency-self.samp_rate/2)/1000000000, (self.frequency+self.samp_rate/2)/1000000000)
         else:
-            y = np.real(samples)
+            y = np.absolute(samples)
             x = range(0,len(y),1)
             title = Qwt.QwtText("Samples")
             title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))

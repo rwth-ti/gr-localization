@@ -8,24 +8,38 @@ def estimate_delay(y1, y2):
     return delay
 
 
-def localize(receivers):
+def localize(receivers, ref_receiver):
 
     t = time.time()
-    sample_rate = receivers[0].samp_rate * receivers[0].interpolation
+    sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
     y = []
     pos_rx = []
-    for receiver in receivers:
-        y.append(receiver.samples)
-        if receiver.selected_position == "manual":
-            pos_rx.append(receiver.coordinates)
+    for key in receivers:
+        receiver = receivers[key]
+        if key == ref_receiver:
+            y.insert(0, receiver.samples)
         else:
-            pos_rx.append(receiver.coordinates_gps)
+            y.append(receiver.samples)
+        if receiver.selected_position == "manual":
+            if key == ref_receiver:
+                pos_rx.insert(0, receiver.coordinates)
+            else:
+                pos_rx.append(receiver.coordinates)
+        else:
+            if key == ref_receiver:
+                pos_rx.insert(0, receiver.coordinates_gps)
+            else:
+                pos_rx.append(receiver.coordinates_gps)
 
     c = 299700000
 
     #cross correlations
-    d12 = float(estimate_delay(receivers[1].samples,receivers[0].samples))/sample_rate
-    d13 = float(estimate_delay(receivers[2].samples,receivers[0].samples))/sample_rate
+    d = []
+    for receiver in receivers:
+        if receiver != ref_receiver:
+            d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+    d12 = d[0]
+    d13 = d[1]
 
     # Set receivers position.
     x1 = pos_rx[0][0]

@@ -2,25 +2,36 @@ import numpy as np
 from scipy.signal import resample
 import time
 
-def localize(receivers, roi_size, resolution, num_compressed_samples):
+def localize(receivers, roi_size, resolution, num_compressed_samples, ref_receiver):
 
     t = time.time()
-    y = np.empty(shape=(len(receivers),receivers[0].samples_to_receive * receivers[0].interpolation),dtype=complex)
+    y = np.empty(shape=(len(receivers),receivers.values()[0].samples_to_receive * receivers.values()[0].interpolation),dtype=complex)
     pos_rx = []
+    used_array_position = 1
     for i in range(0,len(receivers)):
-        receiver = receivers[i]
-        y[i] = receiver.samples
-        if receiver.selected_position == "manual":
-            pos_rx.append(receiver.coordinates)
+        receiver = receivers.values()[i]
+        if receivers.keys()[i] == ref_receiver:
+            y[0] = receiver.samples
         else:
-            pos_rx.append(receiver.coordinates_gps)
+            y[used_array_position] = receiver.samples
+            used_array_position += 1
+        if receiver.selected_position == "manual":
+            if receivers.keys()[i] == ref_receiver:
+                pos_rx.insert(0,receiver.coordinates)
+            else:
+                pos_rx.append(receiver.coordinates)
+        else:
+            if receivers.keys()[i] == ref_receiver:
+                pos_rx.insert(0,receiver.coordinates_gps)
+            else:
+                pos_rx.append(receiver.coordinates_gps)
     pos_rx = np.array(pos_rx)
 
     const_c = 299700000
-    sample_rate = receivers[0].samp_rate * receivers[0].interpolation
+    sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
     channel_model = "free_space"
     num_rx = 3
-    num_delayed_samples = receivers[0].samples_to_receive * receivers[0].interpolation
+    num_delayed_samples = receivers.values()[0].samples_to_receive * receivers.values()[0].interpolation
     measurement_type = "rand"
 
     (D,mask) = generate_environment_matrices(roi_size, resolution, pos_rx, const_c, sample_rate, channel_model)
