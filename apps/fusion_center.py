@@ -149,8 +149,8 @@ class fusion_center():
                     else:
                         pos_ref = ref_receiver.coordinates_gps
                     index_delay = 0
-                    for i in range(0,len(receivers)):
-                        if not self.ref_receiver == receivers.keys()[i]:
+                    for i in range(0,len(self.receivers)):
+                        if not self.ref_receiver == self.receivers.keys()[i]:
                             receiver = self.receivers.values()[i]
                             if receiver.selected_position == "manual":
                                 pos_receiver = receiver.coordinates
@@ -173,8 +173,8 @@ class fusion_center():
             else:
                 pos_ref = ref_receiver.coordinates_gps
             index_delay_auto = 0
-            for i in range(0,len(receivers)):
-                if not self.ref_receiver == receivers.keys()[i]:
+            for i in range(0,len(self.receivers)):
+                if not self.ref_receiver == self.receivers.keys()[i]:
                     receiver = self.receivers.values()[i]
                     if receiver.selected_position == "manual":
                         pos_receiver = receiver.coordinates
