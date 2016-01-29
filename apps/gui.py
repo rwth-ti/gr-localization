@@ -707,7 +707,7 @@ class gui(QtGui.QMainWindow):
             qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
             qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, (self.frequency-self.samp_rate/2)/1000000000, (self.frequency+self.samp_rate/2)/1000000000)
         else:
-            y = np.absolute(samples)
+            y = np.real(samples)
             x = range(0,len(y),1)
             title = Qwt.QwtText("Samples")
             title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
