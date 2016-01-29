@@ -9,15 +9,14 @@ from PIL import Image
 import math
 import requests
 from StringIO import StringIO
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from mpl_toolkits.basemap import Basemap
+import time
 
 class parser():
     def __init__(self,bbox):
 
         # map configuration
-        self.figure = plt.figure()
-        self.canvas = FigureCanvas(self.figure)
+        self.figure = plt.figure(figsize=(16,10))
 
         self.init_map(bbox)
 
@@ -77,15 +76,14 @@ class parser():
 
         self.basemap.imshow(img, interpolation='lanczos', origin='upper')
 
-        self.zp = gui_helpers.ZoomPan()
-        figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
-        figPan = self.zp.pan_factory(self.ax)
+        #self.zp = gui_helpers.ZoomPan()
+        #figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
+        #figPan = self.zp.pan_factory(self.ax)
 
         self.figure.tight_layout(pad=0)
         #self.figure.patch.set_visible(False)
         self.ax.axis('off')
-        self.canvas.draw()
-        self.hyperbolas = {}
+        plt.show(block=False)
 
 ###############################################################################
 # Main
@@ -103,7 +101,7 @@ if __name__ == "__main__":
     delay = []
     for line in f:
         adquisition = eval(eval(line))
-        time = adquisition[0]
+        timestamp = adquisition[0]
         delays = adquisition[1]
         delays_calibration = adquisition[2]
         delays_auto_calibration = adquisition[3]
@@ -132,9 +130,6 @@ if __name__ == "__main__":
 
     p = parser(bbox)
 
-    p.ax.scatter(chan_x,chan_y,color="blue",marker="x")
-    p.ax.scatter(grid_x,grid_y,color="red",marker="x")
-
     i = 1
     for rx in receivers_positions:
         p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
@@ -143,6 +138,18 @@ if __name__ == "__main__":
         i += 1
         p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
 
+    p.figure.canvas.draw()
+
+    #for i in range(0,len(chan_x)):
+    #    p.ax.scatter(chan_x[i],chan_y[i],color="blue",marker="x")
+    #    p.ax.scatter(grid_x[i],grid_y[i],color="red",marker="x")
+    #    time.sleep(0.1)
+    #    p.figure.canvas.draw()
+
+    p.ax.scatter(chan_x,chan_y,color="blue",marker="x")
+    p.ax.scatter(grid_x,grid_y,color="red",marker="x")
+
     # the histogram of the data
     #n, bins, patches = plt.hist(delay, 50, facecolor='green', alpha=0.75)
+
     plt.show()
