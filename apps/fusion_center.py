@@ -552,7 +552,7 @@ class fusion_center():
                     estimated_positions[key].pop("grid")
 
             for i in range(0,len(receivers)):
-                if receivers.values()[i] == self.ref_receiver:
+                if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
             line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + str(index_ref_receiver) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "]"

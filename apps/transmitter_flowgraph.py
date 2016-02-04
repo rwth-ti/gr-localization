@@ -12,9 +12,11 @@ from gnuradio.eng_option import eng_option
 from gnuradio.filter import firdes
 from grc_gnuradio import wxgui as grc_wxgui
 from optparse import OptionParser
+import sys
 import time
 import wx
 import numpy as np
+sys.path.append("../python")
 import mls
 import numpy.matlib as nm
 
@@ -70,8 +72,8 @@ class top_block(gr.top_block):
         z = np.zeros(np.power(nbits,2))
         v = v*2-1
 
-        v = nm.repmat(v,10,1).flatten("F")
-        z = nm.repmat(z,10,1).flatten("F")
+        #v = nm.repmat(v,10,1).flatten("F")
+        #z = nm.repmat(z,1,,1).flatten("F")
 
         self.blocks_vector_source_x_0 = blocks.vector_source_f((v), True, 1, [])
         self.blocks_vector_source_x_1 = blocks.vector_source_f((z), True, 1, [])
