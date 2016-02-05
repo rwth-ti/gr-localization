@@ -17,7 +17,7 @@ class parser():
     def __init__(self,bbox):
 
         # map configuration
-        self.figure = plt.figure(figsize=(16,10))
+        self.figure_map = plt.figure(figsize=(16,10))
 
         self.init_map(bbox)
 
@@ -38,7 +38,7 @@ class parser():
 
         #img = Image.open("../maps/ict_cubes.png")
 
-        self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
+        self.ax = self.figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
         #
         # create basemap
@@ -81,8 +81,8 @@ class parser():
         #figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
         #figPan = self.zp.pan_factory(self.ax)
 
-        self.figure.tight_layout(pad=0)
-        #self.figure.patch.set_visible(False)
+        self.figure_map.tight_layout(pad=0)
+        #self.figure_map.patch.set_visible(False)
         self.ax.axis('off')
         plt.show(block=False)
 
@@ -154,13 +154,14 @@ if __name__ == "__main__":
         samples_to_receive = adquisition[10]
         lo_offset = adquisition[11]
         bbox = adquisition[12]
-        ref_receiver = adquisition[13]
-        receivers_positions = adquisition[14]
-        selected_positions = adquisition[15]
-        receivers_gps = adquisition[16]
-        receivers_antenna = adquisition[17]
-        receivers_gain = adquisition[18]
-        estimated_positions = adquisition[19]
+        receivers_positions = adquisition[13]
+        selected_positions = adquisition[14]
+        receivers_gps = adquisition[15]
+        receivers_antenna = adquisition[16]
+        receivers_gain = adquisition[17]
+        estimated_positions = adquisition[18]
+        if len(adquisition) > 19:
+            ref_receiver = adquisition[19]
         chan_x.append(estimated_positions["chan"]["coordinates"][0])
         chan_y.append(estimated_positions["chan"]["coordinates"][1])
         grid_x.append(estimated_positions["grid_based"]["coordinates"][0])
@@ -180,24 +181,34 @@ if __name__ == "__main__":
         i += 1
         p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
 
-    p.figure.canvas.draw()
+    p.figure_map.canvas.draw()
 
     #for i in range(0,len(chan_x)):
     #    p.ax.scatter(chan_x[i],chan_y[i],color="blue",marker="x")
     #    p.ax.scatter(grid_x[i],grid_y[i],color="red",marker="x")
     #    time.sleep(0.1)
-    #    p.figure.canvas.draw()
+    #    p.figure_map.canvas.draw()
 
     p.ax.scatter(chan_x,chan_y,color="blue",marker="x")
     p.ax.scatter(grid_x,grid_y,color="red",marker="x")
 
+    figure_delay = plt.figure()
+    ax_delay = figure_delay.add_subplot(111)
+
+    delays_calibrated = np.array(delays_list)
+    delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
+
+    figure_hist = plt.figure()
+    ax_hist = figure_hist.add_subplot(111)
     # the histogram of the data
-    #n, bins, patches = plt.hist(delays_list, 50, facecolor='green', alpha=0.75)
+    n_bins = np.max(delays_calibrated[:,0])-np.min(delays_calibrated[:,0])
+    n, bins, patches = ax_hist.hist(delays_calibrated[:,0], n_bins, histtype='stepfilled', facecolor='green', alpha=0.75)
+    n_bins = np.max(delays_calibrated[:,1])-np.min(delays_calibrated[:,1])
+    n, bins, patches = ax_hist.hist(delays_calibrated[:,1], n_bins, histtype='stepfilled', facecolor='red', alpha=0.75)
+    print "Delay 1 mean:", np.mean(delays_calibrated[:,0]),", variance:",np.var(delays_calibrated[:,0])
+    print "Delay 2 mean:", np.mean(delays_calibrated[:,1]),", variance:",np.var(delays_calibrated[:,1])
 
-    #delays_calibrated = np.array(delays_list)
-    #delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
-
-    #p.make_tikz_plot_delays(delays_calibrated, delays_not_calibrated, sys.argv[1])
-    #plt.plot(delays_calibrated)
-    #plt.plot(delays_not_calibrated)
+    p.make_tikz_plot_delays(delays_calibrated, delays_not_calibrated, sys.argv[1])
+    ax_delay.plot(delays_calibrated)
+    ax_delay.plot(delays_not_calibrated)
     plt.show()
