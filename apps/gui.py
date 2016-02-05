@@ -701,7 +701,7 @@ class gui(QtGui.QMainWindow):
     def plot_receiver(self, qwtPlot, checkBoxFFT, samples):
         if checkBoxFFT.isChecked():
             y = 10*np.log10(np.absolute(np.fft.fftshift(np.fft.fft(samples))))
-            x = np.linspace((self.frequency-self.samp_rate/2)/1000000000,(self.frequency+self.samp_rate/2)/1000000000,len(y))
+            x = np.linspace((self.frequency-self.samp_rate*self.interpolation/2)/1000000000,(self.frequency+self.samp_rate*self.interpolation/2)/1000000000,len(y))
             title = Qwt.QwtText("Frequency [GHz]")
             title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
             qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
