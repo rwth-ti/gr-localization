@@ -96,20 +96,24 @@ class top_block(gr.top_block):
             time.sleep(10)
 
     def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
-        self.samples_to_receive = samples_to_receive
-        self.stop()
-        self.wait()
+        times = 1
+        if freq_calibration is not None: times = 2
+        for i in range(0,times):
+            self.samples_to_receive = samples_to_receive
+            self.stop()
+            self.wait()
 
-        self.disconnect(self.mod_block, self.zmq_probe)
+            self.disconnect(self.mod_block, self.zmq_probe)
 
-        # blocks
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive)
-        self.seed += 1
+            # blocks
+            self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive)
+            self.seed += 1
 
-        # connects
-        self.connect(self.mod_block, self.zmq_probe)
+            # connects
+            self.connect(self.mod_block, self.zmq_probe)
 
-        self.start()
+            self.start()
+            time.sleep(0.2)
 
     def get_gps_position(self):
         longitude = 6.062
