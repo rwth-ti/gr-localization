@@ -140,6 +140,7 @@ class fusion_center():
         threading.Thread(target = self.poll_gps_position).start()
 
     def calibrate(self, coordinates, delays=None):
+        # no autocalibration
         if self.results is not None and delays is None:
             if self.results["delay"] is not None:
                 if len(self.results["delay"]) > 0:
@@ -166,6 +167,7 @@ class fusion_center():
                                 self.delay_calibration[index_delay] = int(np.floor(delay_true)-self.results["delay"][index_delay])+self.delay_calibration[index_delay]
                             index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
+        # autocalibration
         else:
             ref_receiver = self.receivers[self.ref_receiver]
             if ref_receiver.selected_position == "manual":
@@ -343,7 +345,7 @@ class fusion_center():
         self.store_results = True
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,index_ref_receiver,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
+        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
@@ -366,7 +368,7 @@ class fusion_center():
             self.store_results = True
             self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,index_ref_receiver,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions", file=open(self.results_file,"a"))
+            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
@@ -467,7 +469,7 @@ class fusion_center():
     def process_results(self, receivers):
         estimated_positions = {}
 
-        if self.auto_calibrate:
+        if self.auto_calibrate and len(receivers) > 1:
             correlation, delay = self.correlate(receivers, True)
             self.calibrate(self.coordinates_calibration, delay)
 
@@ -555,7 +557,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + str(index_ref_receiver) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "]"
+            line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.freq_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
