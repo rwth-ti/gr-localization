@@ -16,16 +16,21 @@ class receiver_interface():
             self.rpc_mgr = rpc_manager_local.rpc_manager()
             self.rpc_mgr.set_request_socket(rpc_address)
 
-        self.samples_to_receive = 0
-        self.frequency = 0
-        self.lo_offset = 0
         self.first_packet = True
         self.reception_complete = False
         self.auto_calibrate = False
         self.samples_calibration = []
         self.samples = []
+        self.samples_to_receive = 0
+        self.frequency = 0
+        self.lo_offset = 0
         self.bw = 0
-        self.interpolation = 1
+        self.interpolation = 0
+        self.samp_rate = 0
+        self.samples_to_receive_calibration = 0
+        self.frequency_calibration = 0
+        self.lo_offset_calibration = 0
+        self.bw_calibration = 0
 
         self.selected_position = "manual"
         self.gps = ""
@@ -57,11 +62,11 @@ class receiver_interface():
         self.antenna = antenna
         self.rpc_mgr.request("set_antenna",[self.antenna])
 
-    def request_samples(self, time_to_receive, freq_calibration):
+    def request_samples(self, time_to_receive):
         self.samples = []
         self.first_packet = True
         self.reception_complete = False
-        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, time_to_receive, freq_calibration])
+        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive])
 
     def receive_samples(self, samples):
         if self.first_packet:
@@ -70,20 +75,22 @@ class receiver_interface():
         elif len(self.samples) < self.samples_to_receive:
             self.samples = np.concatenate((self.samples, samples), axis=1)
             #print "reconstruction"
-        elif len(self.samples) == self.samples_to_receive > len(self.samples_calibration) and self.auto_calibrate:
+        elif len(self.samples) == self.samples_to_receive and self.samples_to_receive_calibration > len(self.samples_calibration) and self.auto_calibrate:
             if len(self.samples_calibration) == 0:
                 self.samples_calibration = samples[100:]
             else:
                 self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
         if self.samples_to_receive == len(self.samples):
-            if self.samples_to_receive == len(self.samples_calibration) and self.auto_calibrate:
+            if self.samples_to_receive_calibration == len(self.samples_calibration) and self.auto_calibrate:
                 #x = np.arange(0,len(self.samples))
                 x = np.linspace(0,len(self.samples),len(self.samples))
                 f = interpolate.interp1d(x, self.samples)
                 x_interpolated = np.linspace(0,len(self.samples),len(self.samples) * self.interpolation)
                 #x_interpolated = np.arange(0,len(self.samples) - 1, 1. / self.interpolation)
                 self.samples = f(x_interpolated)
+                x = np.linspace(0,len(self.samples_calibration),len(self.samples_calibration))
                 f = interpolate.interp1d(x, self.samples_calibration)
+                x_interpolated = np.linspace(0,len(self.samples_calibration),len(self.samples_calibration) * self.interpolation)
                 self.samples_calibration = f(x_interpolated)
                 #self.samples = resample(self.samples, self.interpolation * len(self.samples))
                 #self.samples_calibration = resample(self.samples_calibration, self.interpolation * len(self.samples_calibration))

@@ -136,10 +136,10 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
-        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration)).start()
+    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv):
+        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv)).start()
 
-    def start_reception(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
+    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv):
         print "Start Flowgraph"
         try:
             # get times from USRP
@@ -157,6 +157,8 @@ class top_block(gr.top_block):
             # synchronize LOs
             self.usrp_source.set_command_time(time_to_sync)
             self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
+            self.usrp_source.set_gain(gain,0)
+            self.usrp_source.set_bandwidth(bw,0)
             self.usrp_source.clear_command_time()
             # ask for samples at a specific time
             stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
@@ -170,12 +172,14 @@ class top_block(gr.top_block):
             if freq_calibration is not None:
                 # synchronize LOs
                 self.usrp_source.set_command_time(time_to_calibrate_sync)
-                self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset), 0)
+                self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
+                self.usrp_source.set_gain(gain_calibration,0)
+                self.usrp_source.set_bandwidth(bw_calibration,0)
                 self.usrp_source.clear_command_time()
                 # ask for samples at a specific time
                 stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
                 # add 100 samples to the burst to get rid of transient
-                stream_cmd.num_samps = samples_to_receive + 100
+                stream_cmd.num_samps = samples_to_receive_calibration + 100
                 stream_cmd.stream_now = False
                 stream_cmd.time_spec = time_to_calibrate
                 self.usrp_source.issue_stream_cmd(stream_cmd)
@@ -209,7 +213,7 @@ class top_block(gr.top_block):
                 my_time = time.strptime(t+d,"%H%M%S%d%m%y")
                 time_nmea = calendar.timegm(my_time)
                 self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
-                if self.options.ntp_server:
+                if self.options.ntp_server and time_nmea > 1400000000:
                     os.system("sudo date +%s -s @"+str(time_nmea))
                     print "System time set to:", str(time_nmea)
                 print "Set USRP to NMEA time + 1s:", time_nmea + 1
@@ -248,8 +252,6 @@ class top_block(gr.top_block):
                 self.nmea_lte_lite_lock.acquire()
                 self.nmea_lte_lite = nmea
                 self.nmea_lte_lite_lock.release()
-
-            time.sleep(0.3)
 
     def get_gps_gprmc(self):
         if self.gps == "octoclock":

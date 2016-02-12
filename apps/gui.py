@@ -55,6 +55,10 @@ class gui(QtGui.QMainWindow):
         self.bw = 1e6
         self.interpolation = 10
         self.lo_offset = 0
+        self.samples_to_receive_calibration = 1000
+        self.frequency_calibration = 2.4e9
+        self.bw_calibration = 1e6
+        self.lo_offset_calibration = 0
 
         self.results = {}
         self.new_results = False
@@ -80,7 +84,12 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_interpolation",self.set_gui_interpolation)
         self.rpc_manager.add_interface("set_gui_lo_offset",self.set_gui_lo_offset)
         self.rpc_manager.add_interface("set_gui_samples_to_receive",self.set_gui_samples_to_receive)
+        self.rpc_manager.add_interface("set_gui_frequency_calibration",self.set_gui_frequency_calibration)
+        self.rpc_manager.add_interface("set_gui_bw_calibration",self.set_gui_bw_calibration)
+        self.rpc_manager.add_interface("set_gui_lo_offset_calibration",self.set_gui_lo_offset_calibration)
+        self.rpc_manager.add_interface("set_gui_samples_to_receive_calibration",self.set_gui_samples_to_receive_calibration)
         self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
+        self.rpc_manager.add_interface("set_gui_gain_calibration",self.set_gui_gain_calibration)
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
@@ -145,6 +154,7 @@ class gui(QtGui.QMainWindow):
         self.gui.tableViewReceivers.setModel(self.tmr)
         self.gui.tableViewReceivers.setItemDelegateForColumn(1, gui_helpers.SpinBoxDelegate(self.gui.tableViewReceivers))
         self.gui.tableViewReceivers.setItemDelegateForColumn(2, gui_helpers.ComboDelegate(self.gui.tableViewReceivers))
+        self.gui.tableViewReceivers.setItemDelegateForColumn(3, gui_helpers.SpinBoxDelegate(self.gui.tableViewReceivers))
         self.set_delegate = False
 
         # create and set model for guis table view
@@ -177,10 +187,15 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.checkBoxFFT3, QtCore.SIGNAL("clicked()"), partial(self.refresh_plot,3))
         self.connect(self.gui.checkBoxCorrelation, QtCore.SIGNAL("clicked()"), self.refresh_correlation)
         self.connect(self.gui.frequencySpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency)
+        self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
         self.connect(self.gui.interpolationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_interpolation)
         self.connect(self.gui.loOffsetSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset)
         self.connect(self.gui.samplesToReceiveSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive)
+        self.connect(self.gui.frequencyCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency_calibration)
+        self.connect(self.gui.bwCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw_calibration)
+        self.connect(self.gui.loOffsetCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset_calibration)
+        self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
@@ -188,7 +203,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.shortcut_exit, QtCore.SIGNAL("activated()"), self.gui.close)
 
         # Grid based signals
-        self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(int)"), self.set_TDOA_grid_based_resolution)
+        self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(double)"), self.set_TDOA_grid_based_resolution)
         self.connect(self.gui.spinGridNumCompSamps, QtCore.SIGNAL("valueChanged(int)"), self.set_TDOA_grid_based_num_samples)
 
         # start update timer
@@ -503,8 +518,27 @@ class gui(QtGui.QMainWindow):
         self.interpolation = self.gui.interpolationSpin.value()
         self.rpc_manager.request("set_interpolation",[self.interpolation])
 
+    def set_frequency_calibration(self):
+        self.frequency_calibration = self.gui.frequencyCalibrationSpin.value()*1e6
+        self.rpc_manager.request("set_frequency_calibration",[self.frequency_calibration])
+
+    def set_lo_offset_calibration(self):
+        self.lo_offset_calibration = self.gui.loOffsetCalibrationSpin.value()*1e6
+        self.rpc_manager.request("set_lo_offset_calibration",[self.lo_offset_calibration])
+
+    def set_samples_to_receive_calibration(self):
+        self.samples_to_receive_calibration = self.gui.samplesToReceiveCalibrationSpin.value()
+        self.rpc_manager.request("set_samples_to_receive_calibration",[self.samples_to_receive_calibration])
+
+    def set_bw_calibration(self):
+        self.bw_calibration = self.gui.bwCalibrationSpin.value()*1e6
+        self.rpc_manager.request("set_bw_calibration",[self.bw_calibration])
+
     def set_gain(self, gain, serial):
         self.rpc_manager.request("set_gain",[gain, serial])
+
+    def set_gain_calibration(self, gain, serial):
+        self.rpc_manager.request("set_gain_calibration",[gain, serial])
 
     def set_antenna(self, antenna, serial):
         self.rpc_manager.request("set_antenna",[antenna, serial])
@@ -540,8 +574,23 @@ class gui(QtGui.QMainWindow):
     def set_gui_interpolation(self, interpolation):
         self.gui.interpolationSpin.setValue(interpolation)
 
+    def set_gui_frequency_calibration(self, frequency):
+        self.gui.frequencyCalibrationSpin.setValue(frequency/1e6)
+
+    def set_gui_lo_offset_calibration(self, lo_offset):
+        self.gui.loOffsetCalibrationSpin.setValue(lo_offset/1e6)
+
+    def set_gui_samples_to_receive_calibration(self, samples_to_receive):
+        self.gui.samplesToReceiveCalibrationSpin.setValue(samples_to_receive)
+
+    def set_gui_bw_calibration(self, bw):
+        self.gui.bwCalibrationSpin.setValue(bw/1e6)
+
     def set_gui_gain(self, gain, serial):
         self.tmr.set_gain(gain, serial)
+
+    def set_gui_gain_calibration(self, gain, serial):
+        self.tmr.set_gain_calibration(gain, serial)
 
     def set_gui_antenna(self, antenna, serial):
         self.tmr.set_antenna(antenna, serial)
@@ -550,6 +599,9 @@ class gui(QtGui.QMainWindow):
         self.tmrp.set_selected_position(selected_position, serial)
 
     def set_gui_ref_receiver(self, ref_receiver):
+        for i in range(0,len(self.receivers)):
+            if self.receivers.keys()[i] == ref_receiver:
+                self.gui.comboBoxRefReceiver.setCurrentIndex(i)
         return
 
     def set_gui_TDOA_grid_based_resolution(self, resolution):
@@ -595,6 +647,7 @@ class gui(QtGui.QMainWindow):
             for row in range(0, self.tmr.rowCount()):
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 1))
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 2))
+                self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 3))
                 self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 1))
                 self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 2))
             self.set_delegate = False
@@ -628,14 +681,16 @@ class gui(QtGui.QMainWindow):
                 self.set_tx_position(self.results["estimated_positions"])
         self.new_results = False
 
-    def register_receiver(self, serial, gain, antenna):
+    def register_receiver(self, serial, gain, antenna, gain_calibration):
         if not self.receivers.has_key(serial):
-            self.receivers[serial] = gui_helpers.receiver_item(gain, antenna)
+            self.receivers[serial] = gui_helpers.receiver_item(gain, antenna, gain_calibration)
             self.tmr.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.tmrp.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.set_delegate = True
             # populate Reference receiver combo box
-            self.gui.comboBoxRefReceiver.addItem(serial)
+            self.gui.comboBoxRefReceiver.clear()
+            for serial in self.receivers.keys():
+                self.gui.comboBoxRefReceiver.addItem(serial)
             self.gui.comboBoxRefReceiver.setCurrentIndex(0)
 
     def register_another_gui(self, serial):
