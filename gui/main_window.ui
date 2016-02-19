@@ -136,16 +136,49 @@
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_5">
               <item>
-               <widget class="QPushButton" name="pushButtonSetCalibration">
+               <widget class="QCheckBox" name="checkBoxAutocalibrate">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>0</height>
+                 </size>
+                </property>
                 <property name="text">
-                 <string>Calibrate TX</string>
+                 <string>Autocalibrate</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButtonSetCalibration">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="baseSize">
+                 <size>
+                  <width>0</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Calibrate
+TX</string>
                 </property>
                </widget>
               </item>
               <item>
                <widget class="QPushButton" name="pushButtonRemoveCalibration">
                 <property name="text">
-                 <string>Remove Calibration</string>
+                 <string>Remove
+Calibration</string>
                 </property>
                </widget>
               </item>

@@ -63,6 +63,7 @@ class gui(QtGui.QMainWindow):
         self.results = {}
         self.new_results = False
 
+        self.auto_calibrate = False
         self.receivers = {}
         self.ref_receiver = ""
         self.transmitter_positions = {}
@@ -98,6 +99,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_channel_model",self.set_gui_TDOA_grid_based_channel_model)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
+        self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -178,6 +180,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_loop)
         self.connect(self.gui.pushButtonSetCalibration, QtCore.SIGNAL("clicked()"), self.set_calibration)
         self.connect(self.gui.pushButtonRemoveCalibration, QtCore.SIGNAL("clicked()"), self.remove_calibration)
+        self.connect(self.gui.checkBoxAutocalibrate, QtCore.SIGNAL("clicked()"), self.set_auto_calibrate)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
@@ -550,6 +553,10 @@ class gui(QtGui.QMainWindow):
         self.ref_receiver = self.gui.comboBoxRefReceiver.currentText()
         self.rpc_manager.request("set_ref_receiver",[str(self.ref_receiver)])
 
+    def set_auto_calibrate(self):
+        self.auto_calibrate = self.gui.checkBoxAutocalibrate.isChecked()
+        self.rpc_manager.request("set_auto_calibrate",[self.auto_calibrate])
+
     def set_TDOA_grid_based_resolution(self, resolution):
         self.rpc_manager.request("set_TDOA_grid_based_resolution", [resolution])
 
@@ -603,6 +610,12 @@ class gui(QtGui.QMainWindow):
             if self.receivers.keys()[i] == ref_receiver:
                 self.gui.comboBoxRefReceiver.setCurrentIndex(i)
         return
+
+    def set_gui_auto_calibrate(self, auto_calibrate):
+        if auto_calibrate:
+            self.gui.checkBoxAutocalibrate.setChecked(1)
+        else:
+            self.gui.checkBoxAutocalibrate.setChecked(0)
 
     def set_gui_TDOA_grid_based_resolution(self, resolution):
         self.gui.spinGridResolution.setValue(resolution)

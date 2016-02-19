@@ -44,6 +44,7 @@ class fusion_center():
         self.gain = float(options.gain)
         self.gain_calibration = float(options.gain_calibration)
         self.antenna = options.antenna
+        self.auto_calibrate = not options.no_auto_calibrate
 
         self.receivers = {}
         self.ref_receiver = ""
@@ -105,7 +106,6 @@ class fusion_center():
 
         #self.frequency_calibration = 602000000
         self.coordinates_calibration = self.basemap(50.745597, 6.043278)
-        self.auto_calibrate = True
 
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
@@ -141,6 +141,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_ref_receiver",self.set_ref_receiver)
+        self.rpc_manager.add_interface("set_auto_calibrate",self.set_auto_calibrate)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
         self.rpc_manager.add_interface("sync_success",self.sync_ntp)
@@ -252,6 +253,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_lo_offset_calibration",[self.lo_offset_calibration])
             gui.rpc_manager.request("set_gui_samples_to_receive_calibration",[self.samples_to_receive_calibration])
             gui.rpc_manager.request("set_gui_bw_calibration",[self.bw_calibration])
+            gui.rpc_manager.request("set_gui_auto_calibrate",[self.auto_calibrate])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[self.grid_based["resolution"]])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
 
@@ -291,8 +293,7 @@ class fusion_center():
             receiver.lo_offset_calibration = self.lo_offset_calibration
             receiver.samples_to_receive_calibration = self.samples_to_receive_calibration
             receiver.gps = gps
-            if self.auto_calibrate:
-                receiver.auto_calibrate = True
+            receiver.auto_calibrate = self.auto_calibrate
             self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
             for gui in self.guis.values():
                 # request registration in each gui
@@ -349,6 +350,7 @@ class fusion_center():
             receiver.frequency = self.frequency
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
+            receiver.auto_calibrate = self.auto_calibrate
 
     def start_correlation(self, freq, lo_offset, samples_to_receive):
         threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
@@ -359,7 +361,7 @@ class fusion_center():
         self.store_samples = True
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver", file=open(self.results_file,"a"))
+        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
@@ -384,7 +386,7 @@ class fusion_center():
             self.store_samples = False
             #self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver", file=open(self.results_file,"a"))
+            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
@@ -497,6 +499,13 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_ref_receiver",[ref_receiver])
 
+    def set_auto_calibrate(self, auto_calibrate):
+        self.auto_calibrate = auto_calibrate
+        for receiver in self.receivers.values():
+            receiver.auto_calibrate = auto_calibrate
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_auto_calibrate",[auto_calibrate])
+
     def set_TDOA_grid_based_resolution(self, resolution):
         self.grid_based["resolution"] = resolution
         for gui in self.guis.values():
@@ -511,7 +520,7 @@ class fusion_center():
     def sync_ntp(self, ip_address, is_ntp_server):
         if is_ntp_server:
             print("Synchronize time to receiver NTP server ",ip_address)
-            os.system("sudo ntpdate " + ip_address)
+            os.system("sudo ntpdate -u " + ip_address)
             self.ntp_sync = True
             print("NTP synchronization done")
 
@@ -606,7 +615,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "]"
+            line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + str(self.auto_calibrate) + "]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
@@ -691,6 +700,8 @@ def parse_options():
                       help="Gain in dB")
     parser.add_option("", "--gain-calibration", type="float", default="30",
                       help="Gain in dB for calibration")
+    parser.add_option("", "--no-auto-calibrate", action="store_true", default=False,
+                      help="Deactivate reference calibration station")
     (options, args) = parser.parse_args()
     return options
 

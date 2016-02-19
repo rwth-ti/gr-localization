@@ -136,10 +136,10 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv):
-        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv)).start()
+    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate):
+        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate)).start()
 
-    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv):
+    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate):
         print "Start Flowgraph"
         try:
             # get times from USRP
@@ -169,7 +169,7 @@ class top_block(gr.top_block):
             self.usrp_source.issue_stream_cmd(stream_cmd)
             time_now = self.usrp_source.get_time_now().get_real_secs()
             time.sleep(abs(time_to_recv - time_now) + 0.1)
-            if freq_calibration is not None:
+            if auto_calibrate:
                 # synchronize LOs
                 self.usrp_source.set_command_time(time_to_calibrate_sync)
                 self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
@@ -231,7 +231,7 @@ class top_block(gr.top_block):
                     # set internal time registers in USRP
                     self.usrp_source.set_time_next_pps(uhd.time_spec(time_nmea + 1))
                     # set system time if ntp server option activated
-                    if self.options.ntp_server:
+                    if self.options.ntp_server and time_nmea > 1400000000:
                         os.system("sudo date +%s -s @"+str(time_nmea))
                         print "System time set to:", str(time_nmea)
                     print "Set USRP to NMEA time + 1s:", time_nmea + 1
