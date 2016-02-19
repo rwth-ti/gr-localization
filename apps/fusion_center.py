@@ -72,40 +72,8 @@ class fusion_center():
         # ICT indoor
         #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
         #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
+        self.init_map()
 
-        # get reference UTM grid
-        lon = self.bbox[0]
-        lat = self.bbox[1]
-        if lat>=72:
-            lat_0 = 72
-            if 0<=lon and lon<= 9:
-                lon_0 = 0
-            elif 9<=lon and lon<= 21:
-                lon_0 = 9
-            elif 21<=lon and lon<= 33:
-                lon_0 = 21
-            elif 33<=lon and lon<= 42:
-                lon_0 = 33
-            else:
-                lon_0 = int(lon/6)*6
-
-        elif 56<=lat and lat<= 64:
-            lat_0 = 56
-            if 3<=lon and lon<=12:
-                lon_0 = 3
-            else:
-                lon_0 = int(lon/6)*6
-
-        else:
-            lat_0 = int(lat/8)*8
-            lon_0 = int(lon/6)*6
-
-        self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
-                      urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
-                      projection='tmerc', lon_0=lon_0, lat_0=lat_0)
-
-        #self.frequency_calibration = 602000000
-        self.coordinates_calibration = self.basemap(50.745597, 6.043278)
 
         # ZeroMQ
         self.probe_manager = zeromq.probe_manager()
@@ -145,9 +113,45 @@ class fusion_center():
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
         self.rpc_manager.add_interface("sync_success",self.sync_ntp)
+        self.rpc_manager.add_interface("set_bbox",self.set_bbox)
         self.rpc_manager.start_watcher()
 
         threading.Thread(target = self.poll_gps_position).start()
+
+    def init_map(self):
+        # get reference UTM grid
+        lon = self.bbox[0]
+        lat = self.bbox[1]
+        if lat>=72:
+            lat_0 = 72
+            if 0<=lon and lon<= 9:
+                lon_0 = 0
+            elif 9<=lon and lon<= 21:
+                lon_0 = 9
+            elif 21<=lon and lon<= 33:
+                lon_0 = 21
+            elif 33<=lon and lon<= 42:
+                lon_0 = 33
+            else:
+                lon_0 = int(lon/6)*6
+
+        elif 56<=lat and lat<= 64:
+            lat_0 = 56
+            if 3<=lon and lon<=12:
+                lon_0 = 3
+            else:
+                lon_0 = int(lon/6)*6
+
+        else:
+            lat_0 = int(lat/8)*8
+            lon_0 = int(lon/6)*6
+
+        self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
+                      urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
+                      projection='tmerc', lon_0=lon_0, lat_0=lat_0)
+
+        #self.frequency_calibration = 602000000
+        self.coordinates_calibration = self.basemap(50.745597, 6.043278)
 
     def calibrate(self, coordinates, delays=None):
         # no autocalibration
@@ -523,6 +527,14 @@ class fusion_center():
             os.system("sudo ntpdate -u " + ip_address)
             self.ntp_sync = True
             print("NTP synchronization done")
+
+    def set_bbox(self, bbox):
+        self.bbox = bbox
+        self.init_map()
+        for gui in self.guis.values():
+            gui.rpc_manager.request("init_map",[bbox])
+
+
 
     def process_results(self, receivers):
         estimated_positions = {}

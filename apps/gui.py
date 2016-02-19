@@ -100,6 +100,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
+        self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -200,6 +201,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.loOffsetCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset_calibration)
         self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
+        self.connect(self.gui.pushButtonSetBbox, QtCore.SIGNAL("clicked()"), self.set_bbox)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
@@ -223,8 +225,19 @@ class gui(QtGui.QMainWindow):
     def remove_calibration(self):
         self.rpc_manager.request("remove_calibration")
 
-    def init_map(self):
-        bbox = self.bbox
+    def init_map(self, bbox):
+        self.bbox = bbox
+        threading.Thread(target = self.set_map, args = [bbox]).start()
+
+    def set_map(self, bbox):
+        self.gui.lineEditLeft.setText(str(bbox[0]))
+        self.gui.lineEditLeft.setCursorPosition(0)
+        self.gui.lineEditBottom.setText(str(bbox[1]))
+        self.gui.lineEditBottom.setCursorPosition(0)
+        self.gui.lineEditRight.setText(str(bbox[2]))
+        self.gui.lineEditRight.setCursorPosition(0)
+        self.gui.lineEditTop.setText(str(bbox[3]))
+        self.gui.lineEditTop.setCursorPosition(0)
 
         inProj = Proj(init='epsg:4326')
         outProj = Proj(init='epsg:3857')
@@ -244,6 +257,8 @@ class gui(QtGui.QMainWindow):
 
         #img = Image.open("../maps/ict_cubes.png")
 
+        if hasattr(self, "ax"):
+            self.figure.delaxes(self.ax)
         self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
 
         #
@@ -281,7 +296,9 @@ class gui(QtGui.QMainWindow):
                       urcrnrlon=bbox[2], urcrnrlat=bbox[3],
                       projection='tmerc', ax=self.ax, lon_0=lon_0, lat_0=lat_0)
 
-        self.basemap.imshow(img, interpolation='lanczos', origin='upper')
+        if hasattr(self, "image"):
+            self.image.remove()
+        self.image = self.basemap.imshow(img, interpolation='lanczos', origin='upper')
 
         self.zp = gui_helpers.ZoomPan()
         figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
@@ -292,6 +309,8 @@ class gui(QtGui.QMainWindow):
         self.ax.axis('off')
         self.canvas.draw()
         self.hyperbolas = {}
+
+        self.pending_receivers_to_plot = True
 
     def init_plot(self, qwtPlot):
         title = Qwt.QwtText("Samples")
@@ -315,7 +334,7 @@ class gui(QtGui.QMainWindow):
             bbox = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
             if first and bbox != None:
                 self.bbox = bbox
-                threading.Thread(target = self.init_map).start()
+                self.init_map(bbox)
                 first = False
             time.sleep(10)
 
@@ -562,6 +581,10 @@ class gui(QtGui.QMainWindow):
 
     def set_TDOA_grid_based_num_samples(self, num_samples):
         self.rpc_manager.request("set_TDOA_grid_based_num_samples", [num_samples])
+
+    def set_bbox(self):
+        bbox = [float(self.gui.lineEditLeft.text()),float(self.gui.lineEditBottom.text()),float(self.gui.lineEditRight.text()),float(self.gui.lineEditTop.text())]
+        self.rpc_manager.request("set_bbox",[bbox])
 
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)
