@@ -149,17 +149,13 @@ class top_block(gr.top_block):
                 time_to_recv = time_last_pps + 1
             else:
                 time_to_recv = float(time_to_recv)
-            time_to_sync = uhd.time_spec(time_to_recv)
             time_to_sample = uhd.time_spec(time_to_recv + 0.1)
             if freq_calibration is not None:
-                time_to_calibrate_sync = uhd.time_spec(time_to_recv + 0.15)
                 time_to_calibrate = uhd.time_spec(time_to_recv + 0.6)
             # synchronize LOs
-            self.usrp_source.set_command_time(time_to_sync)
             self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
             self.usrp_source.set_gain(gain,0)
             self.usrp_source.set_bandwidth(bw,0)
-            self.usrp_source.clear_command_time()
             # ask for samples at a specific time
             stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
             # add 100 samples to the burst to get rid of transient
@@ -171,11 +167,9 @@ class top_block(gr.top_block):
             time.sleep(abs(time_to_recv - time_now) + 0.1)
             if auto_calibrate:
                 # synchronize LOs
-                self.usrp_source.set_command_time(time_to_calibrate_sync)
                 self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
                 self.usrp_source.set_gain(gain_calibration,0)
                 self.usrp_source.set_bandwidth(bw_calibration,0)
-                self.usrp_source.clear_command_time()
                 # ask for samples at a specific time
                 stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
                 # add 100 samples to the burst to get rid of transient
