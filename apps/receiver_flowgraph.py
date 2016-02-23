@@ -267,13 +267,13 @@ class top_block(gr.top_block):
         if latitude[1] == "N":
             latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
         else:
-            latitude = -int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+            latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
         longitude = nmea.split(",")[5:7]
         if longitude[1] == "E":
             longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
         else:
-            longitude = -int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+            longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
         return [longitude, latitude]
 
 ###############################################################################
