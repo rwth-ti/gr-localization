@@ -326,6 +326,7 @@ class fusion_center():
             receiver.frequency = freq
             receiver.lo_offset = lo_offset
             receiver.samples_to_receive = samples_to_receive
+            receiver.set_run_loop(self.run_loop)
             if self.ntp_sync:
                 receiver.request_samples(str(time_to_receive))
             else:
@@ -357,7 +358,7 @@ class fusion_center():
             receiver.auto_calibrate = self.auto_calibrate
 
     def start_correlation(self, freq, lo_offset, samples_to_receive):
-        threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
+        self.start_receivers(freq, lo_offset, samples_to_receive)
 
     def start_correlation_loop(self, freq, lo_offset, samples_to_receive):
         self.store_results = True
@@ -368,19 +369,12 @@ class fusion_center():
         print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
-        threading.Thread(target = self.run_correlation, args = (freq, lo_offset, samples_to_receive)).start()
-
-    def run_correlation(self, freq, lo_offset, samples_to_receive):
-        while True:
-            self.start_receivers(freq, lo_offset, samples_to_receive)
-            if not self.run_loop:
-                break
-            time.sleep(2)
+        self.start_receivers(freq, lo_offset, samples_to_receive)
 
     def localize(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
             self.localizing = True
-            threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
+            self.start_receivers(freq, lo_offset, samples_to_receive)
 
     def localize_loop(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
@@ -393,20 +387,15 @@ class fusion_center():
             print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
-            threading.Thread(target = self.run_localization, args = (freq, lo_offset, samples_to_receive)).start()
-
-    def run_localization(self, freq, lo_offset, samples_to_receive):
-        while True:
             self.start_receivers(freq, lo_offset, samples_to_receive)
-            if not self.run_loop:
-                break
-            time.sleep(2)
 
     def stop_loop(self):
         self.run_loop = False
         self.store_results = False
         self.delay_history = []
         self.localizing = False
+        for receiver in self.receivers.values():
+            threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
 
     def set_frequency(self, frequency):
         self.frequency = frequency
@@ -536,20 +525,20 @@ class fusion_center():
 
 
 
-    def process_results(self, receivers):
+    def process_results(self, receivers, delay_auto_calibration):
         estimated_positions = {}
 
         if self.auto_calibrate and len(receivers) > 1:
             correlation, delay = self.correlate(receivers, True)
             self.calibrate(self.coordinates_calibration, delay)
 
-        if len(self.delay_auto_calibration) > 0 and self.auto_calibrate:
-            #for i in range(0,len(self.delay_auto_calibration)):
-            #    receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_auto_calibration[i])
+        if len(delay_auto_calibration) > 0 and self.auto_calibrate:
+            #for i in range(0,len(delay_auto_calibration)):
+            #    receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,delay_auto_calibration[i])
             index_delay_auto = 0
             for i in range(0,len(receivers)):
                 if not self.ref_receiver == receivers.keys()[i]:
-                    receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_auto_calibration[index_delay_auto])
+                    receivers.values()[i].samples = np.roll(receivers.values()[i].samples,delay_auto_calibration[index_delay_auto])
                     index_delay_auto += 1
 
         if len(self.delay_calibration) > 0:
@@ -627,7 +616,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(self.delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + str(self.auto_calibrate) + "]"
+            line = "[" + str(time.time()) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
@@ -642,7 +631,7 @@ class fusion_center():
             time.sleep(0.01)
             if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers) > 0:
                 receivers = copy.deepcopy(self.receivers)
-                threading.Thread(target = self.process_results, args = (receivers,)).start()
+                threading.Thread(target = self.process_results, args = (receivers,self.delay_auto_calibration,)).start()
                 for receiver in self.receivers.values():
                     receiver.samples = []
                     receiver.samples_calibration = []

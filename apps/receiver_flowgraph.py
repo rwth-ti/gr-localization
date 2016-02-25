@@ -32,6 +32,8 @@ class top_block(gr.top_block):
 
         self.options = options
 
+        self.run_loop = False
+
         # socket addresses
         rpc_port = 6665 + options.id_rx
         rpc_adr = "tcp://*:" + str(rpc_port)
@@ -101,6 +103,7 @@ class top_block(gr.top_block):
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.set_request_socket(fusion_center_adr)
+        self.rpc_manager.add_interface("set_run_loop",self.set_run_loop)
         self.rpc_manager.add_interface("start_fg",self.start_fg)
         self.rpc_manager.add_interface("set_gain",self.set_gain)
         self.rpc_manager.add_interface("set_samp_rate",self.set_samp_rate)
@@ -117,6 +120,9 @@ class top_block(gr.top_block):
         else:
             s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
+
+    def set_run_loop(self, run_loop):
+        self.run_loop = run_loop
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
@@ -139,53 +145,70 @@ class top_block(gr.top_block):
     def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate):
         threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate)).start()
 
+
     def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate):
-        print "Start Flowgraph"
-        try:
-            # get times from USRP
-            time_begin = self.usrp_source.get_time_now().get_real_secs()
-            time_last_pps = self.usrp_source.get_time_last_pps().get_real_secs()
-            if time_to_recv is None:
-                time_to_recv = time_last_pps + 1
-            else:
-                time_to_recv = float(time_to_recv)
-            time_to_sample = uhd.time_spec(time_to_recv + 0.1)
-            if freq_calibration is not None:
-                time_to_calibrate = uhd.time_spec(time_to_recv + 0.6)
-            # synchronize LOs
-            self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
-            self.usrp_source.set_gain(gain,0)
-            self.usrp_source.set_bandwidth(bw,0)
-            # ask for samples at a specific time
-            stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
-            # add 100 samples to the burst to get rid of transient
-            stream_cmd.num_samps = samples_to_receive + 100
-            stream_cmd.stream_now = False
-            stream_cmd.time_spec = time_to_sample
-            self.usrp_source.issue_stream_cmd(stream_cmd)
+
+        loop_frequency = 1 # seconds between acquisitions
+
+        if time_to_recv is None:
+            time_to_recv = self.usrp_source.get_time_last_pps().get_real_secs() + 1
+        else:
+            time_to_recv = float(time_to_recv)
+
+        time_now = self.usrp_source.get_time_now().get_real_secs()
+        if time_to_recv < time_now:
+            print time_to_recv,time_now
+            print "Can't start in the past!"
+            return
+
+        while True:
             time_now = self.usrp_source.get_time_now().get_real_secs()
-            time.sleep(abs(time_to_recv - time_now) + 0.1)
-            if auto_calibrate:
-                # synchronize LOs
-                self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
-                self.usrp_source.set_gain(gain_calibration,0)
-                self.usrp_source.set_bandwidth(bw_calibration,0)
-                # ask for samples at a specific time
-                stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
-                # add 100 samples to the burst to get rid of transient
-                stream_cmd.num_samps = samples_to_receive_calibration + 100
-                stream_cmd.stream_now = False
-                stream_cmd.time_spec = time_to_calibrate
-                self.usrp_source.issue_stream_cmd(stream_cmd)
-            print "Time begin:", time_begin
-            print "Time last pps:", time_last_pps
-            print "Time to sample:", time_to_sample.get_real_secs()
-            if freq_calibration is not None:
-                print "Time to calibrate:", time_to_calibrate.get_real_secs()
-            usrp = self.usrp_source
-            print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
-        except RuntimeError:
-            print "Can't start, flowgraph already running!"
+            if round(time_to_recv) == round(time_now):
+                print "Start Flowgraph"
+                try:
+                    # get times from USRP
+                    time_begin = self.usrp_source.get_time_now().get_real_secs()
+                    time_last_pps = self.usrp_source.get_time_last_pps().get_real_secs()
+                    time_to_sample = uhd.time_spec(time_to_recv + loop_frequency/10.0)
+                    if freq_calibration is not None:
+                        time_to_calibrate = uhd.time_spec(time_to_recv + 6 * loop_frequency/10.0)
+                    # synchronize LOs
+                    self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
+                    self.usrp_source.set_gain(gain,0)
+                    self.usrp_source.set_bandwidth(bw,0)
+                    # ask for samples at a specific time
+                    stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                    # add 100 samples to the burst to get rid of transient
+                    stream_cmd.num_samps = samples_to_receive + 100
+                    stream_cmd.stream_now = False
+                    stream_cmd.time_spec = time_to_sample
+                    self.usrp_source.issue_stream_cmd(stream_cmd)
+                    time_now = self.usrp_source.get_time_now().get_real_secs()
+                    time.sleep(abs(time_to_recv - time_now) + 0.1)
+                    if auto_calibrate:
+                        # synchronize LOs
+                        self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
+                        self.usrp_source.set_gain(gain_calibration,0)
+                        self.usrp_source.set_bandwidth(bw_calibration,0)
+                        # ask for samples at a specific time
+                        stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                        # add 100 samples to the burst to get rid of transient
+                        stream_cmd.num_samps = samples_to_receive_calibration + 100
+                        stream_cmd.stream_now = False
+                        stream_cmd.time_spec = time_to_calibrate
+                        self.usrp_source.issue_stream_cmd(stream_cmd)
+                    print "Time begin:", time_begin
+                    print "Time last pps:", time_last_pps
+                    print "Time to sample:", time_to_sample.get_real_secs()
+                    if freq_calibration is not None:
+                        print "Time to calibrate:", time_to_calibrate.get_real_secs()
+                    usrp = self.usrp_source
+                    print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
+                    if not self.run_loop:
+                        break
+                    time_to_recv = time_to_recv + loop_frequency
+                except RuntimeError:
+                    print "Can't start, flowgraph already running!"
 
     def sync_time_nmea(self):
         print "Begin time sync"
@@ -259,7 +282,6 @@ class top_block(gr.top_block):
             self.nmea_lte_lite_lock.release()
         else:
             nmea = self.usrp_source.get_mboard_sensor("gps_gpgga",0).value
-            print "nmea ", nmea
 
         return nmea
 
