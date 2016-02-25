@@ -258,19 +258,20 @@ class top_block(gr.top_block):
             nmea = self.nmea_lte_lite
             self.nmea_lte_lite_lock.release()
         else:
-            nmea = self.usrp_source.get_mboard_sensor("gps_gpgga",0).to_pp_string()[14:-1]
+            nmea = self.usrp_source.get_mboard_sensor("gps_gpgga",0).value
+            print "nmea ", nmea
 
         return nmea
 
     def get_gps_position(self):
         nmea = self.get_gps_gprmc()
-        latitude = nmea.split(",")[1:3]
+        latitude = nmea.split(",")[2:4]
         if latitude[1] == "N":
             latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
         else:
             latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
-        longitude = nmea.split(",")[3:5]
+        longitude = nmea.split(",")[4:6]
         if longitude[1] == "E":
             longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
         else:
