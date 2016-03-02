@@ -64,11 +64,11 @@ class receiver_interface():
     def set_run_loop(self, run_loop):
         self.rpc_mgr.request("set_run_loop",[run_loop])
 
-    def request_samples(self, time_to_receive):
+    def request_samples(self, time_to_receive, acquisitions):
         self.samples = []
         self.first_packet = True
         self.reception_complete = False
-        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate])
+        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions])
 
     def receive_samples(self, samples):
         if self.first_packet:

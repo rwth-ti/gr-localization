@@ -142,13 +142,18 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate):
-        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate)).start()
+    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
+        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions)).start()
 
 
-    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate):
+    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
 
-        loop_frequency = 1 # seconds between acquisitions
+        loop_frequency = 2 # seconds between acquisitions
+
+        if acquisitions == 0:
+            infinity = True
+        else:
+            infinity = False
 
         if time_to_recv is None:
             time_to_recv = self.usrp_source.get_time_last_pps().get_real_secs() + 1
@@ -169,9 +174,9 @@ class top_block(gr.top_block):
                     # get times from USRP
                     time_begin = self.usrp_source.get_time_now().get_real_secs()
                     time_last_pps = self.usrp_source.get_time_last_pps().get_real_secs()
-                    time_to_sample = uhd.time_spec(time_to_recv + loop_frequency/10.0)
+                    time_to_sample = uhd.time_spec(time_to_recv + 3 * loop_frequency/10.0)
                     if freq_calibration is not None:
-                        time_to_calibrate = uhd.time_spec(time_to_recv + 6 * loop_frequency/10.0)
+                        time_to_calibrate = uhd.time_spec(time_to_recv + 7 * loop_frequency/10.0)
                     # synchronize LOs
                     self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
                     self.usrp_source.set_gain(gain,0)
@@ -184,7 +189,7 @@ class top_block(gr.top_block):
                     stream_cmd.time_spec = time_to_sample
                     self.usrp_source.issue_stream_cmd(stream_cmd)
                     time_now = self.usrp_source.get_time_now().get_real_secs()
-                    time.sleep(abs(time_to_recv - time_now) + 0.1)
+                    time.sleep(abs(time_to_recv - time_now) + 3 * loop_frequency/10.0)
                     if auto_calibrate:
                         # synchronize LOs
                         self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
@@ -204,7 +209,8 @@ class top_block(gr.top_block):
                         print "Time to calibrate:", time_to_calibrate.get_real_secs()
                     usrp = self.usrp_source
                     print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
-                    if not self.run_loop:
+                    acquisitions -= 1
+                    if not self.run_loop or (acquisitions <= 0 and not infinity):
                         break
                     time_to_recv = time_to_recv + loop_frequency
                 except RuntimeError:

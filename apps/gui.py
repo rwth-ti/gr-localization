@@ -101,6 +101,8 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.add_interface("init_map",self.init_map)
+        self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
+        self.rpc_manager.add_interface("calibration_status",self.calibration_status)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -172,6 +174,14 @@ class gui(QtGui.QMainWindow):
         grid_correlation.setPen(pen)
         grid_correlation.attach(self.gui.qwtPlotCorrelation)
 
+        # Message box for calibration
+        self.calibration_mBox = QtGui.QMessageBox(self)
+        self.calibration_setButton = self.calibration_mBox.addButton("Set TX position", QtGui.QMessageBox.AcceptRole)
+        self.calibration_cancelButton = self.calibration_mBox.addButton("Cancel", QtGui.QMessageBox.RejectRole)
+        self.calibration_mBox.setWindowTitle("Calibrating system")
+        self.calibration_mBox.setText("Please wait until calibration process is complete.")
+        self.calibration_mBox.buttonClicked.connect(self.set_tx_calibration)
+
         #Signals
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
@@ -217,10 +227,31 @@ class gui(QtGui.QMainWindow):
         self.timer_register.daemon = True
         self.timer_register.start()
 
+    def calibration_loop(self, status):
+        if status:
+            self.calibration_setButton.setEnabled(False)
+        else:
+            self.calibration_setButton.setEnabled(True)
+
+    def calibration_status(self, status):
+        if status:
+            self.gui.pushButtonSetCalibration.setStyleSheet("background-color: green")
+        else:
+            self.gui.pushButtonSetCalibration.setStyleSheet("background-color: red")
+
+    def set_tx_calibration(self, button):
+        if button.text() == "Cancel":
+            self.rpc_manager.request("remove_calibration")
+        else:
+            if hasattr(self, "zp"):
+                self.setting_calibration = True
+                self.zp.enabled = False
+
     def set_calibration(self):
-        if hasattr(self, "zp"):
-            self.setting_calibration = True
-            self.zp.enabled = False
+        # run system multiple times to average calibration
+        # TODO read acquisitions from textbox
+        self.rpc_manager.request("calibration_loop", [self.frequency, self.lo_offset, self.samples_to_receive, 1])
+        self.calibration_mBox.show()
 
     def remove_calibration(self):
         self.rpc_manager.request("remove_calibration")
@@ -746,12 +777,6 @@ class gui(QtGui.QMainWindow):
 
     def stop_loop(self):
         self.rpc_manager.request("stop_loop")
-
-    def send_correlation_command(self):
-        self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
-        while self.run_loop:
-            self.rpc_manager.request("start_correlation", [receiver1, receiver2, self.frequency, self.lo_offset, self.samples_to_receive])
-            time.sleep(1.5)
 
     def reset_receivers(self):
         self.rpc_manager.request("reset_receivers")

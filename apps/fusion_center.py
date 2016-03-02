@@ -55,6 +55,7 @@ class fusion_center():
         self.delay_history = []
         self.delay_calibration = []
         self.delay_auto_calibration = []
+        self.calibration_loop_delays = []
         self.store_results = False
         self.store_samples = False
         self.results_file = ""
@@ -64,6 +65,7 @@ class fusion_center():
         self.run_loop = False
         self.localizing = False
         self.ntp_sync = False
+        self.calibrating = False
 
         # ICT + surroundings
         self.bbox = 6.0580,50.7775,6.0690,50.7810
@@ -85,7 +87,6 @@ class fusion_center():
         self.rpc_manager.add_interface("sync_position",self.sync_position)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("forward_chat",self.forward_chat)
-        self.rpc_manager.add_interface("start_receivers",self.start_receivers)
         self.rpc_manager.add_interface("reset_receivers",self.reset_receivers)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
@@ -93,6 +94,7 @@ class fusion_center():
         self.rpc_manager.add_interface("localize_loop",self.localize_loop)
         self.rpc_manager.add_interface("calibrate",self.calibrate)
         self.rpc_manager.add_interface("remove_calibration",self.remove_calibration)
+        self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_loop",self.stop_loop)
@@ -156,34 +158,41 @@ class fusion_center():
         self.coordinates_calibration = self.basemap(50.745597, 6.043278)
 
     def calibrate(self, coordinates, delays=None):
-        # no autocalibration
+        # calculate offset calibration
         if self.results is not None and delays is None:
-            if self.results["delay"] is not None:
-                if len(self.results["delay"]) > 0:
-                    ref_receiver = self.receivers[self.ref_receiver]
-                    if ref_receiver.selected_position == "manual":
-                        pos_ref = ref_receiver.coordinates
-                    else:
-                        pos_ref = ref_receiver.coordinates_gps
-                    index_delay = 0
-                    for i in range(0,len(self.receivers)):
-                        if not self.ref_receiver == self.receivers.keys()[i]:
-                            receiver = self.receivers.values()[i]
-                            if receiver.selected_position == "manual":
-                                pos_receiver = receiver.coordinates
-                            else:
-                                pos_receiver = receiver.coordinates_gps
-                            d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
-                            d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                            delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
-                            print("True delay: ",delay_true)
-                            if len(self.delay_calibration) < len(self.results["delay"]):
-                                self.delay_calibration.append(int(np.floor(delay_true)-self.results["delay"][index_delay]))
-                            else:
-                                self.delay_calibration[index_delay] = int(np.floor(delay_true)-self.results["delay"][index_delay])+self.delay_calibration[index_delay]
-                            index_delay += 1
+            if len(self.calibration_loop_delays) > 0:
+                ref_receiver = self.receivers[self.ref_receiver]
+                if ref_receiver.selected_position == "manual":
+                    pos_ref = ref_receiver.coordinates
+                else:
+                    pos_ref = ref_receiver.coordinates_gps
+                index_delay = 0
+                for i in range(0,len(self.receivers)):
+                    if not self.ref_receiver == self.receivers.keys()[i]:
+                        receiver = self.receivers.values()[i]
+                        if receiver.selected_position == "manual":
+                            pos_receiver = receiver.coordinates
+                        else:
+                            pos_receiver = receiver.coordinates_gps
+                        d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
+                        d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
+                        delay_true = (d_receiver-d_ref) * self.samp_rate * self.interpolation / 299700000
+                        print("True delay: ",delay_true)
+                        #TODO average calibration_loop_delays
+                        print(index_delay,len(self.delay_calibration),len(self.calibration_loop_delays))
+                        print(self.calibration_loop_delays)
+                        if len(self.delay_calibration) < len(self.calibration_loop_delays[-1]):
+                            self.delay_calibration.append(int(np.floor(delay_true)-self.calibration_loop_delays[-1][index_delay]))
+                        else:
+                            self.delay_calibration[index_delay] = int(np.floor(delay_true)-self.calibration_loop_delays[-1][index_delay])+self.delay_calibration[index_delay]
+                        index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
-        # autocalibration
+            # clear calibration values to average
+            self.calibration_loop_delays = []
+            self.calibrating = False
+            for gui in self.guis.values():
+                gui.rpc_manager.request("calibration_status",[True])
+        # calculate autocalibration
         else:
             ref_receiver = self.receivers[self.ref_receiver]
             if ref_receiver.selected_position == "manual":
@@ -212,6 +221,11 @@ class fusion_center():
     def remove_calibration(self):
         self.delay_calibration = []
         self.delay_auto_calibration = []
+        self.calibrating = False
+        self.calibration_loop_delays = []
+        self.run_loop = False
+        for gui in self.guis.values():
+            gui.rpc_manager.request("calibration_status",[False])
 
     def forward_chat(self, chat):
         for gui in self.guis.values():
@@ -314,13 +328,13 @@ class fusion_center():
         self.reset_receivers()
         print(serial, "registered")
 
-    def start_receivers(self, freq, lo_offset, samples_to_receive):
+    def start_receivers(self, freq, lo_offset, samples_to_receive, acquisitions=0):
         time_to_receive = time.time() + 1
         for receiver in self.receivers.values():
-            threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, freq, lo_offset, samples_to_receive)).start()
+            threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, freq, lo_offset, samples_to_receive, acquisitions)).start()
 
 
-    def start_receiver(self, receiver, time_to_receive, freq, lo_offset, samples_to_receive):
+    def start_receiver(self, receiver, time_to_receive, freq, lo_offset, samples_to_receive, acquisitions):
             receiver.samples = []
             receiver.samples_calibration = []
             receiver.first_packet = True
@@ -330,9 +344,9 @@ class fusion_center():
             receiver.samples_to_receive = samples_to_receive
             receiver.set_run_loop(self.run_loop)
             if self.ntp_sync:
-                receiver.request_samples(str(time_to_receive))
+                receiver.request_samples(str(time_to_receive), acquisitions)
             else:
-                receiver.request_samples(None)
+                receiver.request_samples(None, acquisitions)
 
     def reset_receivers(self):
         #self.update_timer.stop()
@@ -359,10 +373,19 @@ class fusion_center():
             receiver.samples_to_receive = self.samples_to_receive
             receiver.auto_calibrate = self.auto_calibrate
 
+    def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
+        self.delay_calibration = []
+        self.calibrating = True
+        self.run_loop = True
+        self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
+        for gui in self.guis.values():
+            gui.rpc_manager.request("calibration_status",[False])
+            gui.rpc_manager.request("calibration_loop",[True])
+
     def start_correlation(self, freq, lo_offset, samples_to_receive):
         self.start_receivers(freq, lo_offset, samples_to_receive)
 
-    def start_correlation_loop(self, freq, lo_offset, samples_to_receive):
+    def start_correlation_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
         self.store_results = True
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         self.store_samples = True
@@ -371,14 +394,14 @@ class fusion_center():
         print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
         print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
-        self.start_receivers(freq, lo_offset, samples_to_receive)
+        self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
 
     def localize(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
             self.localizing = True
             self.start_receivers(freq, lo_offset, samples_to_receive)
 
-    def localize_loop(self, freq, lo_offset, samples_to_receive):
+    def localize_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
         if len(self.receivers) > 2:
             self.localizing = True
             self.store_results = True
@@ -389,7 +412,7 @@ class fusion_center():
             print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
-            self.start_receivers(freq, lo_offset, samples_to_receive)
+            self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
 
     def stop_loop(self):
         self.run_loop = False
@@ -627,6 +650,16 @@ class fusion_center():
                 f_s = open(self.samples_file,"a")
                 pprint.pprint("[" + str(self.results["correlation"]) + "," + str(self.results["receivers"][0].tolist()) + "]",f_s,width=9000)
                 f_s.close()
+
+        if self.calibrating:
+            self.calibration_loop_delays.append(delay)
+            #TODO set number of acquisitions from gui
+            print(len(self.calibration_loop_delays))
+            if len(self.calibration_loop_delays) == 1:
+                self.run_loop = False
+                for gui in self.guis.values():
+                    gui.rpc_manager.request("calibration_loop",[False])
+
 
     def main_loop(self):
         while True:
