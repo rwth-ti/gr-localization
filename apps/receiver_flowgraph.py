@@ -294,12 +294,16 @@ class top_block(gr.top_block):
     def get_gps_position(self):
         nmea = self.get_gps_gprmc()
         latitude = nmea.split(",")[2:4]
+        # the NMEA sentence may vary for each receiver. This code works for 
+        # the next structure in latitude DDMM.XXXXXX
         if latitude[1] == "N":
             latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
         else:
             latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
         longitude = nmea.split(",")[4:6]
+        # the NMEA sentence may vary for each receiver. This code works for 
+        # the next structure in longitude DDDMM.XXXXXX
         if longitude[1] == "E":
             longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
         else:
