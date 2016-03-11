@@ -32,6 +32,8 @@ class top_block(gr.top_block):
 
         self.options = options
 
+        self.run_loop = False
+
         self.samp_rate = 50000000
         self.hostname = os.uname()[1]
         self.gps = "dummy"
@@ -67,6 +69,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_bw",self.set_bw)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
+        self.rpc_manager.add_interface("set_run_loop",self.set_run_loop)
         self.rpc_manager.start_watcher()
 
 
@@ -77,6 +80,9 @@ class top_block(gr.top_block):
         else:
             s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
+
+    def set_run_loop(self, run_loop):
+        self.run_loop = run_loop
 
     def set_samp_rate(self,samp_rate):
         self.samp_rate = samp_rate
@@ -95,25 +101,51 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset, time_to_recv, freq_calibration):
+    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
+        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions)).start()
+
+
+    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
+
+        loop_frequency = 2 # seconds between acquisitions
+
+        auto_delay = 5 # delay simulation of auto calibration
+
+        if acquisitions == 0:
+            infinity = True
+        else:
+            infinity = False
+
         times = 1
-        if freq_calibration is not None: times = 2
-        for i in range(0,times):
-            self.samples_to_receive = samples_to_receive
-            self.stop()
-            self.wait()
+        if auto_calibrate: times = 2
 
-            self.disconnect(self.mod_block, self.zmq_probe)
+        while True:
+            for i in range(0,times):
+                print "Sending " + str(samples_to_receive) + " samples"
+                self.samples_to_receive = samples_to_receive
+                self.stop()
+                self.wait()
 
-            # blocks
-            self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive)
-            self.seed += 1
+                self.disconnect(self.mod_block, self.zmq_probe)
 
-            # connects
-            self.connect(self.mod_block, self.zmq_probe)
+                # blocks
+                if i == 1:
+                    delay = auto_delay
+                else:
+                    delay = self.delay
+                self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive)
+                self.seed += 1
 
-            self.start()
-            time.sleep(0.2)
+                # connects
+                self.connect(self.mod_block, self.zmq_probe)
+
+                self.start()
+                time.sleep(0.2)
+
+            acquisitions -= 1
+            if not self.run_loop or (acquisitions <= 0 and not infinity):
+                break
+            time.sleep(loop_frequency)
 
     def get_gps_position(self):
         longitude = 6.062
@@ -127,7 +159,7 @@ class ModulatorBlock(gr.hier_block2):
                        gr.io_signature(1, 1, gr.sizeof_gr_complex))
 
         np.random.seed(seed=seed)
-        v = np.random.randint(0,2,1000)
+        v = np.random.randint(0,2,samples_to_receive)
         vector_source = blocks.vector_source_b((v), True, 1, [])
         throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
         noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
