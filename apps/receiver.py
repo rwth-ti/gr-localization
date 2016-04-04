@@ -84,15 +84,20 @@ class top_block(gr.top_block):
 
         self.gps = options.gps
 
-        if self.gps != "lc_xo":
+        if self.gps != "internal":
             print "Using " + self.gps
             self.usrp_source.set_clock_source("external", 0)
             self.usrp_source.set_time_source("external", 0)
-        if self.gps == "lte_lite":
+        if self.gps == "ltelite":
             self.ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
-            self.nmea_lte_lite = ""
-            self.nmea_lte_lite_lock = threading.Lock()
+            self.nmea_external = ""
+            self.nmea_external_lock = threading.Lock()
             threading.Thread(target = self.poll_lte_lite).start()
+        elif self.gps == "leam8f":
+            self.ser = serial.Serial("/dev/ttyACM0", 38400, timeout = 1)
+            self.nmea_external = ""
+            self.nmea_external_lock = threading.Lock()
+            threading.Thread(target = self.poll_lea_m8f).start()
 
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
@@ -225,12 +230,12 @@ class top_block(gr.top_block):
         print "Last pps time before sync:", last_pps_time
         synced = False
         while not synced:
-            if self.gps == "lte_lite":
-                while self.nmea_lte_lite is "":
+            if (self.gps == "ltelite") or (self.gps == "leam8f"):
+                while self.nmea_external is "":
                     time.sleep(0.1)
-                self.nmea_lte_lite_lock.acquire()
-                s = self.nmea_lte_lite
-                self.nmea_lte_lite_lock.release()
+                self.nmea_external_lock.acquire()
+                s = self.nmea_external
+                self.nmea_external_lock.release()
                 t = s.split(",")[1].split(".")[0]
                 d = s.split(",")[9]
                 my_time = time.strptime(t+d,"%H%M%S%d%m%y")
@@ -272,28 +277,37 @@ class top_block(gr.top_block):
         while True:
             nmea = self.ser.readline().replace("\x00","").replace("\n","")
             if "GPRMC" in nmea and len(nmea.split(",")) ==13 :
-                self.nmea_lte_lite_lock.acquire()
-                self.nmea_lte_lite = nmea
-                self.nmea_lte_lite_lock.release()
+                self.nmea_external_lock.acquire()
+                self.nmea_external = nmea
+                self.nmea_external_lock.release()
+
+    def poll_lea_m8f(self):
+        while True:
+            nmea = self.ser.readline().replace("\x00","").replace("\n","")
+            # nmea identifier different for lea m8f
+            if "GNRMC" in nmea and len(nmea.split(",")) ==13 :
+                self.nmea_external_lock.acquire()
+                self.nmea_external = nmea
+                self.nmea_external_lock.release()
 
     def get_gps_gprmc(self):
         if self.gps == "octoclock":
             clock = octoclock.multi_usrp_clock()
             nmea = clock.get_sensor("gps_gprmc")[11:-1]
-        elif self.gps == "lte_lite":
-            while self.nmea_lte_lite is "":
+        elif (self.gps == "ltelite") or (self.gps == "leam8f"):
+            while self.nmea_external is "":
                 time.sleep(0.1)
-            self.nmea_lte_lite_lock.acquire()
-            nmea = self.nmea_lte_lite
-            self.nmea_lte_lite_lock.release()
+            self.nmea_external_lock.acquire()
+            nmea = self.nmea_external
+            self.nmea_external_lock.release()
         else:
-            nmea = self.usrp_source.get_mboard_sensor("gps_gpgga",0).value
+            nmea = self.usrp_source.get_mboard_sensor("gps_gprmc",0).value
 
         return nmea
 
     def get_gps_position(self):
         nmea = self.get_gps_gprmc()
-        latitude = nmea.split(",")[2:4]
+        latitude = nmea.split(",")[3:5]
         # the NMEA sentence may vary for each receiver. This code works for 
         # the next structure in latitude DDMM.XXXXXX
         if latitude[1] == "N":
@@ -301,7 +315,7 @@ class top_block(gr.top_block):
         else:
             latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
-        longitude = nmea.split(",")[4:6]
+        longitude = nmea.split(",")[5:7]
         # the NMEA sentence may vary for each receiver. This code works for 
         # the next structure in longitude DDDMM.XXXXXX
         if longitude[1] == "E":
@@ -320,7 +334,7 @@ def parse_options():
                       help="USRP serial number")
     parser.add_option("", "--fusion-center", type="string", default="localhost",
                       help="Fusion center address")
-    parser.add_option("-g", "--gps", type="string", default="lc_xo",
+    parser.add_option("-g", "--gps", type="string", default="internal",
                       help="GPS type")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
