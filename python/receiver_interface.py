@@ -21,6 +21,8 @@ class receiver_interface():
         self.auto_calibrate = False
         self.samples_calibration = []
         self.samples = []
+        self.tags = None
+        self.tags_calibration = None
         self.samples_to_receive = 0
         self.frequency = 0
         self.lo_offset = 0
@@ -70,18 +72,23 @@ class receiver_interface():
         self.reception_complete = False
         self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions])
 
-    def receive_samples(self, samples):
-        if self.first_packet:
+    def receive_samples(self, samples, tags):
+        print tags
+        print self.frequency,self.frequency_calibration
+        if self.frequency == self.frequency_calibration:
+            print "Warning: calibration frequency should not be equal to target frequency"
+        if tags is not None and tags["rx_freq"] == self.frequency:
             self.samples = samples[100:]
+            self.tags = tags
             self.first_packet = False
-        elif len(self.samples) < self.samples_to_receive:
+        elif tags is None and (len(self.samples) < self.samples_to_receive):
             self.samples = np.concatenate((self.samples, samples), axis=1)
             #print "reconstruction"
-        elif len(self.samples) == self.samples_to_receive and self.samples_to_receive_calibration > len(self.samples_calibration) and self.auto_calibrate:
-            if len(self.samples_calibration) == 0:
-                self.samples_calibration = samples[100:]
-            else:
-                self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
+        elif tags is not None and tags["rx_freq"] == self.frequency_calibration:
+            self.samples_calibration = samples[100:]
+            self.tags_calibration = tags
+        elif tags is None and (len(self.samples) == self.samples_to_receive):
+            self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
         if self.samples_to_receive == len(self.samples):
             if self.samples_to_receive_calibration == len(self.samples_calibration) and self.auto_calibrate:
                 #x = np.arange(0,len(self.samples))

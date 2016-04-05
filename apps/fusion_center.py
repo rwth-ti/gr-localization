@@ -19,6 +19,7 @@ from mpl_toolkits.basemap import Basemap
 import copy
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
+import probe_manager as probe_manager_local
 import receiver_interface
 import chan94_algorithm
 import grid_based_algorithm
@@ -80,7 +81,7 @@ class fusion_center():
 
 
         # ZeroMQ
-        self.probe_manager = zeromq.probe_manager()
+        self.probe_manager = probe_manager_local.probe_manager()
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
         self.rpc_manager.add_interface("register_gui",self.register_gui)
@@ -304,11 +305,13 @@ class fusion_center():
             receiver.set_bw(self.bw)
             receiver.interpolation = self.interpolation
             receiver.set_samp_rate(self.samp_rate)
+            print(receiver.frequency,self.frequency)
             receiver.frequency = self.frequency
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
             receiver.gain_calibration = self.gain_calibration
             receiver.bw_calibration = self.bw_calibration
+            print(receiver.frequency_calibration,self.frequency_calibration)
             receiver.frequency_calibration = self.frequency_calibration
             receiver.lo_offset_calibration = self.lo_offset_calibration
             receiver.samples_to_receive_calibration = self.samples_to_receive_calibration
@@ -423,6 +426,7 @@ class fusion_center():
             threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
 
     def set_frequency(self, frequency):
+        print("in fc f", frequency)
         self.frequency = frequency
         for receiver in self.receivers.values():
             receiver.frequency = frequency
@@ -465,6 +469,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_interpolation",[interpolation])
 
     def set_frequency_calibration(self, frequency):
+        print("in fc f_cal", frequency)
         self.frequency_calibration = frequency
         for receiver in self.receivers.values():
             receiver.frequency_calibration = frequency
@@ -551,6 +556,25 @@ class fusion_center():
 
 
     def process_results(self, receivers, delay_auto_calibration):
+
+        # check if timestamps are equal for all the receivers
+        times_target = []
+        times_calibration = []
+
+        last_time_target = receivers.values()[0].tags["rx_time"]
+        last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
+
+        for i in range(1,len(receivers)):
+
+            if not (last_time_target == receivers.values()[i].tags["rx_time"]):
+                print("Error: target timestamps do not match")
+                return
+            if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
+                print("Error: calibration timestamps do not match")
+                return
+
+        # all timestamps correct -> continue processing
+
         estimated_positions = {}
 
         if self.auto_calibrate and len(receivers) > 1:
