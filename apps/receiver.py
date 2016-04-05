@@ -188,8 +188,8 @@ class top_block(gr.top_block):
                     self.usrp_source.set_bandwidth(bw,0)
                     # ask for samples at a specific time
                     stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
-                    # add 100 samples to the burst to get rid of transient
-                    stream_cmd.num_samps = samples_to_receive + 100
+                    # add 300 samples to the burst to get rid of transient
+                    stream_cmd.num_samps = samples_to_receive + 300
                     stream_cmd.stream_now = False
                     stream_cmd.time_spec = time_to_sample
                     self.usrp_source.issue_stream_cmd(stream_cmd)
@@ -202,8 +202,8 @@ class top_block(gr.top_block):
                         self.usrp_source.set_bandwidth(bw_calibration,0)
                         # ask for samples at a specific time
                         stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
-                        # add 100 samples to the burst to get rid of transient
-                        stream_cmd.num_samps = samples_to_receive_calibration + 100
+                        # add 300 samples to the burst to get rid of transient
+                        stream_cmd.num_samps = samples_to_receive_calibration + 300
                         stream_cmd.stream_now = False
                         stream_cmd.time_spec = time_to_calibrate
                         self.usrp_source.issue_stream_cmd(stream_cmd)

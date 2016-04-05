@@ -78,14 +78,14 @@ class receiver_interface():
         if self.frequency == self.frequency_calibration:
             print "Warning: calibration frequency should not be equal to target frequency"
         if tags is not None and tags["rx_freq"] == self.frequency:
-            self.samples = samples[100:]
+            self.samples = samples[300:]
             self.tags = tags
             self.first_packet = False
         elif tags is None and (len(self.samples) < self.samples_to_receive):
             self.samples = np.concatenate((self.samples, samples), axis=1)
             #print "reconstruction"
         elif tags is not None and tags["rx_freq"] == self.frequency_calibration:
-            self.samples_calibration = samples[100:]
+            self.samples_calibration = samples[300:]
             self.tags_calibration = tags
         elif tags is None and (len(self.samples) == self.samples_to_receive):
             self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
