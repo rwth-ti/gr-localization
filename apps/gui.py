@@ -421,9 +421,9 @@ class gui(QtGui.QMainWindow):
         self.hyperbolas["tdoa"] = self.plot_hyperbolas()
         for algorithm in transmitter_positions.items():
             if not self.transmitter_positions.has_key(algorithm[0]):
-                self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
+                self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
             else:
-                self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]
+                self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["average_coordinates"]
             estimated_position = self.transmitter_positions[algorithm[0]]
             if hasattr(estimated_position, "scatter"):
                 estimated_position.scatter.remove()

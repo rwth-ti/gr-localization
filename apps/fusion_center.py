@@ -186,9 +186,9 @@ class fusion_center():
                         print(index_delay,len(self.delay_calibration),len(self.calibration_loop_delays))
                         print(self.calibration_loop_delays)
                         if len(self.delay_calibration) < len(self.calibration_loop_delays[-1]):
-                            self.delay_calibration.append(int(np.floor(delay_true)-self.calibration_loop_delays[-1][index_delay]))
+                            self.delay_calibration.append(int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay]))
                         else:
-                            self.delay_calibration[index_delay] = int(np.floor(delay_true)-self.calibration_loop_delays[-1][index_delay])+self.delay_calibration[index_delay]
+                            self.delay_calibration[index_delay] = int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay])
                         index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
             self.calibrating = False
@@ -434,6 +434,7 @@ class fusion_center():
         self.run_loop = False
         self.store_results = False
         self.delay_history = []
+        self.estimated_positions_history = []
         self.localizing = False
         for receiver in self.receivers.values():
             threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
@@ -575,16 +576,18 @@ class fusion_center():
         times_calibration = []
 
         last_time_target = receivers.values()[0].tags["rx_time"]
-        last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
+	if self.auto_calibrate:
+            last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
 
         for i in range(1,len(receivers)):
 
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
                 return
-            if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
-                print("Error: calibration timestamps do not match")
-                return
+	    if self.auto_calibrate:
+                if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
+                    print("Error: calibration timestamps do not match")
+                    return
 
         # all timestamps correct -> continue processing
 
@@ -618,17 +621,17 @@ class fusion_center():
 
             # average position estimation
             n_average = 10
-            if len(estimated_positions_history) == n_average:
-                estimated_positions_history.pop(0)
-            estimated_positions_history.append(estimated_positions)
+            if len(self.estimated_positions_history) == n_average:
+                self.estimated_positions_history.pop(0)
+            self.estimated_positions_history.append(estimated_positions)
 
             average_chan = []
             average_grid = []
-            for position in estimated_positions_history:
+            for position in self.estimated_positions_history:
                 average_chan.append(position["chan"]["coordinates"])
-                average_grid.append(position["grid"]["coordinates"])
+                average_grid.append(position["grid_based"]["coordinates"])
             estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0)
-            estimated_positions["grid"]["average_coordinates"] = np.array(average_grid).mean(0)
+            estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
 
             if not self.run_loop:
                 self.localizing = False
