@@ -53,10 +53,12 @@ class fusion_center():
 
         self.grid_based = {"resolution":10,"num_samples":self.samples_to_receive * self.interpolation}
 
+        self.estimated_positions_history = []
         self.delay_history = []
         self.delay_calibration = []
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
+        self.calibration_average = 10
         self.store_results = False
         self.store_samples = False
         self.results_file = ""
@@ -96,6 +98,7 @@ class fusion_center():
         self.rpc_manager.add_interface("calibrate",self.calibrate)
         self.rpc_manager.add_interface("remove_calibration",self.remove_calibration)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
+        self.rpc_manager.add_interface("set_calibration_average",self.set_calibration_average)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_loop",self.stop_loop)
@@ -188,8 +191,6 @@ class fusion_center():
                             self.delay_calibration[index_delay] = int(np.floor(delay_true)-self.calibration_loop_delays[-1][index_delay])+self.delay_calibration[index_delay]
                         index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
-            # clear calibration values to average
-            self.calibration_loop_delays = []
             self.calibrating = False
             for gui in self.guis.values():
                 gui.rpc_manager.request("calibration_status",[True])
@@ -218,6 +219,26 @@ class fusion_center():
                         self.delay_auto_calibration[index_delay_auto] = int(np.floor(delay_true)-delays[index_delay_auto])
                     index_delay_auto += 1
             print ("Delay auto calibration: ", self.delay_auto_calibration)
+
+    def set_calibration_average(self, calibration_average):
+        self.calibration_average = calibration_average
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_calibration_average",[calibration_average])
+
+    def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
+        if len(self.calibration_loop_delays) > 0:
+            self.remove_calibration()
+            return False
+        else:
+            if len(self.receivers) > 1:
+                self.delay_calibration = []
+                self.calibrating = True
+                self.run_loop = True
+                self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
+                for gui in self.guis.values():
+                    gui.rpc_manager.request("calibration_status",[False])
+                    gui.rpc_manager.request("calibration_loop",[True])
+                return True
 
     def remove_calibration(self):
         self.delay_calibration = []
@@ -275,6 +296,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_samples_to_receive_calibration",[self.samples_to_receive_calibration])
             gui.rpc_manager.request("set_gui_bw_calibration",[self.bw_calibration])
             gui.rpc_manager.request("set_gui_auto_calibrate",[self.auto_calibrate])
+            gui.rpc_manager.request("set_gui_calibration_average",[self.calibration_average])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[self.grid_based["resolution"]])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
 
@@ -375,15 +397,6 @@ class fusion_center():
             receiver.lo_offset = self.lo_offset
             receiver.samples_to_receive = self.samples_to_receive
             receiver.auto_calibrate = self.auto_calibrate
-
-    def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
-        self.delay_calibration = []
-        self.calibrating = True
-        self.run_loop = True
-        self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
-        for gui in self.guis.values():
-            gui.rpc_manager.request("calibration_status",[False])
-            gui.rpc_manager.request("calibration_loop",[True])
 
     def start_correlation(self, freq, lo_offset, samples_to_receive):
         self.start_receivers(freq, lo_offset, samples_to_receive)
@@ -602,6 +615,21 @@ class fusion_center():
         if self.localizing:
             estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver)
             estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
+
+            # average position estimation
+            n_average = 10
+            if len(estimated_positions_history) == n_average:
+                estimated_positions_history.pop(0)
+            estimated_positions_history.append(estimated_positions)
+
+            average_chan = []
+            average_grid = []
+            for position in estimated_positions_history:
+                average_chan.append(position["chan"]["coordinates"])
+                average_grid.append(position["grid"]["coordinates"])
+            estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0)
+            estimated_positions["grid"]["average_coordinates"] = np.array(average_grid).mean(0)
+
             if not self.run_loop:
                 self.localizing = False
 
@@ -677,9 +705,8 @@ class fusion_center():
 
         if self.calibrating:
             self.calibration_loop_delays.append(delay)
-            #TODO set number of acquisitions from gui
             print(len(self.calibration_loop_delays))
-            if len(self.calibration_loop_delays) == 1:
+            if len(self.calibration_loop_delays) == self.calibration_average:
                 self.run_loop = False
                 for gui in self.guis.values():
                     gui.rpc_manager.request("calibration_loop",[False])

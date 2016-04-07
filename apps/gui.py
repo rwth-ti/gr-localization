@@ -49,6 +49,7 @@ class gui(QtGui.QMainWindow):
         rpc_adr = "tcp://*:" + str(7775 + options.id_gui)
         fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
 
+        self.calibration_average = 10
         self.samples_to_receive = 1000
         self.frequency = 2.4e9
         self.samp_rate = 10e6
@@ -100,6 +101,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
+        self.rpc_manager.add_interface("set_gui_calibration_average",self.set_gui_calibration_average)
         self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
@@ -190,8 +192,8 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_loop)
         self.connect(self.gui.pushButtonSetCalibration, QtCore.SIGNAL("clicked()"), self.set_calibration)
-        self.connect(self.gui.pushButtonRemoveCalibration, QtCore.SIGNAL("clicked()"), self.remove_calibration)
         self.connect(self.gui.checkBoxAutocalibrate, QtCore.SIGNAL("clicked()"), self.set_auto_calibrate)
+        self.connect(self.gui.calibrationAverageSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_calibration_average)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
@@ -247,14 +249,15 @@ class gui(QtGui.QMainWindow):
                 self.setting_calibration = True
                 self.zp.enabled = False
 
+    def set_calibration_average(self):
+        self.calibration_average = self.gui.calibrationAverageSpin.value()
+        self.rpc_manager.request("set_calibration_average",[self.calibration_average])
+
     def set_calibration(self):
         # run system multiple times to average calibration
-        # TODO read acquisitions from textbox
-        self.rpc_manager.request("calibration_loop", [self.frequency, self.lo_offset, self.samples_to_receive, 1])
-        self.calibration_mBox.show()
-
-    def remove_calibration(self):
-        self.rpc_manager.request("remove_calibration")
+        calibration_started = self.rpc_manager.request("calibration_loop", [self.frequency, self.lo_offset, self.samples_to_receive, self.calibration_average])
+        if calibration_started:
+            self.calibration_mBox.show()
 
     def init_map(self, bbox):
         self.bbox = bbox
@@ -616,6 +619,10 @@ class gui(QtGui.QMainWindow):
     def set_bbox(self):
         bbox = [float(self.gui.lineEditLeft.text()),float(self.gui.lineEditBottom.text()),float(self.gui.lineEditRight.text()),float(self.gui.lineEditTop.text())]
         self.rpc_manager.request("set_bbox",[bbox])
+
+    def set_gui_calibration_average(self, calibration_average):
+        self.calibration_average = calibration_average
+        self.gui.calibrationAverageSpin.setValue(calibration_average)
 
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)
