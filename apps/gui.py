@@ -281,15 +281,18 @@ class gui(QtGui.QMainWindow):
         y = y1-y0
         scale = math.ceil(math.sqrt(abs(x*y/0.3136))) * 2
 
-        r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+        #r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
 
-        if r.status_code == 200:
-            img = Image.open(StringIO(r.content))
-            if not os.path.exists("../maps"):
-                    os.makedirs("../maps")
-            img.save("../maps/map.png")
+        #if r.status_code == 200:
+        #    img = Image.open(StringIO(r.content))
+        #    if not os.path.exists("../maps"):
+        #            os.makedirs("../maps")
+        #    img.save("../maps/map.png")
 
         #img = Image.open("../maps/ict_cubes.png")
+        #img = Image.open("../maps/rwth_ti_seminarroom.png")
+        img = Image.open("../maps/ipsn_2016_dachfoyer.png")
+        self.origin_offset = (10,5)
 
         if hasattr(self, "ax"):
             self.figure.delaxes(self.ax)
@@ -384,8 +387,12 @@ class gui(QtGui.QMainWindow):
         if hasattr(self, "ax"):
             # save scattered point into receiver properties
             receiver.scatter = self.ax.scatter(coordinates[0], coordinates[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
-            # set annotation RXx
-            text = "RX" + str(self.receivers.keys().index(serial) + 1)
+            # set annotation Rxi
+            text = ("Rx" + str(self.receivers.keys().index(serial) + 1)
+                        + " " 
+                        + str(np.round(receiver.coordinates,2))
+                        + "\n"
+                        + str(np.round(np.array(self.origin_offset)-np.array(receiver.coordinates),2)))
             receiver.annotation = self.ax.annotate(text, coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
             self.canvas.draw()
         else:
@@ -404,8 +411,12 @@ class gui(QtGui.QMainWindow):
         if hasattr(self, "ax"):
             # save scattered point into receiver properties
             receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
-            # set annotation RXx
-            text = "RX" + str(self.receivers.keys().index(serial) + 1)
+            # set annotation Rxi
+            text = ("Rx" + str(self.receivers.keys().index(serial) + 1) 
+                        + " " 
+                        + str(np.round(receiver.coordinates_gps,2))
+                        + "\n"
+                        + str(np.round(np.array(self.origin_offset)-np.array(receiver.coordinates_gps),2)))
             receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
             self.canvas.draw()
         else:
@@ -431,8 +442,11 @@ class gui(QtGui.QMainWindow):
             if hasattr(self, "ax"):
                 # save scattered point into receiver properties
                 estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9, zorder=20)
-                # set annotation RXx
-                text = algorithm[0]
+                # set annotation Rxi
+                text = (algorithm[0] + " " 
+                                    + str(np.round(estimated_position.coordinates,2))
+                                    + "\n"
+                                    + str(np.round(np.array(self.origin_offset)-np.array(estimated_position.coordinates),2)))
                 estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9), zorder=20)
                 if algorithm[0] == "chan":
                     if self.hyperbolas.has_key("chan"):
@@ -516,7 +530,7 @@ class gui(QtGui.QMainWindow):
             # Get only points in the region of interest
             distance_1 = np.linalg.norm(h-pos_rx[0])
             distance_2 = np.linalg.norm(h-pos_rx[1])
-            if ((distance_1 <= distance_2) and (0 < h[0] < max_x) and (0 < h[1] < max_y)):
+            if ((distance_1 <= distance_2) and (-max_x < h[0] < 2*max_x) and (-max_y < h[1] < 2*max_y)):
                 Hx.append(h[0])
                 Hy.append(h[1])
         return [Hx,Hy]
@@ -703,8 +717,10 @@ class gui(QtGui.QMainWindow):
                 # save scattered point into receiver properties
                 receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9, zorder=20)
                 receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9, zorder=20)
-                # set annotation RXx
-                text = "RX" + str(self.receivers.keys().index(key) + 1)
+                # set annotation Rxi
+                text = ("Rx" + str(self.receivers.keys().index(key) + 1) 
+                            + " " 
+                            + str(np.round(receiver.coordinates,2)))
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
                 receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
 

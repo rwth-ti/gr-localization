@@ -9,12 +9,13 @@ from scipy import interpolate
 
 class receiver_interface():
 
-    def __init__(self, rpc_address, probe_address):
+    def __init__(self, rpc_address, probe_address, serial):
         if not rpc_address == None:
             self.rpc_address = rpc_address
             self.probe_address = probe_address
             self.rpc_mgr = rpc_manager_local.rpc_manager()
             self.rpc_mgr.set_request_socket(rpc_address)
+            self.serial = serial
 
         self.first_packet = True
         self.reception_complete = False
@@ -41,7 +42,7 @@ class receiver_interface():
 
     def __deepcopy__(self, memo):
         cls = self.__class__
-        result = self.__class__(None,None)
+        result = self.__class__(None,None,None)
         memo[id(self)] = result
         for k, v in self.__dict__.items():
             if not (k == "rpc_mgr"):
@@ -73,7 +74,7 @@ class receiver_interface():
         self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions])
 
     def receive_samples(self, samples, tags):
-        print tags
+        print self.serial, tags, "num_samples", len(samples)
         print self.frequency,self.frequency_calibration
         if self.frequency == self.frequency_calibration:
             print "Warning: calibration frequency should not be equal to target frequency"

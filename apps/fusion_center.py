@@ -79,6 +79,8 @@ class fusion_center():
         #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
         # UPB Campus
         #self.bbox = -75.59124,6.24113,-75.58851,6.24261
+        # Hack for Hofburg Vienna
+        self.bbox = 16.366005973856655,48.2075751150055,16.366222941460894,48.207635515971475
         self.init_map()
 
 
@@ -313,12 +315,12 @@ class fusion_center():
         probe_adr = "tcp://" + hostname + ":" + str(5555 + id_rx)
         if not self.receivers.has_key(serial):
             # create new receiver in fusion center
-            self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr)
+            self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr, serial)
             was_not_registered = True
         elif first:
             # receiver might have restarted, so remove and add again
             self.receivers.pop(serial)
-            self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr)
+            self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr, serial)
         if first or was_not_registered:
             # set parameters of receiver in fusion center
             receiver = self.receivers[serial]
@@ -354,7 +356,7 @@ class fusion_center():
         print(serial, "registered")
 
     def start_receivers(self, freq, lo_offset, samples_to_receive, acquisitions=0):
-        time_to_receive = time.time() + 1
+        time_to_receive = time.time() + 2
         for receiver in self.receivers.values():
             threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, freq, lo_offset, samples_to_receive, acquisitions)).start()
 
@@ -402,6 +404,8 @@ class fusion_center():
         self.start_receivers(freq, lo_offset, samples_to_receive)
 
     def start_correlation_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
+        self.delay_history = []
+        self.estimated_positions_history = []
         self.store_results = True
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         self.store_samples = True
@@ -418,6 +422,8 @@ class fusion_center():
             self.start_receivers(freq, lo_offset, samples_to_receive)
 
     def localize_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
+        self.delay_history = []
+        self.estimated_positions_history = []
         if len(self.receivers) > 2:
             self.localizing = True
             self.store_results = True
@@ -433,7 +439,6 @@ class fusion_center():
     def stop_loop(self):
         self.run_loop = False
         self.store_results = False
-        self.delay_history = []
         self.estimated_positions_history = []
         self.localizing = False
         for receiver in self.receivers.values():
@@ -576,7 +581,7 @@ class fusion_center():
         times_calibration = []
 
         last_time_target = receivers.values()[0].tags["rx_time"]
-	if self.auto_calibrate:
+        if self.auto_calibrate:
             last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
 
         for i in range(1,len(receivers)):
@@ -584,7 +589,7 @@ class fusion_center():
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
                 return
-	    if self.auto_calibrate:
+        if self.auto_calibrate:
                 if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
                     print("Error: calibration timestamps do not match")
                     return
@@ -616,8 +621,8 @@ class fusion_center():
                     index_delay += 1
 
         if self.localizing:
-            estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver)
-            estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
+            estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
+            #estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
 
             # average position estimation
             n_average = 10
@@ -626,12 +631,12 @@ class fusion_center():
             self.estimated_positions_history.append(estimated_positions)
 
             average_chan = []
-            average_grid = []
+            #average_grid = []
             for position in self.estimated_positions_history:
                 average_chan.append(position["chan"]["coordinates"])
-                average_grid.append(position["grid_based"]["coordinates"])
+                #average_grid.append(position["grid_based"]["coordinates"])
             estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0)
-            estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
+            #estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
 
             if not self.run_loop:
                 self.localizing = False

@@ -8,7 +8,7 @@ def estimate_delay(y1, y2):
     return delay
 
 
-def localize(receivers, ref_receiver):
+def localize(receivers, ref_receiver, bbox):
 
     t = time.time()
     sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
@@ -76,11 +76,24 @@ def localize(receivers, ref_receiver):
         gamma = pow(x1,2)+pow(y1,2)-2*x1*B-2*y1*D+pow(B,2)+pow(D,2)
 
         r1 = [(-beta+np.sqrt(pow(beta,2)-4*alpha*gamma+0j))/(2*alpha),(-beta-np.sqrt(pow(beta,2)-4*alpha*gamma+0j))/(2*alpha)]
+        valid_roots = []
+        for root in r1:
+            if root > 0:
+                valid_roots.append(root)
+        valid_roots = np.array(valid_roots)
+        xy = np.real((valid_roots*A+B,valid_roots*C+D)).T
         # Calculate position with the solution in the roi
-        xy = np.real((max(r1)*A+B,max(r1)*C+D))
+        if len(xy) > 1:
+            if np.linalg.norm(xy[0]-np.array(bbox)/2) < np.linalg.norm(xy[1]-np.array(bbox)/2):
+                xy = xy[0]
+            else:
+                xy = xy[1]
+        else:
+            xy = xy[0]
         xy = (xy[0],xy[1])
     except:
-        xy = (0,0)
+        print "Singular matrix, setting location to center of roi."
+        xy = (bbox[0]/2,bbox[1]/2)
     t_used = time.time()-t
     print "Chan results: ",xy," time: ", t_used
     return {"coordinates": xy,"t_used":t_used}
