@@ -74,8 +74,8 @@ class receiver_interface():
         self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions])
 
     def receive_samples(self, samples, tags):
-        print self.serial, tags, "num_samples", len(samples)
-        print self.frequency,self.frequency_calibration
+        if tags is not None:
+            print self.serial, tags, "num_samples", len(samples)
         if self.frequency == self.frequency_calibration:
             print "Warning: calibration frequency should not be equal to target frequency"
         if tags is not None and tags["rx_freq"] == self.frequency:

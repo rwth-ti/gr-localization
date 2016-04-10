@@ -627,7 +627,7 @@ class fusion_center():
             #estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
 
             # average position estimation
-            n_average = 10
+            n_average = 3
             if len(self.estimated_positions_history) == n_average:
                 self.estimated_positions_history.pop(0)
             self.estimated_positions_history.append(estimated_positions)
