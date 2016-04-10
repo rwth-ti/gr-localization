@@ -591,7 +591,7 @@ class fusion_center():
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
                 return
-        if self.auto_calibrate:
+            if self.auto_calibrate:
                 if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
                     print("Error: calibration timestamps do not match")
                     return

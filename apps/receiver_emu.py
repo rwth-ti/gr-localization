@@ -12,6 +12,7 @@ from gnuradio import uhd
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
 import numpy as np
+import numpy.matlib
 import sys
 import os
 import threading
@@ -21,6 +22,7 @@ from grc_gnuradio import blks2 as grc_blks2
 from gnuradio import digital
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
+import pmt
 
 
 ###############################################################################
@@ -43,6 +45,7 @@ class top_block(gr.top_block):
         self.seed = 10
         self.delay = options.delay
         self.samples_to_receive = 1000
+        self.freq = 550000000
 
         # socket addresses
         rpc_port = 6665 + options.id_rx
@@ -52,8 +55,8 @@ class top_block(gr.top_block):
         probe_adr = "tcp://*:" + str(probe_port)
 
         # blocks
-        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr)
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive)
+        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 300, True)
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive, self.freq)
         self.seed += 1
 
         # connects
@@ -107,6 +110,8 @@ class top_block(gr.top_block):
 
     def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
 
+        self.freq = freq
+        self.freq_calibration = freq_calibration
         loop_frequency = 2 # seconds between acquisitions
 
         auto_delay = 5 # delay simulation of auto calibration
@@ -131,9 +136,10 @@ class top_block(gr.top_block):
                 # blocks
                 if i == 1:
                     delay = auto_delay
+                    self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq_calibration)
                 else:
                     delay = self.delay
-                self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive)
+                    self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq)
                 self.seed += 1
 
                 # connects
@@ -153,7 +159,7 @@ class top_block(gr.top_block):
         return [longitude, latitude]
 
 class ModulatorBlock(gr.hier_block2):
-    def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive):
+    def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive, freq):
         gr.hier_block2.__init__(self, "ModulatorBlock",
                        gr.io_signature(0, 0, 0),
                        gr.io_signature(1, 1, gr.sizeof_gr_complex))
@@ -163,40 +169,68 @@ class ModulatorBlock(gr.hier_block2):
         vector_source = blocks.vector_source_b((v), True, 1, [])
         throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
         noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
-        add = blocks.add_vcc(1)
 
-        if modulation == "bpsk":
-            mod = digital.psk.psk_mod(
-              constellation_points=2,
-              mod_code="none",
-              differential=True,
-              samples_per_symbol=2,
-              excess_bw=0.1,
-              verbose=False,
-              log=False,
-              )
-        else:
-            mod = grc_blks2.packet_mod_b(digital.ofdm_mod(
-                            options=grc_blks2.options(
-                                    modulation="qpsk",
-                                    fft_length=4096,
-                                    occupied_tones=200,
-                                    cp_length=0,
-                                    pad_for_usrp=False,
-                                    log=None,
-                                    verbose=None,
-                            ),
-                    ),
-                    payload_length=0,
-            )
-        head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 100)
+        # Timing tag: This is preserved and updated:
+        timing_tag = gr.tag_t()
+        timing_tag.offset = 0
+        timing_tag.key = pmt.string_to_symbol('rx_time')
+        timing_tag.value = pmt.to_pmt((float(seed), 0.6))
+        timing_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
+        # Rx freq tags:
+        rx_freq_tag = gr.tag_t()
+        rx_freq_tag.offset = 0
+        rx_freq_tag.key = pmt.string_to_symbol('rx_freq')
+        rx_freq_tag.value = pmt.from_double(freq)
+        rx_freq_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
+        # Samp_rate tags:
+        rx_rate_tag = gr.tag_t()
+        rx_rate_tag.offset = 0
+        rx_rate_tag.key = pmt.string_to_symbol('rx_rate')
+        rx_rate_tag.value = pmt.from_double(samp_rate)
+        rx_rate_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
+
+        add = blocks.add_vcc(1, )
+
+        tag_debug = blocks.tag_debug(gr.sizeof_gr_complex*1, "", "")
+        tag_debug.set_display(True)
+
+        #if modulation == "bpsk":
+        #    mod = digital.psk.psk_mod(
+        #      constellation_points=2,
+        #      mod_code="none",
+        #      differential=True,
+        #      samples_per_symbol=2,
+        #      excess_bw=0.1,
+        #      verbose=False,
+        #      log=False,
+        #      )
+        #else:
+        #    mod = grc_blks2.packet_mod_b(digital.ofdm_mod(
+        #                    options=grc_blks2.options(
+        #                            modulation="qpsk",
+        #                            fft_length=4096,
+        #                            occupied_tones=200,
+        #                            cp_length=0,
+        #                            pad_for_usrp=False,
+        #                            log=None,
+        #                            verbose=None,
+        #                    ),
+        #            ),
+        #            payload_length=0,
+        #    )
+
+        pulse_width = 4
+        vector_source = blocks.vector_source_c(np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist(), False, tags=(timing_tag, rx_freq_tag, rx_rate_tag)) 
+        head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 300)
         skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
 
 
         # connects
-        self.connect(vector_source, mod, (add,0))
+        #self.connect(vector_source, mod, (add,0))
+        self.connect(vector_source, (add,0))
         self.connect(noise, (add,1))
         self.connect(add, throttle, skiphead, head, self)
+        self.connect(add, tag_debug)
 
 ###############################################################################
 # Options Parser
@@ -216,7 +250,7 @@ def parse_options():
                       help="Delay")
     parser.add_option("", "--snr", type="float", default="20",
                       help="SNR")
-    parser.add_option("-m", "--modulation", type="string", default="bpsk",
+    parser.add_option("-m", "--modulation", type="string", default="ofdm",
                       help="Modulation type (BPSK/OFDM)")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
@@ -239,7 +273,7 @@ if __name__ == "__main__":
         dot_file.close()
 
     try:
-        tb.start()
+        #tb.start()
 
         tb.timer_register = threading.Thread(target = tb.register_receiver)
         tb.timer_register.daemon = True

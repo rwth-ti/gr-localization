@@ -555,7 +555,8 @@ class gui(QtGui.QMainWindow):
                 self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (50.19, 16.31)])
             elif self.setting_pos_receiver == "F57197":
                 self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (47, 2.52)])
-            #self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
+            else:
+                self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
             #self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""
             self.zp.enabled = True
