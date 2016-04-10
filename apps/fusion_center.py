@@ -161,7 +161,8 @@ class fusion_center():
                       projection='tmerc', lon_0=lon_0, lat_0=lat_0)
 
         #self.frequency_calibration = 602000000
-        self.coordinates_calibration = self.basemap(50.745597, 6.043278)
+        #self.coordinates_calibration = self.basemap(50.745597, 6.043278)
+        self.coordinates_calibration = (40.7, 2.5)
 
     def calibrate(self, coordinates, delays=None):
         # calculate offset calibration
@@ -256,6 +257,7 @@ class fusion_center():
             gui.rpc_manager.request("new_chat",[chat])
 
     def sync_position(self, serial, coordinates):
+        print("Position set for serial:",serial,coordinates)
         self.receivers[serial].coordinates = coordinates
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position",[serial, coordinates])
@@ -765,29 +767,29 @@ def parse_options():
                       help="Server hostname")
     parser.add_option("-c", "--clientname", type="string", default="localhost",
                       help="Server hostname")
-    parser.add_option("", "--num-samples", type="string", default="300",
+    parser.add_option("", "--num-samples", type="string", default="1000",
                       help="Number of samples in burst")
-    parser.add_option("", "--interpolation", type="string", default="10",
+    parser.add_option("", "--interpolation", type="string", default="1",
                       help="Interpolation factor")
-    parser.add_option("", "--frequency", type="string", default="2.51e9",
+    parser.add_option("", "--frequency", type="string", default="0.545e9",
                       help="Frequency")
     parser.add_option("", "--samp-rate", type="string", default="50e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
-    parser.add_option("", "--bandwidth", type="string", default="5e6",
+    parser.add_option("", "--bandwidth", type="string", default="10e6",
                       help="Bandwidth")
-    parser.add_option("", "--num-samples-calibration", type="string", default="300",
+    parser.add_option("", "--num-samples-calibration", type="string", default="1000",
                       help="Number of samples in burst for calibration")
     parser.add_option("", "--interpolation-calibration", type="string", default="10",
                       help="Interpolation factor for calibration")
-    parser.add_option("", "--frequency-calibration", type="string", default="2.37e9",
+    parser.add_option("", "--frequency-calibration", type="string", default="0.565e9",
                       help="Frequency for calibration")
     parser.add_option("", "--samp-rate-calibration", type="string", default="50e6",
                       help="Sampling rate for calibration")
     parser.add_option("", "--lo-offset-calibration", type="string", default="0",
                       help="LO offset for calibration")
-    parser.add_option("", "--bandwidth-calibration", type="string", default="5e6",
+    parser.add_option("", "--bandwidth-calibration", type="string", default="10e6",
                       help="Bandwidth for calibration")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")

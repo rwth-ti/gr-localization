@@ -85,10 +85,13 @@ def localize(receivers, ref_receiver, bbox):
         # Calculate position with the solution in the roi
         if len(xy) > 1:
             if np.linalg.norm(xy[0]-np.array(bbox)/2) < np.linalg.norm(xy[1]-np.array(bbox)/2):
-                xy = xy[0]
-            else:
+                print "1"
                 xy = xy[1]
+            else:
+                print "2"
+                xy = xy[0]
         else:
+            print "3"
             xy = xy[0]
         xy = (xy[0],xy[1])
     except:
