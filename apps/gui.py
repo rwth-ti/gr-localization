@@ -292,7 +292,7 @@ class gui(QtGui.QMainWindow):
         #img = Image.open("../maps/ict_cubes.png")
         #img = Image.open("../maps/rwth_ti_seminarroom.png")
         img = Image.open("../maps/ipsn_2016_dachfoyer.png")
-        self.origin_offset = (10,5)
+        self.origin_offset = (15.8,4)
 
         if hasattr(self, "ax"):
             self.figure.delaxes(self.ax)
@@ -392,7 +392,7 @@ class gui(QtGui.QMainWindow):
                         + " " 
                         + str(np.round(receiver.coordinates,2))
                         + "\n"
-                        + str(np.round(np.array(self.origin_offset)-np.array(receiver.coordinates),2)))
+                        + str(np.round(np.array(self.origin_offset)+np.array(receiver.coordinates),2)))
             receiver.annotation = self.ax.annotate(text, coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
             self.canvas.draw()
         else:
@@ -718,9 +718,11 @@ class gui(QtGui.QMainWindow):
                 receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9, zorder=20)
                 receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9, zorder=20)
                 # set annotation Rxi
-                text = ("Rx" + str(self.receivers.keys().index(key) + 1) 
-                            + " " 
-                            + str(np.round(receiver.coordinates,2)))
+                text = ("Rx" + str(self.receivers.keys().index(key) + 1)
+                        + " " 
+                        + str(np.round(receiver.coordinates,2))
+                        + "\n"
+                        + str(np.round(np.array(self.origin_offset)+np.array(receiver.coordinates),2)))
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
                 receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
 
