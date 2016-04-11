@@ -392,7 +392,7 @@ class gui(QtGui.QMainWindow):
                         + " " 
                         + str(np.round(receiver.coordinates,2))
                         + "\n"
-                        + str(np.round(np.array(self.origin_offset)+np.array(receiver.coordinates),2)))
+                        + str(np.round(np.array(receiver.coordinates)-np.array(self.origin_offset),2)))
             receiver.annotation = self.ax.annotate(text, coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
             self.canvas.draw()
         else:
@@ -416,7 +416,7 @@ class gui(QtGui.QMainWindow):
                         + " " 
                         + str(np.round(receiver.coordinates_gps,2))
                         + "\n"
-                        + str(np.round(np.array(self.origin_offset)+np.array(receiver.coordinates_gps),2)))
+                        + str(np.round(np.array(receiver.coordinates_gps)-np.array(self.origin_offset),2)))
             receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
             self.canvas.draw()
         else:
@@ -446,7 +446,7 @@ class gui(QtGui.QMainWindow):
                 text = (algorithm[0] + " " 
                                     + str(np.round(estimated_position.coordinates,2))
                                     + "\n"
-                                    + str(np.round(np.array(self.origin_offset)+np.array(estimated_position.coordinates),2)))
+                                    + str(np.round(np.array(estimated_position.coordinates)-np.array(self.origin_offset),2)))
                 estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9), zorder=20)
                 if algorithm[0] == "chan":
                     if self.hyperbolas.has_key("chan"):
@@ -729,7 +729,7 @@ class gui(QtGui.QMainWindow):
                         + " " 
                         + str(np.round(receiver.coordinates,2))
                         + "\n"
-                        + str(np.round(np.array(self.origin_offset)+np.array(receiver.coordinates),2)))
+                        + str(np.round(np.array(receiver.coordinates)-np.array(self.origin_offset),2)))
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
                 receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
 
