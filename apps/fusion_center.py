@@ -710,7 +710,10 @@ class fusion_center():
 
             if self.store_samples:
                 f_s = open(self.samples_file,"a")
-                pprint.pprint("[" + str(self.results["correlation"]) + "," + str(self.results["receivers"][0].tolist()) + "]",f_s,width=9000)
+                receiver_samples = []
+                for receiver in self.results["receivers"]:
+                    receiver_samples.append(receiver.tolist())
+                pprint.pprint("[" + str(self.results["correlation"]) + "," + str(receiver_samples) + "]",f_s,width=9000)
                 f_s.close()
 
         if self.calibrating:
