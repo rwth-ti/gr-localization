@@ -102,6 +102,8 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.add_interface("set_gui_calibration_average",self.set_gui_calibration_average)
+        self.rpc_manager.add_interface("set_gui_record_results",self.set_gui_record_results)
+        self.rpc_manager.add_interface("set_gui_record_samples",self.set_gui_record_samples)
         self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
@@ -214,6 +216,8 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
         self.connect(self.gui.pushButtonSetBbox, QtCore.SIGNAL("clicked()"), self.set_bbox)
+        self.connect(self.gui.checkBoxRecordResults, QtCore.SIGNAL("clicked()"), self.set_record_results)
+        self.connect(self.gui.checkBoxRecordSamples, QtCore.SIGNAL("clicked()"), self.set_record_samples)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
@@ -641,6 +645,12 @@ class gui(QtGui.QMainWindow):
         bbox = [float(self.gui.lineEditLeft.text()),float(self.gui.lineEditBottom.text()),float(self.gui.lineEditRight.text()),float(self.gui.lineEditTop.text())]
         self.rpc_manager.request("set_bbox",[bbox])
 
+    def set_record_results(self):
+        self.rpc_manager.request("set_record_results",[self.gui.checkBoxRecordResults.isChecked()])
+
+    def set_record_samples(self):
+        self.rpc_manager.request("set_record_samples",[self.gui.checkBoxRecordSamples.isChecked()])
+
     def set_gui_calibration_average(self, calibration_average):
         self.calibration_average = calibration_average
         self.gui.calibrationAverageSpin.setValue(calibration_average)
@@ -712,6 +722,18 @@ class gui(QtGui.QMainWindow):
     def set_gui_TDOA_grid_based_channel_model(self, channel_model):
         return
         #self.gui.comboBoxGridMeasMatrixType
+
+    def set_gui_record_results(self, record_results):
+        if record_results:
+            self.gui.checkBoxRecordResults.setChecked(1)
+        else:
+            self.gui.checkBoxRecordResults.setChecked(0)
+
+    def set_gui_record_samples(self, record_samples):
+        if record_samples:
+            self.gui.checkBoxRecordSamples.setChecked(1)
+        else:
+            self.gui.checkBoxRecordSamples.setChecked(0)
 
     def get_results(self, results):
         self.results = results

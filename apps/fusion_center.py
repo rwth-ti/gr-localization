@@ -59,8 +59,10 @@ class fusion_center():
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
         self.calibration_average = 10
-        self.store_results = False
-        self.store_samples = False
+        self.record_results = False
+        self.record_samples = False
+        self.recording_results = False
+        self.recording_samples = False
         self.results_file = ""
         if not os.path.exists("../log"):
                 os.makedirs("../log")
@@ -122,6 +124,8 @@ class fusion_center():
         self.rpc_manager.add_interface("set_auto_calibrate",self.set_auto_calibrate)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
+        self.rpc_manager.add_interface("set_record_results",self.set_record_results)
+        self.rpc_manager.add_interface("set_record_samples",self.set_record_samples)
         self.rpc_manager.add_interface("sync_success",self.sync_ntp)
         self.rpc_manager.add_interface("set_bbox",self.set_bbox)
         self.rpc_manager.start_watcher()
@@ -303,6 +307,8 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_calibration_average",[self.calibration_average])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[self.grid_based["resolution"]])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
+            gui.rpc_manager.request("set_gui_record_results",[self.record_results])
+            gui.rpc_manager.request("set_gui_record_samples",[self.record_samples])
 
             for gui in self.guis.values():
                 for serial in self.guis:
@@ -408,13 +414,14 @@ class fusion_center():
     def start_correlation_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
         self.delay_history = []
         self.estimated_positions_history = []
-        self.store_results = True
+        self.recording_results = self.record_results
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-        self.store_samples = True
+        self.recording_samples = self.record_samples
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-        print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
-        print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+        if self.recording_results:
+            print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
+            print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
 
@@ -428,19 +435,21 @@ class fusion_center():
         self.estimated_positions_history = []
         if len(self.receivers) > 2:
             self.localizing = True
-            self.store_results = True
+            self.recording_results = self.record_results
             self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-            self.store_samples = False
-            #self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-            print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
-            print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+            self.recording_samples = self.record_samples
+            self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+            if self.recording_results:
+                print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+                print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
+                print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             self.start_receivers(freq, lo_offset, samples_to_receive, acquisitions)
 
     def stop_loop(self):
         self.run_loop = False
-        self.store_results = False
+        self.recording_results = False
+        self.recording_samples = False
         self.estimated_positions_history = []
         self.localizing = False
         for receiver in self.receivers.values():
@@ -561,6 +570,16 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[num_samples])
 
+    def set_record_results(self, record_results):
+        self.record_results = record_results
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_record_results",[record_results])
+
+    def set_record_samples(self, record_samples):
+        self.record_samples = record_samples
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_record_samples",[record_samples])
+
     def sync_ntp(self, ip_address, is_ntp_server):
         if is_ntp_server:
             print("Synchronize time to receiver NTP server ",ip_address)
@@ -660,7 +679,7 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[self.results])
 
-        if self.store_results:
+        if self.recording_results:
             # build receivers strings for log file
             receivers_position = "["
             selected_positions = "["
@@ -708,7 +727,7 @@ class fusion_center():
             pprint.pprint(line,f,width=9000)
             f.close()
 
-            if self.store_samples:
+            if self.recording_samples:
                 f_s = open(self.samples_file,"a")
                 receiver_samples = []
                 for receiver in self.results["receivers"]:
