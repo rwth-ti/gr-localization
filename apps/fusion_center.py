@@ -353,6 +353,7 @@ class fusion_center():
             for gui in self.guis.values():
                 # request registration in each gui
                 gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna, receiver.gain_calibration])
+            self.set_ref_receiver(serial)
             self.sync_position(serial,coordinates)
             self.update_receivers()
             print(serial, "registered")
