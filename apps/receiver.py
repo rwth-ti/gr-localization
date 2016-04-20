@@ -101,11 +101,17 @@ class top_block(gr.top_block):
             self.nmea_external = ""
             self.nmea_external_lock = threading.Lock()
             threading.Thread(target = self.poll_lea_m8f).start()
+        if self.options.log:
+            file_name = "../log/receiver_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+            self.file_sink = blocks.file_sink(gr.sizeof_gr_complex*1, file_name, True)
+            self.file_sink.set_unbuffered(False)
 
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
         self.connect(self.usrp_source, self.zmq_probe)
         self.connect(self.usrp_source, self.tag_debug)
+        if self.options.log:
+            self.connect(self.usrp_source, self.file_sink)
 
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
@@ -353,6 +359,8 @@ def parse_options():
                       help="Generate dot-graph file from flowgraph")
     parser.add_option("", "--ntp-server", action="store_true", default=False,
                       help="Activate ntp server")
+    parser.add_option("-l", "--log", action="store_true", default=False,
+                      help="Activate receiver logging")
     (options, args) = parser.parse_args()
     return options
 
