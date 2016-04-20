@@ -145,6 +145,7 @@ class gui(QtGui.QMainWindow):
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
+        self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.BottomLegend);
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
@@ -783,9 +784,9 @@ class gui(QtGui.QMainWindow):
                 self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()
-                self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][0],Qt.Qt.blue)
+                self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
                 if len(self.results["correlation"]) > 1:
-                    self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][1],Qt.Qt.red)
+                    self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][1],Qt.Qt.red, self.results["correlation_labels"][1])
                 # clear the previous points from the plot
                 self.gui.qwtPlotDelayHistory.clear()
                 if len(self.results["delay_history"]) > 0:
@@ -843,12 +844,12 @@ class gui(QtGui.QMainWindow):
         threading.Thread(target=runit).start()
 
     # plot cross correlation
-    def plot_correlation(self, plot, samples, colour):
+    def plot_correlation(self, plot, samples, colour, label):
         num_corr_samples = (len(samples) + 1)/2
         x = range(-num_corr_samples+1,num_corr_samples,1)
         y = samples
         # draw curve with new points and plot
-        curve = Qwt.QwtPlotCurve()
+        curve = Qwt.QwtPlotCurve(label)
         curve.setPen(Qt.QPen(colour, 2))
         curve.attach(plot)
         curve.setData(x, y)

@@ -611,7 +611,7 @@ class fusion_center():
         estimated_positions = {}
 
         if self.auto_calibrate and len(receivers) > 1:
-            correlation, delay = self.correlate(receivers, True)
+            correlation, delay, correlation_labels = self.correlate(receivers, True)
             self.calibrate(self.coordinates_calibration, delay)
 
         if len(delay_auto_calibration) > 0 and self.auto_calibrate:
@@ -653,9 +653,9 @@ class fusion_center():
             if not self.run_loop:
                 self.localizing = False
 
-        correlation, delay = None,None
+        correlation, delay, correlation_labels = None,None,None
         if len(receivers) > 1:
-            correlation, delay = self.correlate(receivers)
+            correlation, delay, correlation_labels = self.correlate(receivers)
             if len(self.delay_history) < len(delay):
                 self.delay_history = []
                 for i in range(0,len(delay)):
@@ -665,7 +665,7 @@ class fusion_center():
         receivers_samples = []
         for receiver in receivers.values():
             receivers_samples.append(receiver.samples)
-        self.results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions}
+        self.results = {"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels}
 
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[self.results])
@@ -751,6 +751,8 @@ class fusion_center():
 
     def correlate(self, receivers, calibration=False):
         correlation = []
+        correlation_labels = []
+        i = 1
         for receiver in receivers:
             if not self.ref_receiver == receiver:
                 if not calibration:
@@ -759,8 +761,10 @@ class fusion_center():
                 else:
                     correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full", False)).tolist())
                     delay = (np.argmax(correlation, axis=1) - self.samples_to_receive_calibration * self.interpolation + 1).tolist()
+                correlation_labels.append("Rx" + str(i) + "_Rx" + str(receivers.keys().index(self.ref_receiver)+1))
+            i +=1
         print("Delay:", delay, "samples")
-        return correlation, delay
+        return correlation, delay, correlation_labels
 
 class gui_interface():
     def __init__(self, rpc_address, hostname):
