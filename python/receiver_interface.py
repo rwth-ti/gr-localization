@@ -66,6 +66,8 @@ class receiver_interface():
         self.rpc_mgr.request("set_antenna",[self.antenna])
     def set_run_loop(self, run_loop):
         self.rpc_mgr.request("set_run_loop",[run_loop])
+    def sync_time(self):
+        self.rpc_mgr.request("sync_time")
 
     def request_samples(self, time_to_receive, acquisitions):
         self.samples = []

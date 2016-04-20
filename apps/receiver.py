@@ -34,6 +34,9 @@ class top_block(gr.top_block):
 
         self.run_loop = False
 
+        coordinates_string = options.coordinates.split(",")
+        self.coordinates = (float(coordinates_string[0]),float(coordinates_string[1]))
+
         # socket addresses
         rpc_port = 6665 + options.id_rx
         rpc_adr = "tcp://*:" + str(rpc_port)
@@ -115,6 +118,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_bw",self.set_bw)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
+        self.rpc_manager.add_interface("sync_time",self.sync_time)
         self.rpc_manager.start_watcher()
 
 
@@ -131,7 +135,6 @@ class top_block(gr.top_block):
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
-        threading.Thread(target = self.sync_time_nmea).start()
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
     def set_gain(self,gain):
@@ -139,11 +142,14 @@ class top_block(gr.top_block):
     def set_antenna(self,antenna):
         self.usrp_source.set_antenna(antenna, 0)
 
+    def sync_time(self):
+        threading.Thread(target = self.sync_time_nmea).start()
+
     def register_receiver(self):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_receiver",[self.ip_addr, self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx, self.gps, first])
+            self.rpc_manager.request("register_receiver",[self.ip_addr, self.usrp_source.get_usrp_info().vals()[2], self.options.id_rx, self.gps, first, self.coordinates])
             first = False
             time.sleep(10)
 
@@ -341,6 +347,8 @@ def parse_options():
                       help="Receiver ID")
     parser.add_option("--mcr", type="float", default="0",
                       help="Master clock rate")
+    parser.add_option("-c", "--coordinates", type="string", default="0.0,0.0",
+                      help="Receiver coordinates in meters")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
     parser.add_option("", "--ntp-server", action="store_true", default=False,

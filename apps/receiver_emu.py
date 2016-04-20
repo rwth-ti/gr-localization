@@ -45,7 +45,10 @@ class top_block(gr.top_block):
         self.seed = 10
         self.delay = options.delay
         self.samples_to_receive = 1000
+        self.samples_to_receive_calibration = 1000
         self.freq = 550000000
+        coordinates_string = options.coordinates.split(",")
+        self.coordinates = (float(coordinates_string[0]),float(coordinates_string[1]))
 
         # socket addresses
         rpc_port = 6665 + options.id_rx
@@ -73,6 +76,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
         self.rpc_manager.add_interface("set_run_loop",self.set_run_loop)
+        self.rpc_manager.add_interface("sync_time",self.sync_time)
         self.rpc_manager.start_watcher()
 
 
@@ -95,12 +99,15 @@ class top_block(gr.top_block):
         return
     def set_antenna(self,antenna):
         return
+    def sync_time(self):
+        print "Reset seed"
+        self.seed = 10
 
     def register_receiver(self):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_receiver",[self.ip_addr, "dummy" + self.hostname + str(options.id_rx), self.options.id_rx, self.gps, first])
+            self.rpc_manager.request("register_receiver",[self.ip_addr, "dummy" + self.hostname + str(options.id_rx), self.options.id_rx, self.gps, first, self.coordinates])
             first = False
             time.sleep(10)
 
@@ -126,8 +133,8 @@ class top_block(gr.top_block):
 
         while True:
             for i in range(0,times):
-                print "Sending " + str(samples_to_receive) + " samples"
                 self.samples_to_receive = samples_to_receive
+                self.samples_to_receive_calibration = samples_to_receive_calibration
                 self.stop()
                 self.wait()
 
@@ -135,9 +142,11 @@ class top_block(gr.top_block):
 
                 # blocks
                 if i == 1:
+                    print "Sending " + str(samples_to_receive_calibration) + " samples"
                     delay = auto_delay
-                    self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq_calibration)
+                    self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive_calibration, self.freq_calibration)
                 else:
+                    print "Sending " + str(samples_to_receive) + " samples"
                     delay = self.delay
                     self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq)
                 self.seed += 1
@@ -252,6 +261,8 @@ def parse_options():
                       help="SNR")
     parser.add_option("-m", "--modulation", type="string", default="ofdm",
                       help="Modulation type (BPSK/OFDM)")
+    parser.add_option("-c", "--coordinates", type="string", default="0.0,0.0",
+                      help="Receiver coordinates in meters")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
     (options, args) = parser.parse_args()
