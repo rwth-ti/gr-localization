@@ -94,7 +94,6 @@ class fusion_center():
         self.rpc_manager.add_interface("sync_position",self.sync_position)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("forward_chat",self.forward_chat)
-        self.rpc_manager.add_interface("reset_receivers",self.reset_receivers)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
         self.rpc_manager.add_interface("localize",self.localize)
@@ -130,6 +129,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_bbox",self.set_bbox)
         self.rpc_manager.start_watcher()
 
+        self.probe_manager_lock = threading.Lock()
         threading.Thread(target = self.poll_gps_position).start()
 
     def init_map(self):
@@ -278,7 +278,7 @@ class fusion_center():
         for gui in self.guis.values():
             threading.Thread(target = gui.rpc_manager.request, args = ("set_gps_position", [serial, self.receivers[serial].coordinates_gps])).start()
 
-    def register_gui(self, ip_addr, hostname, id_gui, first):
+    def register_gui(self, ip_addr, hostname, id_gui, first_time):
         was_not_registered = False
         gui_serial = hostname + str(id_gui)
         if not self.guis.has_key(gui_serial):
@@ -287,7 +287,7 @@ class fusion_center():
             was_not_registered = True
         else:
             gui = self.guis[gui_serial]
-        if first or was_not_registered:
+        if first_time or was_not_registered:
             for serial in self.receivers:
                 # request registration of each receiver in gui
                 gui.rpc_manager.request("register_receiver",[serial, self.receivers[serial].gain, self.receivers[serial].antenna, self.receivers[serial].gain_calibration])
@@ -317,7 +317,7 @@ class fusion_center():
             print(gui_serial, "registered")
         return self.bbox
 
-    def register_receiver(self, hostname, serial, id_rx, gps, first, coordinates):
+    def register_receiver(self, hostname, serial, id_rx, gps, first_time, coordinates):
         was_not_registered = False
         rpc_adr = "tcp://" + hostname + ":" + str(6665 + id_rx)
         probe_adr = "tcp://" + hostname + ":" + str(5555 + id_rx)
@@ -325,11 +325,14 @@ class fusion_center():
             # create new receiver in fusion center
             self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr, serial)
             was_not_registered = True
-        elif first:
+        elif first_time:
             # receiver might have restarted, so remove and add again
-            self.receivers.pop(serial)
+            self.probe_manager_lock.acquire()
+            self.probe_manager.remove_socket(self.receivers[serial].probe_address)
+            self.probe_manager_lock.release()
+            receiver = self.receivers.pop(serial)
             self.receivers[serial] = receiver_interface.receiver_interface(rpc_adr, probe_adr, serial)
-        if first or was_not_registered:
+        if first_time or was_not_registered:
             # set parameters of receiver in fusion center
             receiver = self.receivers[serial]
             receiver.set_gain(self.gain)
@@ -357,13 +360,6 @@ class fusion_center():
             self.sync_position(serial,coordinates)
             self.update_receivers()
             print(serial, "registered")
-            #threading.Thread(target = self.finish_register(serial)).start()
-            #self.reset_receivers()
-
-    def finish_register(self, serial):
-        time.sleep(5)
-        self.reset_receivers()
-        print(serial, "registered")
 
     def start_receivers(self, acquisitions=0):
         time_to_receive = time.time() + 2
@@ -381,19 +377,6 @@ class fusion_center():
                 receiver.request_samples(str(time_to_receive), acquisitions)
             else:
                 receiver.request_samples(None, acquisitions)
-
-    def reset_receivers(self):
-        #self.update_timer.stop()
-        for i in range(0,1000000):
-            self.probe_manager.watcher()
-        for receiver in self.receivers.values():
-            receiver.samples = []
-            receiver.samples_calibration = []
-            receiver.first_packet = True
-            receiver.reception_complete = False
-        #self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.probe_manager.watcher)
-        #self.update_timer.start(33)
-        self.probe_manager.watcher()
 
     def update_receivers(self):
         for receiver in self.receivers.values():
@@ -747,7 +730,9 @@ class fusion_center():
                     receiver.first_packet = True
                     receiver.reception_complete = False
             else:
+                self.probe_manager_lock.acquire()
                 self.probe_manager.watcher()
+                self.probe_manager_lock.release()
 
     def correlate(self, receivers, calibration=False):
         correlation = []
@@ -761,7 +746,7 @@ class fusion_center():
                 else:
                     correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full", False)).tolist())
                     delay = (np.argmax(correlation, axis=1) - self.samples_to_receive_calibration * self.interpolation + 1).tolist()
-                correlation_labels.append("Rx" + str(i) + "_Rx" + str(receivers.keys().index(self.ref_receiver)+1))
+                correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))
             i +=1
         print("Delay:", delay, "samples")
         return correlation, delay, correlation_labels

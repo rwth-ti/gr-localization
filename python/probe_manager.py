@@ -35,8 +35,15 @@ class probe_manager():
         socket.setsockopt(zmq.SUBSCRIBE, "")
         socket.connect(address)
         # use a tuple to store interface elements
-        self.interfaces.append((socket, data_type, callback_func))
+        self.interfaces.append((socket, address, data_type, callback_func))
         self.poller.register(socket, zmq.POLLIN)
+
+    def remove_socket(self, address):
+        for i in self.interfaces:
+            if i[1] == address:
+                i[0].close()
+                print "Closing socket " + address
+                return
 
     def watcher(self):
         poll = dict(self.poller.poll(100))
@@ -96,11 +103,11 @@ class probe_manager():
                     #        except:
                     #            pass
 
-                    samples = numpy.fromstring(msg_packed[180:], numpy.dtype(i[1]))
+                    samples = numpy.fromstring(msg_packed[180:], numpy.dtype(i[2]))
                     tags = {key:value,key_2:value_2,key_3:value_3}
                 else:
-                    samples = numpy.fromstring(msg_packed[19:], numpy.dtype(i[1]))
+                    samples = numpy.fromstring(msg_packed[19:], numpy.dtype(i[2]))
                     tags = None
 
                 # invoke callback function
-                i[2](samples,tags)
+                i[3](samples,tags)

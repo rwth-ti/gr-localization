@@ -145,7 +145,7 @@ class gui(QtGui.QMainWindow):
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
-        self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.BottomLegend);
+        self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.RightLegend);
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
@@ -394,10 +394,8 @@ class gui(QtGui.QMainWindow):
             receiver.scatter = self.ax.scatter(coordinates[0], coordinates[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation Rxi
             text = ("Rx" + str(self.receivers.keys().index(serial) + 1)
-                        + " " 
-                        + str(np.round(receiver.coordinates,2))
-                        + "\n"
-                        + str(np.round(np.array(receiver.coordinates)-np.array(self.origin_offset),2)))
+                        + " "
+                        + str(np.round(receiver.coordinates,2)))
             receiver.annotation = self.ax.annotate(text, coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
             self.canvas.draw()
         else:
@@ -419,9 +417,7 @@ class gui(QtGui.QMainWindow):
             # set annotation Rxi
             text = ("Rx" + str(self.receivers.keys().index(serial) + 1) 
                         + " " 
-                        + str(np.round(receiver.coordinates_gps,2))
-                        + "\n"
-                        + str(np.round(np.array(receiver.coordinates_gps)-np.array(self.origin_offset),2)))
+                        + str(np.round(receiver.coordinates_gps,2)))
             receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
             self.canvas.draw()
         else:
@@ -449,9 +445,7 @@ class gui(QtGui.QMainWindow):
                 estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9, zorder=20)
                 # set annotation Rxi
                 text = (algorithm[0] + " " 
-                                    + str(np.round(estimated_position.coordinates,2))
-                                    + "\n"
-                                    + str(np.round(np.array(estimated_position.coordinates)-np.array(self.origin_offset),2)))
+                                    + str(np.round(estimated_position.coordinates,2)))
                 estimated_position.annotation = self.ax.annotate(text, estimated_position.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9), zorder=20)
                 if algorithm[0] == "chan":
                     if self.hyperbolas.has_key("chan"):
@@ -554,14 +548,7 @@ class gui(QtGui.QMainWindow):
     def set_position(self, mouse_event):
         if self.setting_pos_receiver is not "":
             receiver = self.receivers[self.setting_pos_receiver]
-            if self.setting_pos_receiver == "F571C4":
-                self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (23.69,10.73)])
-            elif self.setting_pos_receiver == "F571ED":
-                self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (50.19, 16.31)])
-            elif self.setting_pos_receiver == "F57197":
-                self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (47, 2.52)])
-            else:
-                self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
+            self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
             #self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""
             self.zp.enabled = True
@@ -750,9 +737,7 @@ class gui(QtGui.QMainWindow):
                 # set annotation Rxi
                 text = ("Rx" + str(self.receivers.keys().index(key) + 1)
                         + " " 
-                        + str(np.round(receiver.coordinates,2))
-                        + "\n"
-                        + str(np.round(np.array(receiver.coordinates)-np.array(self.origin_offset),2)))
+                        + str(np.round(receiver.coordinates,2)))
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
                 receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
 

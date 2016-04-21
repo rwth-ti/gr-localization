@@ -34,6 +34,7 @@ class receiver_interface():
         self.frequency_calibration = 0
         self.lo_offset_calibration = 0
         self.bw_calibration = 0
+        self.acquisition_state = "target"
 
         self.selected_position = "manual"
         self.gps = ""
@@ -80,18 +81,46 @@ class receiver_interface():
             print self.serial, tags, "num_samples", len(samples)
         if self.frequency == self.frequency_calibration:
             print "Warning: calibration frequency should not be equal to target frequency"
-        if tags is not None and tags["rx_freq"] == self.frequency:
-            self.samples = samples[300:]
-            self.tags = tags
-            self.first_packet = False
-        elif tags is None and (len(self.samples) < self.samples_to_receive):
-            self.samples = np.concatenate((self.samples, samples), axis=1)
-            #print "reconstruction"
-        elif tags is not None and tags["rx_freq"] == self.frequency_calibration:
-            self.samples_calibration = samples[300:]
-            self.tags_calibration = tags
-        elif tags is None and (len(self.samples) == self.samples_to_receive):
-            self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
+
+        # state machine to toggle between target and calibration samples
+        if self.acquisition_state == "target":
+            print "target"
+            if tags is not None:
+                if tags["rx_freq"] == self.frequency:
+                    self.samples = samples[300:]
+                    self.tags = tags
+                    self.first_packet = False
+                    if len(self.samples) == self.samples_to_receive and self.auto_calibrate:
+                        self.acquisition_state = "calibration"
+                else:
+                    print "Error: UHD tag shows unexpected target carrier frequency"
+            elif tags is None:
+                if len(self.samples) < self.samples_to_receive:
+                    self.samples = np.concatenate((self.samples, samples), axis=1)
+                    if len(self.samples) == self.samples_to_receive and self.auto_calibrate:
+                        self.acquisition_state = "calibration"
+                else:
+                    print "Error: more target samples received than expected"
+
+        elif self.acquisition_state == "calibration":
+            print "calibration"
+            if tags is not None:
+                if tags["rx_freq"] == self.frequency_calibration:
+                    self.samples_calibration = samples[300:]
+                    self.tags_calibration = tags
+                    if len(self.samples_calibration) == self.samples_to_receive_calibration:
+                        self.acquisition_state = "target"
+                else:
+                    self.acquisition_state = "target"
+                    print "Error: UHD tag shows unexpected calibration carrier frequency"
+            elif tags is None:
+                if len(self.samples_calibration) < self.samples_to_receive_calibration:
+                    self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
+                    if len(self.samples_calibration) == self.samples_to_receive_calibration:
+                        self.acquisition_state = "target"
+                else:
+                    print "Error: more calibration samples received than expected"
+
         if self.samples_to_receive == len(self.samples):
             if self.samples_to_receive_calibration == len(self.samples_calibration) and self.auto_calibrate:
                 #x = np.arange(0,len(self.samples))
