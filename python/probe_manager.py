@@ -39,10 +39,11 @@ class probe_manager():
         self.poller.register(socket, zmq.POLLIN)
 
     def remove_socket(self, address):
-        for i in self.interfaces:
-            if i[1] == address:
-                i[0].close()
+        for i in range(0,len(self.interfaces)):
+            if self.interfaces[i][1] == address:
                 print "Closing socket " + address
+                self.interfaces[i][0].close()
+                del self.interfaces[i]
                 return
 
     def watcher(self):
