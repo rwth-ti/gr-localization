@@ -50,6 +50,7 @@ class gui(QtGui.QMainWindow):
         fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
 
         self.calibration_average = 10
+        self.location_average_length = 10
         self.samples_to_receive = 1000
         self.frequency = 2.4e9
         self.samp_rate = 10e6
@@ -68,6 +69,8 @@ class gui(QtGui.QMainWindow):
         self.receivers = {}
         self.ref_receiver = ""
         self.transmitter_positions = {}
+        self.filtering_types = []
+        self.filtering_type = ""
 
         self.chats = ""
 
@@ -100,10 +103,13 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_channel_model",self.set_gui_TDOA_grid_based_channel_model)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
+        self.rpc_manager.add_interface("set_gui_filtering_type",self.set_gui_filtering_type)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.add_interface("set_gui_calibration_average",self.set_gui_calibration_average)
+        self.rpc_manager.add_interface("set_gui_location_average_length",self.set_gui_location_average_length)
         self.rpc_manager.add_interface("set_gui_record_results",self.set_gui_record_results)
         self.rpc_manager.add_interface("set_gui_record_samples",self.set_gui_record_samples)
+        self.rpc_manager.add_interface("set_gui_filtering_types",self.set_gui_filtering_types)
         self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
@@ -197,6 +203,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonSetCalibration, QtCore.SIGNAL("clicked()"), self.set_calibration)
         self.connect(self.gui.checkBoxAutocalibrate, QtCore.SIGNAL("clicked()"), self.set_auto_calibrate)
         self.connect(self.gui.calibrationAverageSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_calibration_average)
+        self.connect(self.gui.spinBoxAverageLength, QtCore.SIGNAL("valueChanged(int)"), self.set_location_average_length)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
@@ -216,6 +223,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.loOffsetCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset_calibration)
         self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
+        self.connect(self.gui.comboBoxFilteringType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_filtering_type)
         self.connect(self.gui.pushButtonSetBbox, QtCore.SIGNAL("clicked()"), self.set_bbox)
         self.connect(self.gui.checkBoxRecordResults, QtCore.SIGNAL("clicked()"), self.set_record_results)
         self.connect(self.gui.checkBoxRecordSamples, QtCore.SIGNAL("clicked()"), self.set_record_samples)
@@ -257,6 +265,10 @@ class gui(QtGui.QMainWindow):
     def set_calibration_average(self):
         self.calibration_average = self.gui.calibrationAverageSpin.value()
         self.rpc_manager.request("set_calibration_average",[self.calibration_average])
+
+    def set_location_average_length(self):
+        self.location_average_length = self.gui.spinBoxAverageLength.value()
+        self.rpc_manager.request("set_location_average_length",[self.location_average_length])
 
     def set_calibration(self):
         # run system multiple times to average calibration
@@ -433,9 +445,15 @@ class gui(QtGui.QMainWindow):
         self.hyperbolas["tdoa"] = self.plot_hyperbolas()
         for algorithm in transmitter_positions.items():
             if not self.transmitter_positions.has_key(algorithm[0]):
-                self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
+                if self.filtering_type == "Moving average":
+                    self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
+                else:
+                    self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
             else:
-                self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["average_coordinates"]
+                if self.filtering_type == "Moving average":
+                    self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["average_coordinates"]
+                else:
+                    self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]
             estimated_position = self.transmitter_positions[algorithm[0]]
             if hasattr(estimated_position, "scatter"):
                 estimated_position.scatter.remove()
@@ -619,6 +637,10 @@ class gui(QtGui.QMainWindow):
         self.ref_receiver = self.gui.comboBoxRefReceiver.currentText()
         self.rpc_manager.request("set_ref_receiver",[str(self.ref_receiver)])
 
+    def set_filtering_type(self):
+        self.filtering_type = self.gui.comboBoxFilteringType.currentText()
+        self.rpc_manager.request("set_filtering_type",[str(self.filtering_type)])
+
     def set_auto_calibrate(self):
         self.auto_calibrate = self.gui.checkBoxAutocalibrate.isChecked()
         self.rpc_manager.request("set_auto_calibrate",[self.auto_calibrate])
@@ -642,6 +664,10 @@ class gui(QtGui.QMainWindow):
     def set_gui_calibration_average(self, calibration_average):
         self.calibration_average = calibration_average
         self.gui.calibrationAverageSpin.setValue(calibration_average)
+
+    def set_gui_location_average_length(self, location_average_length):
+        self.location_average_length = location_average_length
+        self.gui.spinBoxAverageLength.setValue(location_average_length)
 
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)
@@ -691,6 +717,12 @@ class gui(QtGui.QMainWindow):
                 self.gui.comboBoxRefReceiver.setCurrentIndex(i)
         return
 
+    def set_gui_filtering_type(self, filtering_type):
+        for i in range(0,len(self.filtering_types)):
+            if self.filtering_types[i] == filtering_type:
+                self.gui.comboBoxFilteringType.setCurrentIndex(i)
+        return
+
     def set_gui_auto_calibrate(self, auto_calibrate):
         if auto_calibrate:
             self.gui.checkBoxAutocalibrate.setChecked(1)
@@ -722,6 +754,14 @@ class gui(QtGui.QMainWindow):
             self.gui.checkBoxRecordSamples.setChecked(1)
         else:
             self.gui.checkBoxRecordSamples.setChecked(0)
+
+    def set_gui_filtering_types(self, filtering_types):
+        self.filtering_types = filtering_types
+        self.gui.comboBoxFilteringType.clear()
+        for f_type in self.filtering_types:
+            self.gui.comboBoxFilteringType.addItem(f_type)
+        self.gui.comboBoxFilteringType.setCurrentIndex(0)
+
 
     def get_results(self, results):
         self.results = results

@@ -49,6 +49,7 @@ class fusion_center():
 
         self.receivers = {}
         self.ref_receiver = ""
+        self.filtering_type = "Moving average"
         self.guis = {}
 
         self.grid_based = {"resolution":10,"num_samples":self.samples_to_receive * self.interpolation}
@@ -58,7 +59,8 @@ class fusion_center():
         self.delay_calibration = []
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
-        self.calibration_average = 10
+        self.calibration_average = 3
+        self.location_average_length = 3
         self.record_results = False
         self.record_samples = False
         self.recording_results = False
@@ -71,6 +73,8 @@ class fusion_center():
         self.localizing = False
         self.ntp_sync = False
         self.calibrating = False
+
+        self.filtering_types = ["No averaging","Moving average","Kalmann filter"]
 
         # ICT + surroundings
         self.bbox = 6.0580,50.7775,6.0690,50.7810
@@ -102,6 +106,7 @@ class fusion_center():
         self.rpc_manager.add_interface("remove_calibration",self.remove_calibration)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("set_calibration_average",self.set_calibration_average)
+        self.rpc_manager.add_interface("set_location_average_length",self.set_location_average_length)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_loop",self.stop_loop)
@@ -120,6 +125,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_ref_receiver",self.set_ref_receiver)
+        self.rpc_manager.add_interface("set_filtering_type",self.set_filtering_type)
         self.rpc_manager.add_interface("set_auto_calibrate",self.set_auto_calibrate)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
@@ -227,6 +233,11 @@ class fusion_center():
                     index_delay_auto += 1
             print ("Delay auto calibration: ", self.delay_auto_calibration)
 
+    def set_location_average_length(self, location_average_length):
+        self.location_average_length = location_average_length
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_location_average_length",[location_average_length])
+
     def set_calibration_average(self, calibration_average):
         self.calibration_average = calibration_average
         for gui in self.guis.values():
@@ -309,6 +320,9 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
             gui.rpc_manager.request("set_gui_record_results",[self.record_results])
             gui.rpc_manager.request("set_gui_record_samples",[self.record_samples])
+            gui.rpc_manager.request("set_gui_filtering_types",[self.filtering_types])
+            gui.rpc_manager.request("set_gui_filtering_type",[self.filtering_type])
+            gui.rpc_manager.request("set_gui_location_average_length",[self.location_average_length])
 
             for gui in self.guis.values():
                 for serial in self.guis:
@@ -526,6 +540,11 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_ref_receiver",[ref_receiver])
 
+    def set_filtering_type(self, filtering_type):
+        self.filtering_type = filtering_type
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_filtering_type",[filtering_type])
+
     def set_auto_calibrate(self, auto_calibrate):
         self.auto_calibrate = auto_calibrate
         for receiver in self.receivers.values():
@@ -619,19 +638,19 @@ class fusion_center():
             estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
             #estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
 
-            # average position estimation
-            n_average = 3
-            if len(self.estimated_positions_history) == n_average:
-                self.estimated_positions_history.pop(0)
-            self.estimated_positions_history.append(estimated_positions)
+            if self.filtering_type == "Moving average":
+                # average position estimation
+                if len(self.estimated_positions_history) == self.location_average_length:
+                    self.estimated_positions_history.pop(0)
+                self.estimated_positions_history.append(estimated_positions)
 
-            average_chan = []
-            #average_grid = []
-            for position in self.estimated_positions_history:
-                average_chan.append(position["chan"]["coordinates"])
-                #average_grid.append(position["grid_based"]["coordinates"])
-            estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0)
-            #estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
+                average_chan = []
+                #average_grid = []
+                for position in self.estimated_positions_history:
+                    average_chan.append(position["chan"]["coordinates"])
+                    #average_grid.append(position["grid_based"]["coordinates"])
+                estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0)
+                #estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
 
             if not self.run_loop:
                 self.localizing = False
@@ -769,11 +788,11 @@ def parse_options():
                       help="Server hostname")
     parser.add_option("-c", "--clientname", type="string", default="localhost",
                       help="Server hostname")
-    parser.add_option("", "--num-samples", type="string", default="1000",
+    parser.add_option("", "--num-samples", type="string", default="300",
                       help="Number of samples in burst")
-    parser.add_option("", "--interpolation", type="string", default="1",
+    parser.add_option("", "--interpolation", type="string", default="10",
                       help="Interpolation factor")
-    parser.add_option("", "--frequency", type="string", default="0.545e9",
+    parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
     parser.add_option("", "--samp-rate", type="string", default="50e6",
                       help="Sampling rate")
@@ -781,11 +800,9 @@ def parse_options():
                       help="LO offset")
     parser.add_option("", "--bandwidth", type="string", default="10e6",
                       help="Bandwidth")
-    parser.add_option("", "--num-samples-calibration", type="string", default="1000",
+    parser.add_option("", "--num-samples-calibration", type="string", default="300",
                       help="Number of samples in burst for calibration")
-    parser.add_option("", "--interpolation-calibration", type="string", default="10",
-                      help="Interpolation factor for calibration")
-    parser.add_option("", "--frequency-calibration", type="string", default="0.565e9",
+    parser.add_option("", "--frequency-calibration", type="string", default="2.37e9",
                       help="Frequency for calibration")
     parser.add_option("", "--samp-rate-calibration", type="string", default="50e6",
                       help="Sampling rate for calibration")
