@@ -37,7 +37,6 @@ class rpc_manager():
 
     def __del__(self):
         self.stop_watcher()
-        self.watcher_thread.join()
 
     def set_reply_socket(self, address):
         self.rep_socket = self.zmq_context.socket(zmq.REP)
@@ -86,7 +85,8 @@ class rpc_manager():
 
     def stop_watcher(self):
         self.keep_running = False
-        self.watcher_thread.join()
+        if hasattr(self, "watcher_thread"):
+            self.watcher_thread.join()
 
     def request(self, id_str, args=None):
         time_waiting = 0
