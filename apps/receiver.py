@@ -15,7 +15,7 @@ import numpy
 import sys
 import os
 import threading
-import time
+import time, sched
 import socket
 import serial
 import calendar
@@ -31,6 +31,9 @@ class top_block(gr.top_block):
         gr.top_block.__init__(self)
 
         self.options = options
+
+        # create scheduler for retuning
+        self.scheduler = sched.scheduler(time.time, time.sleep)
 
         self.run_loop = False
 
@@ -165,7 +168,7 @@ class top_block(gr.top_block):
 
     def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions):
 
-        loop_frequency = 2 # seconds between acquisitions
+        acquisition_time = 1 # seconds between acquisitions
 
         if acquisitions == 0:
             infinity = True
@@ -185,19 +188,11 @@ class top_block(gr.top_block):
 
         while True:
             time_now = self.usrp_source.get_time_now().get_real_secs()
-            if round(time_to_recv) == round(time_now):
+            if ((time_to_recv - time_now) < 3*acquisition_time/10.0):
                 print "Start Flowgraph"
                 try:
                     # get times from USRP
-                    time_begin = self.usrp_source.get_time_now().get_real_secs()
-                    time_last_pps = self.usrp_source.get_time_last_pps().get_real_secs()
-                    time_to_sample = uhd.time_spec(time_to_recv + 3 * loop_frequency/10.0)
-                    if autocalibrate:
-                        time_to_calibrate = uhd.time_spec(time_to_recv + 7 * loop_frequency/10.0)
-                    # synchronize LOs
-                    self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
-                    self.usrp_source.set_gain(gain,0)
-                    self.usrp_source.set_bandwidth(bw,0)
+                    time_to_sample = uhd.time_spec(time_to_recv + 3 * acquisition_time/10.0)
                     # ask for samples at a specific time
                     stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
                     # add 300 samples to the burst to get rid of transient
@@ -205,13 +200,8 @@ class top_block(gr.top_block):
                     stream_cmd.stream_now = False
                     stream_cmd.time_spec = time_to_sample
                     self.usrp_source.issue_stream_cmd(stream_cmd)
-                    time_now = self.usrp_source.get_time_now().get_real_secs()
-                    time.sleep(abs(time_to_recv - time_now) + 3 * loop_frequency/10.0)
                     if autocalibrate:
-                        # synchronize LOs
-                        self.usrp_source.set_center_freq(uhd.tune_request(freq_calibration, lo_offset_calibration), 0)
-                        self.usrp_source.set_gain(gain_calibration,0)
-                        self.usrp_source.set_bandwidth(bw_calibration,0)
+                        time_to_calibrate = uhd.time_spec(time_to_recv + 7 * acquisition_time/10.0)
                         # ask for samples at a specific time
                         stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
                         # add 300 samples to the burst to get rid of transient
@@ -219,6 +209,17 @@ class top_block(gr.top_block):
                         stream_cmd.stream_now = False
                         stream_cmd.time_spec = time_to_calibrate
                         self.usrp_source.issue_stream_cmd(stream_cmd)
+                    # synchronize LOs
+                    time_retune_1 = self.usrp_source.get_time_now().get_real_secs()
+                    self.retune(freq, lo_offset, gain, bw)
+                    time_now = self.usrp_source.get_time_now().get_real_secs()
+                    if autocalibrate:
+                        if (time_to_sample > time_now):
+                            if (time_now > time_to_recv):
+                                self.scheduler.enter((4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
+                            else:
+                                self.scheduler.enter(((time_to_recv-time_now) + 4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
+                            self.scheduler.run()
                     print "Time begin:", time_begin
                     print "Time last pps:", time_last_pps
                     print "Time to sample:", time_to_sample.get_real_secs()
@@ -229,10 +230,17 @@ class top_block(gr.top_block):
                     acquisitions -= 1
                     if not self.run_loop or (acquisitions <= 0 and not infinity):
                         break
-                    time_to_recv = time_to_recv + loop_frequency
+                    time_to_recv = time_to_recv + acquisition_time
                 except RuntimeError:
                     print "Can't start, flowgraph already running!"
-            time.sleep(0.1)
+            time.sleep(acquisition_time/10.0)
+
+    def retune(self, freq, lo_offset, gain, bw):
+        # synchronize LOs
+        #time_retune_2 = self.usrp_source.get_time_now().get_real_secs()
+        self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
+        self.usrp_source.set_gain(gain,0)
+        self.usrp_source.set_bandwidth(bw,0)
 
     def sync_time_nmea(self):
         print "Begin time sync"
