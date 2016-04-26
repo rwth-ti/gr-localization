@@ -72,7 +72,7 @@ class gui(QtGui.QMainWindow):
         self.transmitter_positions = {}
         self.filtering_types = []
         self.filtering_type = ""
-        self.map_type = "Online"
+        self.map_type = ""
         self.map_file = ""
         self.coordinates_type = ""
 
@@ -292,9 +292,11 @@ class gui(QtGui.QMainWindow):
         if calibration_started:
             self.calibration_mBox.show()
 
-    def init_map(self, bbox, map_type):
+    def init_map(self, bbox, map_type, map_file, coordinates_type):
         self.bbox = bbox
         self.map_type = map_type
+        self.map_file = map_file
+        self.coordinates_type = coordinates_type
         threading.Thread(target = self.set_map, args = [bbox]).start()
 
     @QtCore.pyqtSlot()
@@ -376,9 +378,14 @@ class gui(QtGui.QMainWindow):
             lat_0 = int(lat/8)*8
             lon_0 = int(lon/6)*6
 
-        self.basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
-                      urcrnrlon=bbox[2], urcrnrlat=bbox[3],
-                      projection='tmerc', ax=self.ax, lon_0=lon_0, lat_0=lat_0)
+        if self.coordinates_type == "Geographical":
+            self.basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
+                          urcrnrlon=bbox[2], urcrnrlat=bbox[3],
+                          projection='tmerc', ax=self.ax, lon_0=lon_0, lat_0=lat_0)
+        else:
+            self.basemap = Basemap(width=bbox[2], height=bbox[3],
+                          lon_0=0,lat_0=0,
+                          projection='tmerc', ax=self.ax,)
 
         if hasattr(self, "image"):
             self.image.remove()
@@ -415,10 +422,10 @@ class gui(QtGui.QMainWindow):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            bbox, map_type = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
+            bbox, map_type, map_file, coordinates_type = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
             if first and bbox != None:
                 self.bbox = bbox
-                self.init_map(bbox, map_type)
+                self.init_map(bbox, map_type, map_file, coordinates_type)
                 first = False
             time.sleep(10)
 
@@ -783,8 +790,12 @@ class gui(QtGui.QMainWindow):
     def set_gui_coordinates_type(self, coordinates_type):
         if coordinates_type == "Geographical":
             self.gui.comboBoxCoordinatesType.setCurrentIndex(0)
+            self.gui.lineEditLeft.setEnabled(True)
+            self.gui.lineEditBottom.setEnabled(True)
         else:
             self.gui.comboBoxCoordinatesType.setCurrentIndex(1)
+            self.gui.lineEditLeft.setEnabled(False)
+            self.gui.lineEditBottom.setEnabled(False)
 
     def set_gui_auto_calibrate(self, auto_calibrate):
         if auto_calibrate:

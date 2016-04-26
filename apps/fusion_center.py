@@ -172,9 +172,14 @@ class fusion_center():
             lat_0 = int(lat/8)*8
             lon_0 = int(lon/6)*6
 
-        self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
-                      urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
-                      projection='tmerc', lon_0=lon_0, lat_0=lat_0)
+        if self.coordinates_type == "Geographical":
+            self.basemap = Basemap(llcrnrlon=self.bbox[0], llcrnrlat=self.bbox[1],
+                          urcrnrlon=self.bbox[2], urcrnrlat=self.bbox[3],
+                          projection='tmerc', lon_0=lon_0, lat_0=lat_0)
+        else:
+            self.basemap = Basemap(width=self.bbox[2], height=self.bbox[3],
+                          lon_0=0,lat_0=0,
+                          projection='tmerc')
 
         #self.frequency_calibration = 602000000
         #self.coordinates_calibration = self.basemap(50.745597, 6.043278)
@@ -338,7 +343,7 @@ class fusion_center():
                     # request registration in each gui
                     gui.rpc_manager.request("register_another_gui",[serial])
             print(gui_serial, "registered")
-        return [self.bbox, self.map_type]
+        return [self.bbox, self.map_type, self.map_file, self.coordinates_type]
 
     def register_receiver(self, hostname, serial, id_rx, gps, first_time, coordinates):
         was_not_registered = False
@@ -608,7 +613,7 @@ class fusion_center():
         self.bbox = bbox
         self.init_map()
         for gui in self.guis.values():
-            gui.rpc_manager.request("init_map",[bbox, self.map_type])
+            gui.rpc_manager.request("init_map",[bbox, self.map_type, self.map_file, self.coordinates_type])
 
 
 
