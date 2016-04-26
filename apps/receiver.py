@@ -168,7 +168,7 @@ class top_block(gr.top_block):
 
     def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions):
 
-        acquisition_time = 1 # seconds between acquisitions
+        acquisition_time = 1.2 # seconds between acquisitions
 
         if acquisitions == 0:
             infinity = True
@@ -216,14 +216,16 @@ class top_block(gr.top_block):
                     if autocalibrate:
                         if (time_to_sample > time_now):
                             if (time_now > time_to_recv):
+                                print "time_now > time_to_recv"
                                 self.scheduler.enter((4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
                             else:
+                                print "time_now < time_to_recv"
                                 self.scheduler.enter(((time_to_recv-time_now) + 4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
                             self.scheduler.run()
-                    print "Time begin:", time_begin
-                    print "Time last pps:", time_last_pps
+                    print "Time retune 1:", time_retune_1
                     print "Time to sample:", time_to_sample.get_real_secs()
                     if autocalibrate:
+                        #print "Time retune 2:", time_retune_2
                         print "Time to calibrate:", time_to_calibrate.get_real_secs()
                     usrp = self.usrp_source
                     print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)

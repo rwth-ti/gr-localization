@@ -602,10 +602,14 @@ class fusion_center():
 
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
+                for receiver in self.receivers.values():
+                    receiver.reset_receiver()
                 return
             if self.auto_calibrate:
                 if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
                     print("Error: calibration timestamps do not match")
+                    for receiver in self.receivers.values():
+                        receiver.reset_receiver()
                     return
 
         # all timestamps correct -> continue processing
@@ -748,6 +752,9 @@ class fusion_center():
                     receiver.samples_calibration = []
                     receiver.first_packet = True
                     receiver.reception_complete = False
+            elif any(self.receivers[key].error_detected for key in self.receivers):
+                for receiver in self.receivers.values():
+                    receiver.reset_receiver()
             else:
                 self.probe_manager_lock.acquire()
                 self.probe_manager.watcher()
