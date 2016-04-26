@@ -49,7 +49,6 @@ class fusion_center():
 
         self.receivers = {}
         self.ref_receiver = ""
-        self.filtering_type = "Moving average"
         self.guis = {}
 
         self.grid_based = {"resolution":10,"num_samples":self.samples_to_receive * self.interpolation}
@@ -75,6 +74,10 @@ class fusion_center():
         self.calibrating = False
 
         self.filtering_types = ["No averaging","Moving average","Kalmann filter"]
+        self.filtering_type = "Moving average"
+        self.map_type = "Online"
+        self.map_file = ""
+        self.coordinates_type = "Geographical"
 
         # ICT + surroundings
         self.bbox = 6.0580,50.7775,6.0690,50.7810
@@ -126,6 +129,9 @@ class fusion_center():
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_ref_receiver",self.set_ref_receiver)
         self.rpc_manager.add_interface("set_filtering_type",self.set_filtering_type)
+        self.rpc_manager.add_interface("set_map_type",self.set_map_type)
+        self.rpc_manager.add_interface("set_map_file",self.set_map_file)
+        self.rpc_manager.add_interface("set_coordinates_type",self.set_coordinates_type)
         self.rpc_manager.add_interface("set_auto_calibrate",self.set_auto_calibrate)
         self.rpc_manager.add_interface("set_TDOA_grid_based_resolution",self.set_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
@@ -322,6 +328,9 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_record_samples",[self.record_samples])
             gui.rpc_manager.request("set_gui_filtering_types",[self.filtering_types])
             gui.rpc_manager.request("set_gui_filtering_type",[self.filtering_type])
+            gui.rpc_manager.request("set_gui_map_type",[self.map_type])
+            gui.rpc_manager.request("set_gui_map_file",[self.map_file])
+            gui.rpc_manager.request("set_gui_coordinates_type",[self.coordinates_type])
             gui.rpc_manager.request("set_gui_location_average_length",[self.location_average_length])
 
             for gui in self.guis.values():
@@ -329,7 +338,7 @@ class fusion_center():
                     # request registration in each gui
                     gui.rpc_manager.request("register_another_gui",[serial])
             print(gui_serial, "registered")
-        return self.bbox
+        return [self.bbox, self.map_type]
 
     def register_receiver(self, hostname, serial, id_rx, gps, first_time, coordinates):
         was_not_registered = False
@@ -545,6 +554,21 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_filtering_type",[filtering_type])
 
+    def set_map_type(self, map_type):
+        self.map_type = map_type
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_map_type",[map_type])
+
+    def set_map_file(self, map_file):
+        self.map_file = map_file
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_map_file",[map_file])
+
+    def set_coordinates_type(self, coordinates_type):
+        self.coordinates_type = coordinates_type
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_coordinates_type",[coordinates_type])
+
     def set_auto_calibrate(self, auto_calibrate):
         self.auto_calibrate = auto_calibrate
         for receiver in self.receivers.values():
@@ -584,7 +608,7 @@ class fusion_center():
         self.bbox = bbox
         self.init_map()
         for gui in self.guis.values():
-            gui.rpc_manager.request("init_map",[bbox])
+            gui.rpc_manager.request("init_map",[bbox, self.map_type])
 
 
 

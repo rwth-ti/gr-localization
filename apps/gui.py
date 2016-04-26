@@ -30,6 +30,7 @@ import rpc_manager as rpc_manager_local
 import gui_helpers
 
 class gui(QtGui.QMainWindow):
+    signal_error_set_map = QtCore.pyqtSignal()
     def __init__(self, window_name, options, parent=None):
         QtGui.QMainWindow.__init__(self, parent)
 
@@ -71,6 +72,14 @@ class gui(QtGui.QMainWindow):
         self.transmitter_positions = {}
         self.filtering_types = []
         self.filtering_type = ""
+        self.map_type = "Online"
+        self.map_file = ""
+        self.coordinates_type = ""
+
+        self.gui.comboBoxMapType.addItem("Online")
+        self.gui.comboBoxMapType.addItem("Offline")
+        self.gui.comboBoxCoordinatesType.addItem("Geographical")
+        self.gui.comboBoxCoordinatesType.addItem("Projected")
 
         self.chats = ""
 
@@ -104,6 +113,9 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.add_interface("set_gui_filtering_type",self.set_gui_filtering_type)
+        self.rpc_manager.add_interface("set_gui_map_type",self.set_gui_map_type)
+        self.rpc_manager.add_interface("set_gui_map_file",self.set_gui_map_file)
+        self.rpc_manager.add_interface("set_gui_coordinates_type",self.set_gui_coordinates_type)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.add_interface("set_gui_calibration_average",self.set_gui_calibration_average)
         self.rpc_manager.add_interface("set_gui_location_average_length",self.set_gui_location_average_length)
@@ -194,6 +206,7 @@ class gui(QtGui.QMainWindow):
         self.calibration_mBox.buttonClicked.connect(self.set_tx_calibration)
 
         #Signals
+        self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
         self.connect(self.gui.lineEdit, QtCore.SIGNAL("returnPressed()"), self.send_chat)
@@ -224,6 +237,9 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
         self.connect(self.gui.comboBoxFilteringType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_filtering_type)
+        self.connect(self.gui.comboBoxMapType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_map_type)
+        self.connect(self.gui.comboBoxCoordinatesType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_coordinates_type)
+        self.connect(self.gui.pushButtonSetMapFile, QtCore.SIGNAL("clicked()"), self.set_map_file)
         self.connect(self.gui.pushButtonSetBbox, QtCore.SIGNAL("clicked()"), self.set_bbox)
         self.connect(self.gui.checkBoxRecordResults, QtCore.SIGNAL("clicked()"), self.set_record_results)
         self.connect(self.gui.checkBoxRecordSamples, QtCore.SIGNAL("clicked()"), self.set_record_samples)
@@ -276,9 +292,18 @@ class gui(QtGui.QMainWindow):
         if calibration_started:
             self.calibration_mBox.show()
 
-    def init_map(self, bbox):
+    def init_map(self, bbox, map_type):
         self.bbox = bbox
+        self.map_type = map_type
         threading.Thread(target = self.set_map, args = [bbox]).start()
+
+    @QtCore.pyqtSlot()
+    def error_set_map(self):
+        msg = QtGui.QMessageBox(self)
+        msg.setIcon(QtGui.QMessageBox.Warning)
+        msg.setText("Map file not found. Please select a correct file.")
+        msg.setWindowTitle("Error loading map")
+        msg.show()
 
     def set_map(self, bbox):
         self.gui.lineEditLeft.setText(str(bbox[0]))
@@ -298,18 +323,23 @@ class gui(QtGui.QMainWindow):
         y = y1-y0
         scale = math.ceil(math.sqrt(abs(x*y/0.3136))) * 2
 
-        #r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+        if self.map_type == "Online":
+            print "Setting online map"
+            r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
 
-        #if r.status_code == 200:
-        #    img = Image.open(StringIO(r.content))
-        #    if not os.path.exists("../maps"):
-        #            os.makedirs("../maps")
-        #    img.save("../maps/map.png")
+            if r.status_code == 200:
+                img = Image.open(StringIO(r.content))
+                if not os.path.exists("../maps"):
+                        os.makedirs("../maps")
+                img.save("../maps/map.png")
 
-        #img = Image.open("../maps/ict_cubes.png")
-        #img = Image.open("../maps/rwth_ti_seminarroom.png")
-        img = Image.open("../maps/ipsn_2016_dachfoyer.png")
-        self.origin_offset = (15.8,4)
+        else:
+            print "Setting offline map", self.map_file
+            try:
+                img = Image.open(self.map_file)
+            except:
+                self.signal_error_set_map.emit()
+                return
 
         if hasattr(self, "ax"):
             self.figure.delaxes(self.ax)
@@ -385,10 +415,10 @@ class gui(QtGui.QMainWindow):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            bbox = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
+            bbox, map_type = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
             if first and bbox != None:
                 self.bbox = bbox
-                self.init_map(bbox)
+                self.init_map(bbox, map_type)
                 first = False
             time.sleep(10)
 
@@ -641,6 +671,19 @@ class gui(QtGui.QMainWindow):
         self.filtering_type = self.gui.comboBoxFilteringType.currentText()
         self.rpc_manager.request("set_filtering_type",[str(self.filtering_type)])
 
+    def set_map_type(self):
+        self.map_type = self.gui.comboBoxMapType.currentText()
+        self.rpc_manager.request("set_map_type",[str(self.map_type)])
+
+    def set_map_file(self):
+        self.gui.lineEditMapFile.setText(Qt.QFileDialog.getOpenFileName())
+        self.map_file = str(self.gui.lineEditMapFile.text())
+        self.rpc_manager.request("set_map_file",[str(self.map_file)])
+
+    def set_coordinates_type(self):
+        self.coordinates_type = self.gui.comboBoxCoordinatesType.currentText()
+        self.rpc_manager.request("set_coordinates_type",[str(self.coordinates_type)])
+
     def set_auto_calibrate(self):
         self.auto_calibrate = self.gui.checkBoxAutocalibrate.isChecked()
         self.rpc_manager.request("set_auto_calibrate",[self.auto_calibrate])
@@ -715,13 +758,33 @@ class gui(QtGui.QMainWindow):
         for i in range(0,len(self.receivers)):
             if self.receivers.keys()[i] == ref_receiver:
                 self.gui.comboBoxRefReceiver.setCurrentIndex(i)
-        return
 
     def set_gui_filtering_type(self, filtering_type):
         for i in range(0,len(self.filtering_types)):
             if self.filtering_types[i] == filtering_type:
                 self.gui.comboBoxFilteringType.setCurrentIndex(i)
-        return
+
+    def set_gui_map_type(self, map_type):
+        if map_type == "Online":
+            self.gui.comboBoxMapType.setCurrentIndex(0)
+            self.gui.comboBoxCoordinatesType.setEnabled(False)
+            self.gui.lineEditMapFile.setEnabled(False)
+            self.gui.pushButtonSetMapFile.setEnabled(False)
+        else:
+            self.gui.comboBoxMapType.setCurrentIndex(1)
+            self.gui.comboBoxCoordinatesType.setEnabled(True)
+            self.gui.lineEditMapFile.setEnabled(True)
+            self.gui.pushButtonSetMapFile.setEnabled(True)
+
+    def set_gui_map_file(self, map_file):
+        self.map_file = map_file
+        self.gui.lineEditMapFile.setText(str(map_file))
+
+    def set_gui_coordinates_type(self, coordinates_type):
+        if coordinates_type == "Geographical":
+            self.gui.comboBoxCoordinatesType.setCurrentIndex(0)
+        else:
+            self.gui.comboBoxCoordinatesType.setCurrentIndex(1)
 
     def set_gui_auto_calibrate(self, auto_calibrate):
         if auto_calibrate:
