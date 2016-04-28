@@ -82,8 +82,8 @@ class top_block(gr.top_block):
 
         # Find out ip address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        if not options.fusion_center == "localhost":
-            s.connect((options.fusion_center,22))
+        if not options.ssh_proxy:
+            s.connect((options.fusion_center,6665))
         else:
             s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
@@ -265,6 +265,8 @@ def parse_options():
                       help="Receiver coordinates in meters")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
+    parser.add_option("", "--ssh-proxy", action="store_true", default=False,
+                      help="Activate when using a ssh proxy")
     (options, args) = parser.parse_args()
     return options
 
