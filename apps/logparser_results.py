@@ -133,14 +133,16 @@ def parse_options():
 
     parser.add_option("", "--map", action="store_true", default=False,
                       help="Activate map plot")
-    parser.add_option("", "--histogram", action="store_true", default=False,
+    parser.add_option("", "--histogram-delays", action="store_true", default=False,
                       help="Activate histogram plot")
-    parser.add_option("", "--histogram-meters", action="store_true", default=False,
+    parser.add_option("", "--histogram-location", action="store_true", default=False,
                       help="Activate histogram in meters plot")
     parser.add_option("", "--delay", action="store_true", default=False,
                       help="Activate delay history plot")
     parser.add_option("-s", "--save", action="store_true", default=False,
                       help="Save plots to files")
+    parser.add_option("", "--delay-threshold", type="int", default="0",
+                                  help="Threshold to filter TDOAs")
     (options, args) = parser.parse_args()
     if len(args)<1:   # if filename is not given
         parser.error('Filename not given')
@@ -186,15 +188,30 @@ if __name__ == "__main__":
         estimated_positions = acquisition[18]
         if len(acquisition) > 19:
             ref_receiver = acquisition[19]
-        if estimated_positions.has_key("chan"):
-            chan_x.append(estimated_positions["chan"]["coordinates"][0])
-            chan_y.append(estimated_positions["chan"]["coordinates"][1])
-        if estimated_positions.has_key("grid_based"):
-            grid_x.append(estimated_positions["grid_based"]["coordinates"][0])
-            grid_y.append(estimated_positions["grid_based"]["coordinates"][1])
-        delays_list.append(delays)
-        delays_calibration_list.append(delays_calibration)
-        delays_auto_calibration_list.append(delays_auto_calibration)
+        if (options.delay_threshold > 0):
+            if all(abs(d)<options.delay_threshold for d in delays):
+                if all(abs(d_c)<options.delay_threshold for d_c in delays_calibration):
+                    if all(abs(d_ac)<options.delay_threshold for d_ac in delays_auto_calibration):
+                        if estimated_positions.has_key("chan"):
+                            chan_x.append(estimated_positions["chan"]["coordinates"][0])
+                            chan_y.append(estimated_positions["chan"]["coordinates"][1])
+                        if estimated_positions.has_key("grid_based"):
+                            grid_x.append(estimated_positions["grid_based"]["coordinates"][0])
+                            grid_y.append(estimated_positions["grid_based"]["coordinates"][1])
+                        delays_list.append(delays)
+                        delays_calibration_list.append(delays_calibration)
+                        delays_auto_calibration_list.append(delays_auto_calibration)
+        else:
+            if estimated_positions.has_key("chan"):
+                chan_x.append(estimated_positions["chan"]["coordinates"][0])
+                chan_y.append(estimated_positions["chan"]["coordinates"][1])
+            if estimated_positions.has_key("grid_based"):
+                grid_x.append(estimated_positions["grid_based"]["coordinates"][0])
+                grid_y.append(estimated_positions["grid_based"]["coordinates"][1])
+            delays_list.append(delays)
+            delays_calibration_list.append(delays_calibration)
+            delays_auto_calibration_list.append(delays_auto_calibration)
+
     f.close()
 
     delays_calibrated = np.array(delays_list)
@@ -236,48 +253,52 @@ if __name__ == "__main__":
         #    p.figure_map.canvas.draw()
 
         p.ax.scatter(chan_x,chan_y,color="blue",marker="x")
-        p.ax.scatter(grid_x,grid_y,color="red",marker="x")
+        if len(grid_x)>0:
+            p.ax.scatter(grid_x,grid_y,color="red",marker="x")
 
         if options.save:
             plt.savefig(args[0].split(".")[0] + "_map.pdf", dpi=150)
 
-    if options.histogram_meters:
+    if options.histogram_location:
         chan_x_mean = np.mean(chan_x)
         chan_x_variance = np.var(chan_x)
-        grid_x_mean = np.mean(grid_x)
-        grid_x_variance = np.var(grid_x)
         chan_y_mean = np.mean(chan_y)
         chan_y_variance = np.var(chan_y)
-        grid_y_mean = np.mean(grid_y)
-        grid_y_variance = np.var(grid_y)
         label_chan_x= r'$chan_x$, $\mu=' + "{0:.2f}".format(chan_x_mean) + '$, $\sigma^2=' + "{0:.2f}".format(chan_x_variance) + '$'
-        label_grid_x= r'$grid_x$, $\mu=' + "{0:.2f}".format(grid_x_mean) + '$, $\sigma^2=' + "{0:.2f}".format(grid_x_variance) + '$'
+        grid_y_variance = np.var(grid_y)
         label_chan_y= r'$chan_y$, $\mu=' + "{0:.2f}".format(chan_y_mean) + '$, $\sigma^2=' + "{0:.2f}".format(chan_y_variance) + '$'
-        label_grid_y= r'$grid_y$, $\mu=' + "{0:.2f}".format(grid_y_mean) + '$, $\sigma^2=' + "{0:.2f}".format(grid_y_variance) + '$'
+        if len(grid_x)>0:
+            grid_x_mean = np.mean(grid_x)
+            grid_x_variance = np.var(grid_x)
+            grid_y_mean = np.mean(grid_y)
+            label_grid_x= r'$grid_x$, $\mu=' + "{0:.2f}".format(grid_x_mean) + '$, $\sigma^2=' + "{0:.2f}".format(grid_x_variance) + '$'
+            label_grid_y= r'$grid_y$, $\mu=' + "{0:.2f}".format(grid_y_mean) + '$, $\sigma^2=' + "{0:.2f}".format(grid_y_variance) + '$'
 
         figure_hist_m = plt.figure()
-        figure_hist_m.canvas.set_window_title(filename + "_histogram_m")
+        figure_hist_m.canvas.set_window_title(filename + "_histogram_location")
         ax_hist_m_x = figure_hist_m.add_subplot(211)
         ax_hist_m_x.set_xlabel(r'x[m]')
         # the histogram of the data
         offset=0.5
         bins = np.arange(np.min(chan_x)-1,np.max(chan_x)+1,299700000/(sampling_rate*interpolation))
         n, bins, patches = ax_hist_m_x.hist(chan_x, bins=bins, histtype='stepfilled', facecolor='blue', alpha=0.75, label=label_chan_x)
-        bins = np.arange(np.min(grid_x)-1,np.max(grid_x)+1,estimated_positions["grid_based"]["resolution"])
-        n, bins, patches = ax_hist_m_x.hist(grid_x, bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=label_grid_x)
+        if len(grid_x)>0:
+            bins = np.arange(np.min(grid_x)-1,np.max(grid_x)+1,estimated_positions["grid_based"]["resolution"])
+            n, bins, patches = ax_hist_m_x.hist(grid_x, bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=label_grid_x)
         plt.legend()
         ax_hist_m_y = figure_hist_m.add_subplot(212)
         ax_hist_m_y.set_xlabel(r'y[m]')
         bins = np.arange(np.min(chan_y)-1,np.max(chan_y)+1,299700000/(sampling_rate*interpolation))
         n, bins, patches = ax_hist_m_y.hist(chan_y, bins=bins, histtype='stepfilled', facecolor='blue', alpha=0.75, label=label_chan_y)
-        bins = np.arange(np.min(grid_y)-1,np.max(grid_y)+1,estimated_positions["grid_based"]["resolution"])
-        n, bins, patches = ax_hist_m_y.hist(grid_y, bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=label_grid_y)
+        if len(grid_x)>0:
+            bins = np.arange(np.min(grid_y)-1,np.max(grid_y)+1,estimated_positions["grid_based"]["resolution"])
+            n, bins, patches = ax_hist_m_y.hist(grid_y, bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=label_grid_y)
         plt.legend()
 
         if options.save:
-            plt.savefig(args[0].split(".")[0] + "_histogram.pdf")
+            plt.savefig(args[0].split(".")[0] + "_histogram_location.pdf")
 
-    if options.histogram:
+    if options.histogram_delays:
         d21mean = np.mean(delays_calibrated[:,0])
         d21variance = np.var(delays_calibrated[:,0])
         d31mean = np.mean(delays_calibrated[:,1])
@@ -286,7 +307,7 @@ if __name__ == "__main__":
         labeld31 = r'$\Delta\tau_{31}$, $\mu=' + "{0:.2f}".format(d31mean) + '$, $\sigma^2=' + "{0:.2f}".format(d31variance) + '$'
 
         figure_hist = plt.figure()
-        figure_hist.canvas.set_window_title(filename + "_histogram")
+        figure_hist.canvas.set_window_title(filename + "_histogram_delays")
         ax_hist = figure_hist.add_subplot(111)
         ax_hist.set_xlabel(r'$\Delta\tau$[samples]')
         # the histogram of the data
@@ -298,7 +319,7 @@ if __name__ == "__main__":
         plt.legend()
 
         if options.save:
-            plt.savefig(args[0].split(".")[0] + "_histogram_m.pdf")
+            plt.savefig(args[0].split(".")[0] + "_histogram_delays.pdf")
 
     if options.delay:
         figure_delay = plt.figure()
