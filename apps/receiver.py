@@ -239,7 +239,8 @@ class top_block(gr.top_block):
 
     def retune(self, freq, lo_offset, gain, bw):
         # synchronize LOs
-        #time_retune_2 = self.usrp_source.get_time_now().get_real_secs()
+        time_retune_2 = self.usrp_source.get_time_now().get_real_secs()
+        print "Time retune 2:", time_retune_2
         self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
         self.usrp_source.set_gain(gain,0)
         self.usrp_source.set_bandwidth(bw,0)

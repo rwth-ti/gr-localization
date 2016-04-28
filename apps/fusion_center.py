@@ -85,11 +85,11 @@ class fusion_center():
         #self.bbox = 6.06429,50.77697,6.07271,50.78033
         # ICT indoor
         #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
-        #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
+        self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
         # UPB Campus
         #self.bbox = -75.59124,6.24113,-75.58851,6.24261
         # Hack for Hofburg Vienna
-        self.bbox = 16.366270782839383, 48.20741002023011, 16.367042, 48.2075765
+        #self.bbox = 16.366270782839383, 48.20741002023011, 16.367042, 48.2075765
         self.init_map()
 
 
@@ -682,7 +682,7 @@ class fusion_center():
                 for position in self.estimated_positions_history:
                     average_chan.append(position["chan"]["coordinates"])
                     #average_grid.append(position["grid_based"]["coordinates"])
-                estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0)
+                estimated_positions["chan"]["average_coordinates"] = np.array(average_chan).mean(0).tolist()
                 #estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
 
             if not self.run_loop:
