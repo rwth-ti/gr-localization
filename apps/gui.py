@@ -422,11 +422,14 @@ class gui(QtGui.QMainWindow):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            bbox, map_type, map_file, coordinates_type = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
-            if first and bbox != None:
-                self.bbox = bbox
-                self.init_map(bbox, map_type, map_file, coordinates_type)
-                first = False
+            try:
+                bbox, map_type, map_file, coordinates_type = self.rpc_manager.request("register_gui",[self.ip_addr, self.hostname, options.id_gui, first])
+                if first and bbox != None:
+                    self.bbox = bbox
+                    self.init_map(bbox, map_type, map_file, coordinates_type)
+                    first = False
+            except:
+                print "Error: fusion center not reachable"
             time.sleep(10)
 
     def sync_position(self, serial, coordinates):
