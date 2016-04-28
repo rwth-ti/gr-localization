@@ -683,7 +683,8 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("set_map_type",[str(self.map_type)])
 
     def set_map_file(self):
-        self.gui.lineEditMapFile.setText(Qt.QFileDialog.getOpenFileName())
+        f = Qt.QFileDialog.getOpenFileName()
+        self.gui.lineEditMapFile.setText("../maps/" + f.split("/")[-1])
         self.map_file = str(self.gui.lineEditMapFile.text())
         self.rpc_manager.request("set_map_file",[str(self.map_file)])
 
