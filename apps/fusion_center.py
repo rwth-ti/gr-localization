@@ -287,6 +287,7 @@ class fusion_center():
         self.receivers[serial].coordinates = coordinates
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position",[serial, coordinates])
+        self.get_gui_gps_position(serial)
 
     def poll_gps_position(self):
         while True:
