@@ -64,7 +64,15 @@ def localize(receivers, ref_receiver, bbox):
         x31 = x3 - x1
         y21 = y2 - y1
         y31 = y3 - y1
-
+        rmax21= np.sqrt(x21**2+y21**2)
+        rmax31= np.sqrt(x31**2+y31**2)
+        #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, clip it to maximum value.
+        if r21>rmax21:
+            r21=rmax21
+            print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible.
+        if r31>rmax31:
+            r31=rmax31    
+            print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible.
         # Solve equations system
         A = (y21*r31-y31*r21)/(y31*x21-y21*x31)
         B = (y21*(0.5*(pow(r31,2)-K3+K1))-y31*(0.5*(pow(r21,2)-K2+K1)))/(y31*x21-y21*x31)
@@ -86,10 +94,10 @@ def localize(receivers, ref_receiver, bbox):
         if len(xy) > 1:
             if np.linalg.norm(xy[0]-np.array(bbox)/2) < np.linalg.norm(xy[1]-np.array(bbox)/2):
                 print "1"
-                xy = xy[1]
+                xy = xy[0]#changed:different solution gets chosen(closer to the center!)
             else:
                 print "2"
-                xy = xy[0]
+                xy = xy[1]
         else:
             print "3"
             xy = xy[0]
