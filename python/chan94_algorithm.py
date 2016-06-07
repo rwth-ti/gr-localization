@@ -2,6 +2,7 @@ import numpy as np
 import time
 
 
+
 def estimate_delay(y1, y2):
     correlation = np.absolute(np.correlate(y1, y2, "full", False)).tolist()
     delay = (np.argmax(correlation) - len(y1) + 1).tolist()
@@ -40,6 +41,7 @@ def localize(receivers, ref_receiver, bbox):
             d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
     d12 = d[0]
     d13 = d[1]
+    #print "d21:"+str(d12)+"d31:"+str(d13)
 
     # Set receivers position.
     x1 = pos_rx[0][0]
@@ -64,15 +66,24 @@ def localize(receivers, ref_receiver, bbox):
         x31 = x3 - x1
         y21 = y2 - y1
         y31 = y3 - y1
+        #print "r21:"+str(r21)+"r31:"+str(r31)
         rmax21= np.sqrt(x21**2+y21**2)
         rmax31= np.sqrt(x31**2+y31**2)
+        eps= 0.5
         #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, clip it to maximum value.
         if r21>rmax21:
-            r21=rmax21
-            print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible.
+            r21=rmax21-eps
+            print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
+        if r21<-rmax21:
+            r21=-(rmax21-eps)
+            print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r31>rmax31:
-            r31=rmax31    
-            print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible.
+            r31=rmax31-eps  
+            print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
+        if r31<-rmax31:
+            r31=-(rmax31-eps ) 
+            print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
+            
         # Solve equations system
         A = (y21*r31-y31*r21)/(y31*x21-y21*x31)
         B = (y21*(0.5*(pow(r31,2)-K3+K1))-y31*(0.5*(pow(r21,2)-K2+K1)))/(y31*x21-y21*x31)
