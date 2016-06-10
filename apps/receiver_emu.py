@@ -111,15 +111,14 @@ class top_block(gr.top_block):
             first = False
             time.sleep(10)
 
-    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
-        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions)).start()
+    def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions, acquisition_time):
+        threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions, acquisition_time)).start()
 
 
-    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions):
+    def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions, acquisition_time):
 
         self.freq = freq
         self.freq_calibration = freq_calibration
-        loop_frequency = 2 # seconds between acquisitions
 
         auto_delay = 5 # delay simulation of auto calibration
 
@@ -160,7 +159,7 @@ class top_block(gr.top_block):
             acquisitions -= 1
             if not self.run_loop or (acquisitions <= 0 and not infinity):
                 break
-            time.sleep(loop_frequency)
+            time.sleep(acquisition_time)
 
     def get_gps_position(self):
         longitude = 6.062

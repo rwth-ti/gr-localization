@@ -62,6 +62,7 @@ class gui(QtGui.QMainWindow):
         self.frequency_calibration = 2.4e9
         self.bw_calibration = 1e6
         self.lo_offset_calibration = 0
+        self.acquisition_time = 0
 
         self.results = {}
         self.new_results = False
@@ -75,6 +76,8 @@ class gui(QtGui.QMainWindow):
         self.map_type = ""
         self.map_file = ""
         self.coordinates_type = ""
+
+        self.grid_based_active = False
 
         self.gui.comboBoxMapType.addItem("Online")
         self.gui.comboBoxMapType.addItem("Offline")
@@ -122,6 +125,8 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_record_results",self.set_gui_record_results)
         self.rpc_manager.add_interface("set_gui_record_samples",self.set_gui_record_samples)
         self.rpc_manager.add_interface("set_gui_filtering_types",self.set_gui_filtering_types)
+        self.rpc_manager.add_interface("set_gui_acquisition_time",self.set_gui_acquisition_time)
+        self.rpc_manager.add_interface("set_gui_grid_based_active",self.set_gui_grid_based_active)
         self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
@@ -243,6 +248,8 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.pushButtonSetBbox, QtCore.SIGNAL("clicked()"), self.set_bbox)
         self.connect(self.gui.checkBoxRecordResults, QtCore.SIGNAL("clicked()"), self.set_record_results)
         self.connect(self.gui.checkBoxRecordSamples, QtCore.SIGNAL("clicked()"), self.set_record_samples)
+        self.connect(self.gui.acquisitionTimeSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_acquisition_time)
+        self.connect(self.gui.gridBasedCheckBox, QtCore.SIGNAL("clicked()"), self.set_grid_based_active)
         self.shortcut_start = QtGui.QShortcut(Qt.QKeySequence("Ctrl+S"), self.gui)
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
@@ -483,6 +490,7 @@ class gui(QtGui.QMainWindow):
             for h in self.hyperbolas["tdoa"]:
                 h.remove()
         self.hyperbolas["tdoa"] = self.plot_hyperbolas()
+
         for algorithm in transmitter_positions.items():
             if not self.transmitter_positions.has_key(algorithm[0]):
                 if self.filtering_type == "Moving average":
@@ -520,6 +528,22 @@ class gui(QtGui.QMainWindow):
             else:
                 # ax not rendered yet, so update position when available
                 self.pending_receivers_to_plot = True
+
+        if not self.grid_based_active:
+            if hasattr(self,"grid"):
+                self.grid.remove()
+                del self.grid
+            if self.hyperbolas.has_key("grid_based"):
+                for h in self.hyperbolas["grid_based"]:
+                    h.remove()
+                del self.hyperbolas["grid_based"]
+            if self.transmitter_positions.has_key("grid_based"):
+                estimated_position = self.transmitter_positions["grid_based"]
+                estimated_position.scatter.remove()
+                estimated_position.annotation.remove()
+                del self.transmitter_positions["grid_based"]
+            self.canvas.draw()
+
 
     def plot_hyperbolas(self, pos_tx=None, c="red"):
         pos_rx = []
@@ -715,6 +739,14 @@ class gui(QtGui.QMainWindow):
     def set_record_samples(self):
         self.rpc_manager.request("set_record_samples",[self.gui.checkBoxRecordSamples.isChecked()])
 
+    def set_acquisition_time(self):
+        self.acquisition_time = self.gui.acquisitionTimeSpin.value()
+        self.rpc_manager.request("set_acquisition_time",[self.acquisition_time])
+
+    def set_grid_based_active(self):
+        self.grid_based_active = self.gui.gridBasedCheckBox.isChecked()
+        self.rpc_manager.request("set_grid_based_active",[self.grid_based_active])
+
     def set_gui_calibration_average(self, calibration_average):
         self.calibration_average = calibration_average
         self.gui.calibrationAverageSpin.setValue(calibration_average)
@@ -840,6 +872,16 @@ class gui(QtGui.QMainWindow):
             self.gui.comboBoxFilteringType.addItem(f_type)
         self.gui.comboBoxFilteringType.setCurrentIndex(0)
 
+    def set_gui_acquisition_time(self, acquisition_time):
+        self.acquisition_time = acquisition_time
+        self.gui.acquisitionTimeSpin.setValue(acquisition_time)
+
+    def set_gui_grid_based_active(self, grid_based_active):
+        self.grid_based_active = grid_based_active
+        if grid_based_active:
+            self.gui.gridBasedCheckBox.setChecked(1)
+        else:
+            self.gui.gridBasedCheckBox.setChecked(0)
 
     def get_results(self, results):
         self.results = results

@@ -71,12 +71,12 @@ class receiver_interface():
     def sync_time(self):
         self.rpc_mgr.request("sync_time")
 
-    def request_samples(self, time_to_receive, acquisitions):
+    def request_samples(self, time_to_receive, acquisitions, acquisition_time):
         self.samples = []
         self.samples_calibration = []
         self.first_packet = True
         self.reception_complete = False
-        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions])
+        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions, acquisition_time])
 
     def reset_receiver(self):
         print "Reset receiver: ", self.serial
