@@ -3,6 +3,7 @@
 from optparse import OptionParser
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy import array
 import sys
 sys.path.append("../python")
 #import gui_helpers
@@ -13,6 +14,9 @@ import requests
 from StringIO import StringIO
 from mpl_toolkits.basemap import Basemap
 import time
+from kalman import kalman_filter
+import ConfigParser
+from ConfigSectionMap import ConfigSectionMap
 
 class parser():
     def __init__(self,bbox,filename,options):
@@ -133,6 +137,12 @@ def parse_options():
 
     parser.add_option("", "--map", action="store_true", default=False,
                       help="Activate map plot")
+    parser.add_option("", "--redo-kalman", action="store_true", default=False,
+                      help="Do posterior Kalman filtering. Will overwrite real time filtered values.")
+    parser.add_option("-c", "--config", type="str", default="./cfg_kalman_parser.cfg",
+                      help="Configuration File for Kalman Filter")
+    parser.add_option("", "--mapplot_mode", type="str", default="compare",
+                      help="Points that should be plotted on the map.\ Possible options:\nfinal: just plot filtered Locations.\nraw:just Plot algorithm results without filtering. \ncompare: plot raw and filtered locations.")
     parser.add_option("", "--histogram-delays", action="store_true", default=False,
                       help="Activate histogram plot")
     parser.add_option("", "--histogram-location", action="store_true", default=False,
@@ -147,22 +157,30 @@ def parse_options():
     if len(args)<1:   # if filename is not given
         parser.error('Filename not given')
     return options,args
+    
 
+    
+    
 ###############################################################################
 # Main
 ###############################################################################
 if __name__ == "__main__":
     options,args = parse_options()
-
+    if options.mapplot_mode not in ["final","raw","compare"]:
+        sys.exit("invalid option %s:check logparser_results.py --help"%options.mapplot_mode)
     f = open(args[0],"r")
     f.readline()
     f.readline()
     f.readline()
     chan_x = []
     chan_y = []
+    chan_x_kalman=[]
+    chan_y_kalman=[]
     grid_x = []
     grid_y = []
-    delays_list = []
+    grid_x_kalman=[]
+    grid_y_kalman=[]
+    delays_list=[]
     delays_calibration_list = []
     delays_auto_calibration_list = []
     for line in f:
@@ -195,9 +213,15 @@ if __name__ == "__main__":
                         if estimated_positions.has_key("chan"):
                             chan_x.append(estimated_positions["chan"]["coordinates"][0])
                             chan_y.append(estimated_positions["chan"]["coordinates"][1])
+                            if estimated_positions["chan"].has_key("kalman_coordinates"):
+                                chan_x_kalman.append(estimated_positions["chan"]["kalman_coordinates"][0])
+                                chan_y_kalman.append(estimated_positions["chan"]["kalman_coordinates"][1])
                         if estimated_positions.has_key("grid_based"):
                             grid_x.append(estimated_positions["grid_based"]["coordinates"][0])
                             grid_y.append(estimated_positions["grid_based"]["coordinates"][1])
+                            if estimated_positions["grid_based"].has_key("kalman_coordinates"):
+                                grid_x_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][0])
+                                grid_y_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][1])
                         delays_list.append(delays)
                         delays_calibration_list.append(delays_calibration)
                         delays_auto_calibration_list.append(delays_auto_calibration)
@@ -205,17 +229,58 @@ if __name__ == "__main__":
             if estimated_positions.has_key("chan"):
                 chan_x.append(estimated_positions["chan"]["coordinates"][0])
                 chan_y.append(estimated_positions["chan"]["coordinates"][1])
+                if estimated_positions["chan"].has_key("kalman_coordinates"):
+                    chan_x_kalman.append(estimated_positions["chan"]["kalman_coordinates"][0])
+                    chan_y_kalman.append(estimated_positions["chan"]["kalman_coordinates"][1])
             if estimated_positions.has_key("grid_based"):
                 grid_x.append(estimated_positions["grid_based"]["coordinates"][0])
                 grid_y.append(estimated_positions["grid_based"]["coordinates"][1])
+                if estimated_positions["grid_based"].has_key("kalman_coordinates"):
+                    grid_x_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][0])
+                    grid_y_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][1])
             delays_list.append(delays)
             delays_calibration_list.append(delays_calibration)
             delays_auto_calibration_list.append(delays_auto_calibration)
-
+    
     f.close()
-
-    delays_calibrated = np.array(delays_list)
-    delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
+    
+    if options.redo_kalman: 
+        #Kalman filtering the returned data
+        cfg=ConfigParser.ConfigParser()
+        
+        cfg.read(options.config)
+        init_kalman=ConfigSectionMap(cfg,"sectionOne")
+        #init_kalman={"delta_t":1.5,"noise_factor":0.08,"filter_receivers":False,"noise_var_x":20,"noise_var_y":20,"model":"maneuvering","measurement_noise_chan":160*0.08,"measurement_noise_grid":160*0.08}
+        if chan_x :
+            init_kalman['algorithm']='chan'
+            kalman=kalman_filter(init_kalman)
+            measurements = np.column_stack((chan_x,chan_y))
+            
+            xk_1= np.hstack((measurements[0,:],np.zeros(kalman.get_state_size()-2)))#init state
+            kalman_states= xk_1
+            Pk_1=kalman.get_init_cov()
+            for i in range(len(measurements)):
+                xk_1,Pk_1=kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"chan")
+                if i>0:
+                    kalman_states=np.vstack((kalman_states,xk_1))
+                chan_x_kalman.append=kalman_states[:,0] 
+                chan_y_kalman.append=kalman_states[:,1]         
+        
+        if grid_x:        
+            init_kalman['algorithm']='grid_based'
+            kalman=kalman_filter(init_kalman)
+            measurements = np.column_stack((chan_x,chan_y))
+            xk_1= np.hstack((measurements[0,:],np.zeros(kalman.get_state_size()-2)))#init state
+            kalman_states= xk_1
+            Pk_1=kalman.get_init_cov()
+            for i in range(len(measurements)):
+                xk_1,Pk_1=kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"grid_based")
+                if i>0:
+                    kalman_states=np.vstack((kalman_states,xk_1))
+                grid_x_kalman.append=kalman_states[:,0] 
+                grid_y_kalman.append=kalman_states[:,1] 
+        delays_calibrated = np.array(delays_list)
+        delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
 
     filename = args[0].split("/")[-1].split(".")[0]
 
@@ -251,10 +316,17 @@ if __name__ == "__main__":
         #    p.ax.scatter(grid_x[i],grid_y[i],color="red",marker="x")
         #    time.sleep(0.1)
         #    p.figure_map.canvas.draw()
-
-        p.ax.scatter(chan_x,chan_y,color="blue",marker="x")
+        if options.mapplot_mode in ["raw","compare"]:
+            p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2)
+        if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
+            p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2)
+        #for i in range(len(measurements)):
+        #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
+        #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
         if len(grid_x)>0:
             p.ax.scatter(grid_x,grid_y,color="red",marker="x")
+            if len (grid_x_kalman)>0:
+                p.ax.scatter(grid_x_kalman,grid_y_kalman,color="red",marker="x")
 
         if options.save:
             plt.savefig(args[0].split(".")[0] + "_map.pdf", dpi=150)
