@@ -106,8 +106,10 @@ class receiver_interface():
                     if len(self.samples) == self.samples_to_receive and self.auto_calibrate:
                         self.acquisition_state = "calibration"
                 else:
+                    #print "in receiver:" 
+                    #print "tag frequency:"+str(tags["rx_freq"])+"\nreceiver frequency:"+str(self.frequency)
                     self.error_detected = True
-                    print "Error: UHD tag shows unexpected target carrier frequency"
+                    print "Error: USRP-source tag shows unexpected target carrier frequency"
             elif tags is None:
                 if len(self.samples) < self.samples_to_receive:
                     self.samples = np.concatenate((self.samples, samples), axis=1)
@@ -126,9 +128,11 @@ class receiver_interface():
                     if len(self.samples_calibration) == self.samples_to_receive_calibration:
                         self.acquisition_state = "target"
                 else:
+                    #print "in receiver:"
+                    #print "tag frequency:"+str(tags["rx_freq"])+"\nreceiver frequency:"+str(self.frequency)
                     self.acquisition_state = "target"
                     self.error_detected = True
-                    print "Error: UHD tag shows unexpected calibration carrier frequency"
+                    print "Error: USRP-source tag shows unexpected calibration carrier frequency"
             elif tags is None:
                 if len(self.samples_calibration) < self.samples_to_receive_calibration:
                     self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)

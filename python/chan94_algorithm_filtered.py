@@ -111,20 +111,20 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
         if len(xy) > 1:
             if not xk_prio.any():
                 if np.linalg.norm(xy[0]-xk_prio) < np.linalg.norm(xy[1]-xk_prio):
-                    #print "1"
+                    print "1"
                     xy = xy[0]#changed:different solution gets chosen(closer to the center!)
                 else:
-                    #print "2"
+                    print "2"
                     xy = xy[1]
             else:
                 if np.linalg.norm(xy[0]-np.array(bbox)/2) < np.linalg.norm(xy[1]-np.array(bbox)/2):
-                    #print "1"
+                    print "1"
                     xy = xy[0]#changed:different solution gets chosen(closer to the center!)
                 else:
-                    #print "2"
+                    print "2"
                     xy = xy[1]
         else:
-            #print "3"
+            print "3"
             xy = xy[0]
         xy = (xy[0],xy[1])
       
@@ -136,5 +136,5 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
             xy = (bbox[0]/2,bbox[1]/2)
         invalid_total=True
     t_used = time.time()-t
-    #print "Chan results: ",xy," time: ", t_used
+    print "Chan results: ",xy," time: ", t_used
     return {"coordinates": xy,"t_used":t_used}

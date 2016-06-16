@@ -185,6 +185,8 @@ class ModulatorBlock(gr.hier_block2):
         timing_tag.value = pmt.to_pmt((float(seed), 0.6))
         timing_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
         # Rx freq tags:
+        #print "In source emulation (before tag)" 
+        #print freq
         rx_freq_tag = gr.tag_t()
         rx_freq_tag.offset = 0
         rx_freq_tag.key = pmt.string_to_symbol('rx_freq')
@@ -226,7 +228,8 @@ class ModulatorBlock(gr.hier_block2):
         #            ),
         #            payload_length=0,
         #    )
-
+        #print "in source emulation(after_tag)"
+        #print  pmt.to_double(rx_freq_tag.value)
         pulse_width = 4
         vector_source = blocks.vector_source_c(np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist(), False, tags=(timing_tag, rx_freq_tag, rx_rate_tag)) 
         head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 300)
@@ -275,7 +278,7 @@ def parse_options():
 if __name__ == "__main__":
     options = parse_options()
     tb = top_block(options)
-
+    
     if options.dot_graph:
         # write a dot graph of the flowgraph to file
         dot_str = tb.dot_graph()
@@ -283,6 +286,7 @@ if __name__ == "__main__":
         dot_file = open(file_str,'w')
         dot_file.write(dot_str)
         dot_file.close()
+        print "flowgraph can be found in: "+ file_str
 
     try:
         #tb.start()

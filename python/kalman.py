@@ -2,6 +2,7 @@ import numpy as np
 from numpy import dot,array,identity
 from numpy.linalg import inv
 import sys, math
+import pdb
 
 class kalman_filter():
 
@@ -10,18 +11,19 @@ class kalman_filter():
         self.delta_t=init_settings["delta_t"]
         self.noise_factor=init_settings["noise_factor"] 
         self.filter_receivers=init_settings["filter_receivers"] #integrate if necessary 
-        
         self.noise_var_x=init_settings["noise_var_x"] 
         self.noise_var_y=init_settings["noise_var_y"]
+        self.cnt_valid_locations=0
+        self.cnt_invalid_locations=0
         self.max_acceleration=init_settings["max_acceleration"]
         self.R_chan =   array( [[  1,  -0.135],
-                     [-0.135,  1]])*init_settings["measurement_noise_chan"]
+                     [-0.135,  1]])*init_settings["noise_var_x"]
         self.R_cs =    array( [[  1,  -0.14],
-                     [-0.14,  1]])*init_settings["measurement_noise_grid"]
+                     [-0.14,  1]])*init_settings["noise_var_x"]
              
         self.B =0 
         self.state_noise=(self.delta_t**2)*self.noise_factor  #if performance decreases -> back to delta_t
-        if self.model == "hellebrandt":
+        if self.model == "simple":
             self.state_size=4
             self.init_cov = array([[self.noise_var_x, 0, 0, 0],
                     [0, self.noise_var_y, 0, 0],
@@ -77,7 +79,7 @@ class kalman_filter():
         
         self.state_noise=(self.delta_t**2)*self.noise_factor
         self.Q=self.Q*self.state_noise
-        if self.model =="hellebrandt":
+        if self.model =="simple":
             self.phi = array([[1, 0, self.delta_t, 0,],
                            [0, 1, 0, self.delta_t],
                            [0, 0, 1, 0],
@@ -102,29 +104,34 @@ class kalman_filter():
     def get_a_priori_est(self,xk_1):
         return dot(self.phi,xk_1.transpose())
     def pre_filter(self,measurement,xk_1):
-        if np.sqrt((np.linalg.norm((measurement[0]-xk_1[0])/self.delta_t-xk_1[2]))**2+(np.linalg.norm((measurement[1]-xk_1[1])/self.delta_t-xk_1[3]))**2)/(2*self.delta_t)>self.max_acceleration:
+        if np.sqrt((np.linalg.norm((measurement[0]-xk_1[0])/self.delta_t-xk_1[2]))**2+(np.linalg.norm((measurement[1]-xk_1[1])/self.delta_t-xk_1[3]))**2)/(2*self.delta_t)>self.max_acceleration and self.cnt_valid_locations>5 and self.cnt_invalid_locations<5:
             measurement=xk_1[:2]+np.random.normal()
+            self.cnt_valid_locations=0
+            self.cnt_invalid_locations=self.cnt_invalid_locations+1
             print "acceleration exeeds the greatest value allowed. The Kalman-Filter prediction will be used."
+        else:
+            self.cnt_invalid_locations=0
+            self.cnt_valid_locations=self.cnt_valid_locations+1
         return measurement
-    def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm,invalid=False):
+    def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm):
     #measurement:vector,Pk_1:mxm matrix,xk_1: size m-vector, self:containing state propagation matrices, delta_t:time distance between measurements
         if algorithm == "chan":
             R=self.R_chan
-        elif algorithm == "grid_based":#replace with grid based(?)
+        elif algorithm == "grid_based":
             R=self.R_cs
         else:
             sys.exit('algorithm does not exist')
-    
+
         #a priori estimations
         #Time Update
         xk_prio, Pk_prio=self.time_update(Pk_1, xk_1)
-        #if not invalid:
+
         #Kalman Gain
         Kk=dot(dot(Pk_prio,self.M.transpose()),inv(dot(dot(self.M,Pk_prio),self.M.transpose())+R))
     
         #Measurement Update
         Pk=dot((identity(self.full_state_size)-dot(Kk,self.M)),Pk_prio)
         xk= (xk_prio+dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))).transpose()
-        #pdb.set_trace()
+
         return xk ,Pk
 

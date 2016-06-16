@@ -78,7 +78,7 @@ class probe_manager():
                     #print "value", value
                     srcid = str(pmt.deserialize_str(msg_packed[60:82]))
                     #print "srcid",srcid
-
+                    #print "in probe_manager:"
                     key_2 = str(pmt.deserialize_str(msg_packed[90:100]))
                     #print "key_2",key_2
                     value_2 = pmt.to_python(pmt.deserialize_str(msg_packed[100:109]))

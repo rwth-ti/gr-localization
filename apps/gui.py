@@ -52,6 +52,9 @@ class gui(QtGui.QMainWindow):
 
         self.calibration_average = 10
         self.location_average_length = 10
+        self.target_dynamic = 0.8
+        self.max_acc = 4
+        self.measurement_noise = 14
         self.samples_to_receive = 1000
         self.frequency = 2.4e9
         self.samp_rate = 10e6
@@ -116,17 +119,22 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
         self.rpc_manager.add_interface("set_gui_filtering_type",self.set_gui_filtering_type)
+        self.rpc_manager.add_interface("set_gui_motion_model",self.set_gui_motion_model)
         self.rpc_manager.add_interface("set_gui_map_type",self.set_gui_map_type)
         self.rpc_manager.add_interface("set_gui_map_file",self.set_gui_map_file)
         self.rpc_manager.add_interface("set_gui_coordinates_type",self.set_gui_coordinates_type)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.add_interface("set_gui_calibration_average",self.set_gui_calibration_average)
         self.rpc_manager.add_interface("set_gui_location_average_length",self.set_gui_location_average_length)
+        self.rpc_manager.add_interface("set_gui_measurement_noise",self.set_gui_measurement_noise)
+        self.rpc_manager.add_interface("set_gui_target_dynamic",self.set_gui_target_dynamic)
+        self.rpc_manager.add_interface("set_gui_max_acc",self.set_gui_max_acc)
         self.rpc_manager.add_interface("set_gui_record_results",self.set_gui_record_results)
         self.rpc_manager.add_interface("set_gui_record_samples",self.set_gui_record_samples)
         self.rpc_manager.add_interface("set_gui_filtering_types",self.set_gui_filtering_types)
         self.rpc_manager.add_interface("set_gui_acquisition_time",self.set_gui_acquisition_time)
         self.rpc_manager.add_interface("set_gui_grid_based_active",self.set_gui_grid_based_active)
+        self.rpc_manager.add_interface("set_gui_motion_models",self.set_gui_motion_models)
         self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
@@ -222,6 +230,9 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.checkBoxAutocalibrate, QtCore.SIGNAL("clicked()"), self.set_auto_calibrate)
         self.connect(self.gui.calibrationAverageSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_calibration_average)
         self.connect(self.gui.spinBoxAverageLength, QtCore.SIGNAL("valueChanged(int)"), self.set_location_average_length)
+        self.connect(self.gui.spinBoxMeasurementNoise, QtCore.SIGNAL("valueChanged(int)"), self.set_measurement_noise)
+        self.connect(self.gui.doubleSpinBoxDynamic, QtCore.SIGNAL("valueChanged(int)"), self.set_target_dynamic)
+        self.connect(self.gui.spinBoxMaxAcc, QtCore.SIGNAL("valueChanged(int)"), self.set_max_acc)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
@@ -242,6 +253,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
         self.connect(self.gui.comboBoxFilteringType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_filtering_type)
+        self.connect(self.gui.comboBoxMotionModel, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_motion_model)
         self.connect(self.gui.comboBoxMapType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_map_type)
         self.connect(self.gui.comboBoxCoordinatesType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_coordinates_type)
         self.connect(self.gui.pushButtonSetMapFile, QtCore.SIGNAL("clicked()"), self.set_map_file)
@@ -292,6 +304,18 @@ class gui(QtGui.QMainWindow):
     def set_location_average_length(self):
         self.location_average_length = self.gui.spinBoxAverageLength.value()
         self.rpc_manager.request("set_location_average_length",[self.location_average_length])
+        
+    def set_target_dynamic(self):
+        self.target_dynamic = self.gui.spinBoxDynamic.value()
+        self.rpc_manager.request("set_target_dynamic",[self.target_dynamic])
+        
+    def set_max_acc(self):
+        self.max_acc = self.gui.spinBoxMaxAcc.value()
+        self.rpc_manager.request("set_max_acc",[self.max_acc])
+        
+    def set_measurement_noise(self):
+        self.measurement_noise = self.gui.spinBoxMeasurementNoise.value()
+        self.rpc_manager.request("set_measurement_noise",[self.measurement_noise])
 
     def set_calibration(self):
         # run system multiple times to average calibration
@@ -704,6 +728,10 @@ class gui(QtGui.QMainWindow):
     def set_filtering_type(self):
         self.filtering_type = self.gui.comboBoxFilteringType.currentText()
         self.rpc_manager.request("set_filtering_type",[str(self.filtering_type)])
+        
+    def set_motion_model(self):
+        self.motion_model = self.gui.comboBoxMotionModel.currentText()
+        self.rpc_manager.request("set_motion_model",[str(self.motion_model)])
 
     def set_map_type(self):
         self.map_type = self.gui.comboBoxMapType.currentText()
@@ -754,7 +782,19 @@ class gui(QtGui.QMainWindow):
     def set_gui_location_average_length(self, location_average_length):
         self.location_average_length = location_average_length
         self.gui.spinBoxAverageLength.setValue(location_average_length)
-
+        
+    def set_gui_measurement_noise(self, measurement_noise):
+        self.measurement_noise = measurement_noise
+        self.gui.spinBoxMeasurementNoise.setValue(measurement_noise)
+        
+    def set_gui_target_dynamic(self, target_dynamic):
+        self.target_dynamic = target_dynamic
+        self.gui.doubleSpinBoxDynamic.setValue(target_dynamic)
+     
+    def set_gui_max_acc(self, max_acc):
+        self.max_acc = max_acc
+        self.gui.spinBoxMaxAcc.setValue(max_acc)    
+        
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)
 
@@ -806,6 +846,10 @@ class gui(QtGui.QMainWindow):
         for i in range(0,len(self.filtering_types)):
             if self.filtering_types[i] == filtering_type:
                 self.gui.comboBoxFilteringType.setCurrentIndex(i)
+    def set_gui_motion_model(self, motion_model):
+        for i in range(0,len(self.motion_models)):
+            if self.motion_models[i] == motion_model:
+                self.gui.comboBoxMotionModel.setCurrentIndex(i)
 
     def set_gui_map_type(self, map_type):
         if map_type == "Online":
@@ -871,6 +915,13 @@ class gui(QtGui.QMainWindow):
         for f_type in self.filtering_types:
             self.gui.comboBoxFilteringType.addItem(f_type)
         self.gui.comboBoxFilteringType.setCurrentIndex(0)
+        
+    def set_gui_motion_models(self, motion_models):
+        self.motion_models = motion_models
+        self.gui.comboBoxMotionModel.clear()
+        for motion_model in self.motion_models:
+            self.gui.comboBoxMotionModel.addItem(motion_model)
+        self.gui.comboBoxMotionModel.setCurrentIndex(0)
 
     def set_gui_acquisition_time(self, acquisition_time):
         self.acquisition_time = acquisition_time

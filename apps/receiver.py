@@ -19,7 +19,7 @@ import time, sched
 import socket
 import serial
 import calendar
-import octoclock
+#import octoclock
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 

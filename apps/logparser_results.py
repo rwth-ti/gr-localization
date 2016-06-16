@@ -317,6 +317,7 @@ if __name__ == "__main__":
         #    time.sleep(0.1)
         #    p.figure_map.canvas.draw()
         if options.mapplot_mode in ["raw","compare"]:
+            p.ax.plot(chan_x[0],chan_y[0],color="blue",marker="x",markersize=10)
             p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2)
         if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
             p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2)
@@ -324,9 +325,10 @@ if __name__ == "__main__":
         #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
         #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
         if len(grid_x)>0:
-            p.ax.scatter(grid_x,grid_y,color="red",marker="x")
-            if len (grid_x_kalman)>0:
-                p.ax.scatter(grid_x_kalman,grid_y_kalman,color="red",marker="x")
+            if options.mapplot_mode in ["raw","compare"]:
+                p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2)
+            if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
+                p.ax.plot(grid_x_kalman,grid_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2)
 
         if options.save:
             plt.savefig(args[0].split(".")[0] + "_map.pdf", dpi=150)

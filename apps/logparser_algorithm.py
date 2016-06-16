@@ -141,13 +141,15 @@ if __name__ == "__main__":
             init_kalman['algorithm']='chan'
             kalman=kalman_filter(init_kalman)
             estimated_positions["chan"]=chan94_algorithm_filtered.localize(receivers_steps[0],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
+            estimated_positions["chan"]["coordinates"]=estimated_positions["chan"]["coordinates"]#+np.array([-20,-20])
             xk_1= np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(kalman.get_state_size()-2))) #init state
             kalman_states= xk_1
             Pk_1=kalman.get_init_cov()
             for i in range(len(receivers_steps)):
                 start_time=time.time()
-                estimated_positions["chan"]=chan94_algorithm_filtered.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])),kalman.get_a_priori_est(xk_1)[:2])
-                estimated_positions["chan"]["coordinates"]=kalman.pre_filter(estimated_positions["chan"]["coordinates"],xk_1)
+                if not i==0:
+                    estimated_positions["chan"]=chan94_algorithm_filtered.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])),kalman.get_a_priori_est(xk_1)[:2])
+                    estimated_positions["chan"]["coordinates"]=kalman.pre_filter(estimated_positions["chan"]["coordinates"],xk_1)
                 xk_1,Pk_1=kalman.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),Pk_1,xk_1,"chan")
                 if i>0:
                     kalman_states=np.vstack((kalman_states,xk_1))
@@ -158,30 +160,32 @@ if __name__ == "__main__":
                 line = "[" + str(time.time()) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver)  + "]"
 
                 pprint.pprint(line,f,width=9000)
-        if options.algorithm=="grid-based" or options.algorithm=="both":        
-            init_kalman['algorithm']='grid-based'
+        if options.algorithm=="grid_based" or options.algorithm=="both":        
+            init_kalman['algorithm']='grid_based'
             kalman=kalman_filter(init_kalman)
-            estimated_positions["grid-based"]=grid_based_algorithm.localize(receivers_steps[0],10,interpolation*samples_to_receive,ref_receiver,np.round(basemap(bbox[2],bbox[3])))
-            measurement = estimated_positions["chan"]["coordinates"]
-            xk_1= np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(kalman.get_state_size()-2))) #init state
+            estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[0],np.round(basemap(bbox[2],bbox[3])),1,interpolation*samples_to_receive,ref_receiver)
+            measurement = estimated_positions["grid_based"]["coordinates"]
+            xk_1= np.hstack((np.array(list(estimated_positions["grid_based"]["coordinates"])),np.zeros(kalman.get_state_size()-2))) #init state
             kalman_states= xk_1
             Pk_1=kalman.get_init_cov()
             for i in range(len(receivers_steps)):
-                estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],10,interpolation*samples_to_receive,ref_receiver,np.round(basemap(bbox[2],bbox[3])))
-                xk_1,Pk_1=kalman.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),Pk_1,xk_1,"grid-based")
+                estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],np.round(basemap(bbox[2],bbox[3])),1,interpolation*samples_to_receive,ref_receiver)
+                estimated_positions["grid_based"]["coordinates"]=kalman.pre_filter(estimated_positions["grid_based"]["coordinates"],xk_1)
+                xk_1,Pk_1=kalman.kalman_fltr(np.array(list(estimated_positions["grid_based"]["coordinates"])),Pk_1,xk_1,"grid_based")
                 if i>0:
                     kalman_states=np.vstack((kalman_states,xk_1))
 
                 estimated_positions["grid_based"]["kalman_coordinates"]=xk_1[:2].tolist()
+                estimated_positions["grid_based"]["grid"]=0
                 line = "[" + str(time.time()) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver)  + "]"
-
                 pprint.pprint(line,f,width=9000)
     else:
         for i in range(len(receivers_steps)):
             if options.algorithm=="chan"or options.algorithm=="both":
                 estimated_positions["chan"]=chan94_algorithm.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
             elif options.algorithm=="grid_based" or options.algorithm=="both":
-                estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],10,interpolation*samples_to_receive,ref_receiver,np.round(basemap(bbox[2],bbox[3])))
+                estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],np.round(basemap(bbox[2],bbox[3])),1,interpolation*samples_to_receive,ref_receiver)
+                estimated_positions["grid_based"]["grid"]=0
             line = "[" + str(time.time()) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver)  + "]"
 
             pprint.pprint(line,f,width=9000)
