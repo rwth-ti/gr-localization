@@ -81,14 +81,14 @@ class probe_manager():
 
                     key_2 = str(pmt.deserialize_str(msg_packed[90:100]))
                     #print "key_2",key_2
-                    value_2 = pmt.to_float(pmt.deserialize_str(msg_packed[100:109]))
+                    value_2 = pmt.to_python(pmt.deserialize_str(msg_packed[100:109]))
                     #print "value_2", value_2
                     srcid_2 = str(pmt.deserialize_str(msg_packed[109:131]))
                     #print "srcid_2",srcid_2
 
                     key_3 = str(pmt.deserialize_str(msg_packed[139:149]))
                     #print "key_3",key_3
-                    value_3 = pmt.to_float(pmt.deserialize_str(msg_packed[149:158]))
+                    value_3 = pmt.to_python(pmt.deserialize_str(msg_packed[149:158]))
                     #print "value_3", value_3
                     srcid_3 = str(pmt.deserialize_str(msg_packed[158:180]))
                     #print "srcid_3",srcid_3
