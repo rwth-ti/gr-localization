@@ -23,6 +23,7 @@ from gnuradio import digital
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 import pmt
+import movements
 
 
 ###############################################################################
@@ -31,11 +32,10 @@ import pmt
 class top_block(gr.top_block):
     def __init__(self, options):
         gr.top_block.__init__(self)
-
+        self.c = 299700000
         self.options = options
-
+        self.cnt=0
         self.run_loop = False
-
         self.samp_rate = 50000000
         self.hostname = os.uname()[1]
         self.gps = "dummy"
@@ -49,7 +49,9 @@ class top_block(gr.top_block):
         self.freq = 550000000
         coordinates_string = options.coordinates.split(",")
         self.coordinates = (float(coordinates_string[0]),float(coordinates_string[1]))
-
+        tx_coordinates_string = options.tx_coordinates.split(",")
+        self.tx_coordinates = np.array([float(tx_coordinates_string[0]),float(tx_coordinates_string[1])])
+        self.movement_type=options.movement_type
         # socket addresses
         rpc_port = 6665 + options.id_rx
         rpc_adr = "tcp://*:" + str(rpc_port)
@@ -119,7 +121,7 @@ class top_block(gr.top_block):
 
         self.freq = freq
         self.freq_calibration = freq_calibration
-
+        
         auto_delay = 5 # delay simulation of auto calibration
 
         if acquisitions == 0:
@@ -129,25 +131,35 @@ class top_block(gr.top_block):
 
         times = 1
         if auto_calibrate: times = 2
-
+        
         while True:
             for i in range(0,times):
                 self.samples_to_receive = samples_to_receive
                 self.samples_to_receive_calibration = samples_to_receive_calibration
                 self.stop()
                 self.wait()
-
+                
                 self.disconnect(self.mod_block, self.zmq_probe)
 
                 # blocks
                 if i == 1:
-                    print "Sending " + str(samples_to_receive_calibration) + " samples"
+                    print "Sending " + str(samples_to_receive_calibration) + " samples for autocalibtration"
                     delay = auto_delay
                     self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive_calibration, self.freq_calibration)
                 else:
                     print "Sending " + str(samples_to_receive) + " samples"
-                    delay = self.delay
+                    if self.movement_type != "static":
+                        # calculate delay from transmitter position
+                        delay = self.get_delay_from_location(self.tx_coordinates)
+                        if self.movement_type == "linear":
+                            # update target location for next acquisition
+                            self.tx_coordinates = self.tx_coordinates + movements.linear_movement(np.array([1/np.sqrt(2),1/np.sqrt(2)]),3)
+                            print self.tx_coordinates
+                    else:
+                        delay = self.delay
+                    #print delay
                     self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq)
+                    
                 self.seed += 1
 
                 # connects
@@ -165,18 +177,16 @@ class top_block(gr.top_block):
         longitude = 6.062
         latitude = 50.7795
         return [longitude, latitude]
-
+    def get_delay_from_location(self,transmitter_coordinates):
+        
+        delay=int((np.linalg.norm(np.array(list(self.coordinates))-transmitter_coordinates)/self.c)*self.samp_rate)
+        return delay
+    
 class ModulatorBlock(gr.hier_block2):
     def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive, freq):
         gr.hier_block2.__init__(self, "ModulatorBlock",
                        gr.io_signature(0, 0, 0),
                        gr.io_signature(1, 1, gr.sizeof_gr_complex))
-
-        np.random.seed(seed=seed)
-        v = np.random.randint(0,2,samples_to_receive)
-        vector_source = blocks.vector_source_b((v), True, 1, [])
-        throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
-        noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
 
         # Timing tag: This is preserved and updated:
         timing_tag = gr.tag_t()
@@ -203,7 +213,7 @@ class ModulatorBlock(gr.hier_block2):
 
         tag_debug = blocks.tag_debug(gr.sizeof_gr_complex*1, "", "")
         tag_debug.set_display(True)
-
+    
         #if modulation == "bpsk":
         #    mod = digital.psk.psk_mod(
         #      constellation_points=2,
@@ -231,16 +241,25 @@ class ModulatorBlock(gr.hier_block2):
         #print "in source emulation(after_tag)"
         #print  pmt.to_double(rx_freq_tag.value)
         pulse_width = 4
-        vector_source = blocks.vector_source_c(np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist(), False, tags=(timing_tag, rx_freq_tag, rx_rate_tag)) 
+        np.random.seed(seed=seed)
+        
+        tx_vector = np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist()
+        # delay signal vector -> insert zeros at beginnig; nothing happens if signal has not reached the receiver:
+        tx_vector_delayed = np.hstack((np.zeros(delay),tx_vector))
+        tx_vector_delayed = tx_vector_delayed[:600]
+        vector_source = blocks.vector_source_c(tx_vector_delayed, False, tags=(timing_tag, rx_freq_tag, rx_rate_tag)) 
+        #clip first 600 samples
         head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 300)
-        skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
-
+        print "Delay is " + str(delay)
+        # skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
+        throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
+        noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
 
         # connects
         #self.connect(vector_source, mod, (add,0))
         self.connect(vector_source, (add,0))
         self.connect(noise, (add,1))
-        self.connect(add, throttle, skiphead, head, self)
+        self.connect(add, throttle, head, self)
         self.connect(add, tag_debug)
 
 ###############################################################################
@@ -269,6 +288,10 @@ def parse_options():
                       help="Generate dot-graph file from flowgraph")
     parser.add_option("", "--ssh-proxy", action="store_true", default=False,
                       help="Activate when using a ssh proxy")
+    parser.add_option("-t", "--tx_coordinates", type="string", default="0.0,0.0",
+                      help="Transmitter starting position for tracking simulations")
+    parser.add_option("", "--movement_type", type="string", default="static",
+                      help="transmitter movement behaviour (static, linear, circle or spline)")                  
     (options, args) = parser.parse_args()
     return options
 
