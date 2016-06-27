@@ -249,22 +249,22 @@ if __name__ == "__main__":
         cfg=ConfigParser.ConfigParser()
         
         cfg.read(options.config)
-        init_kalman=ConfigSectionMap(cfg,"sectionOne")
+        init_kalman = ConfigSectionMap(cfg,"sectionOne")
         #init_kalman={"delta_t":1.5,"noise_factor":0.08,"filter_receivers":False,"noise_var_x":20,"noise_var_y":20,"model":"maneuvering","measurement_noise_chan":160*0.08,"measurement_noise_grid":160*0.08}
         if chan_x :
             init_kalman['algorithm']='chan'
-            kalman=kalman_filter(init_kalman)
+            kalman = kalman_filter(init_kalman)
             measurements = np.column_stack((chan_x,chan_y))
             
-            xk_1= np.hstack((measurements[0,:],np.zeros(kalman.get_state_size()-2)))#init state
-            kalman_states= xk_1
-            Pk_1=kalman.get_init_cov()
+            xk_1 = np.hstack((measurements[0,:],np.zeros(kalman.get_state_size()-2)))#init state
+            kalman_states = xk_1
+            Pk_1 = kalman.get_init_cov()
             for i in range(len(measurements)):
-                xk_1,Pk_1=kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"chan")
-                if i>0:
-                    kalman_states=np.vstack((kalman_states,xk_1))
-                chan_x_kalman.append=kalman_states[:,0] 
-                chan_y_kalman.append=kalman_states[:,1]         
+                xk_1,Pk_1 = kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"chan")
+                if i > 0:
+                    kalman_states = np.vstack((kalman_states,xk_1))
+                chan_x_kalman.append = kalman_states[:,0] 
+                chan_y_kalman.append = kalman_states[:,1]         
         
         if grid_x:        
             init_kalman['algorithm']='grid_based'

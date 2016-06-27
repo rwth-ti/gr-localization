@@ -45,7 +45,7 @@ class fusion_center():
         self.gain = float(options.gain)
         self.gain_calibration = float(options.gain_calibration)
         self.antenna = options.antenna
-        self.auto_calibrate = not options.no_auto_calibrate
+        self.auto_calibrate = options.no_auto_calibrate
         self.acquisition_time = float(options.acquisition_time)
 
         self.receivers = {}
@@ -80,9 +80,9 @@ class fusion_center():
         self.ntp_sync = False
         self.calibrating = False
 
-        self.filtering_types = ["No averaging","Moving average","Kalman filter"]
+        self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
-        self.filtering_type = "Moving average"
+        self.filtering_type = "No filtering"
         self.motion_model = "maneuvering"
         self.map_type = "Online"
         self.map_file = ""
@@ -497,11 +497,12 @@ class fusion_center():
         self.recording_samples = False
         self.estimated_positions_history = []
         self.localizing = False
+        self.init_kalman = True
         for receiver in self.receivers.values():
             threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
 
     def set_frequency(self, frequency):
-        print("in fc f", frequency)
+        #print("in fc f", frequency)
         self.frequency = frequency
         for receiver in self.receivers.values():
             receiver.frequency = frequency
@@ -544,7 +545,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_interpolation",[interpolation])
 
     def set_frequency_calibration(self, frequency):
-        print("in fc f_cal", frequency)
+        #print("in fc f_cal", frequency)
         self.frequency_calibration = frequency
         for receiver in self.receivers.values():
             receiver.frequency_calibration = frequency
@@ -721,7 +722,7 @@ class fusion_center():
                 if not self.ref_receiver == receivers.keys()[i]:
                     receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
                     index_delay += 1
-
+        
         if self.localizing:
 
             if not self.filtering_type=="Kalman filter":
@@ -747,38 +748,41 @@ class fusion_center():
                         estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
             else:
                 if self.init_kalman:
-                    self.init_settings_kalman["model"]=self.motion_model
-                    self.init_settings_kalman["delta_t"]=self.acquisition_time
-                    self.init_settings_kalman["noise_factor"]=self.target_dynamic 
-                    self.init_settings_kalman["filter_receivers"] =False
-                    self.init_settings_kalman["noise_var_x"] =self.measurement_noise
-                    self.init_settings_kalman["noise_var_y"] =self.measurement_noise
-                    self.init_settings_kalman["max_acceleration"]=self.max_acc
-                    #print (self.init_settings_kalman)
-                    self.kalman_filter=kalman.kalman_filter(self.init_settings_kalman)
+                    self.init_settings_kalman["model"] = self.motion_model
+                    self.init_settings_kalman["delta_t"] = self.acquisition_time
+                    self.init_settings_kalman["noise_factor"] = self.target_dynamic 
+                    self.init_settings_kalman["filter_receivers"] = False
+                    self.init_settings_kalman["noise_var_x"] = self.measurement_noise
+                    self.init_settings_kalman["noise_var_y"] = self.measurement_noise
+                    self.init_settings_kalman["max_acceleration"]= self.max_acc
+                    
+                    print (self.init_settings_kalman)
+                    self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
                     if self.grid_based_active:
                         estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
-                        self.xk_1_grid= np.hstack((np.array(list(estimated_positions["grid_based"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
-                        self.Pk_1_grid= self.kalman_filter.get_init_cov()
-                        estimated_positions["grid-based"]["kalman_coordinates"]=np.array(list(estimated_positions["grid-based"]["coordinates"]))
-                    self.xk_1_chan= np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
-                    self.Pk_1_chan= self.kalman_filter.get_init_cov()
-                    estimated_positions["chan"]["kalman_coordinates"]=np.array(list(estimated_positions["chan"]["coordinates"]))
-                    self.init_kalman=False
-                else:
-                    estimated_positions["chan"]= chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan))
-                    #print (estimated_positions["chan"]["coordinates"])
-                    estimated_positions["chan"]["coordinates"]=self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
-                    self.xk_1_chan,self.Pk_1_chan=self.kalman_filter.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),self.Pk_1_chan,self.xk_1_chan,"chan")    
-                    estimated_positions["chan"]["kalman_coordinates"]=self.xk_1_chan[:2].tolist()
+                        self.xk_1_grid = np.hstack((np.array(list(estimated_positions["grid_based"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
+                        self.Pk_1_grid = self.kalman_filter.get_init_cov()
+                        estimated_positions["grid-based"]["kalman_coordinates"] = np.array(list(estimated_positions["grid-based"]["coordinates"]))
+                    self.xk_1_chan = np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
+                    self.Pk_1_chan = self.kalman_filter.get_init_cov()
+                    estimated_positions["chan"]["kalman_coordinates"] = np.array(list(estimated_positions["chan"]["coordinates"]))
                     #print (estimated_positions["chan"]["kalman_coordinates"])
+                    self.init_kalman = False
+                else:
+                    estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
+                    #print (estimated_positions["chan"]["coordinates"])
+                    estimated_positions["chan"]["coordinates"] = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
+                    self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),self.Pk_1_chan,self.xk_1_chan,"chan")    
+                    estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]
+                    #print (estimated_positions["chan"]["kalman_coordinates"])
+
                     if self.grid_based_active:
                         estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
-                        estimated_positions["grid_based"]["coordinates"]=self.kalman_filter.pre_filter(np.array(list(estimated_positions["grid_based"]["coordinates"])),self.xk_1_grid)
-                        self.xk_1_grid,self.Pk_1_grid=self.kalman_filter.kalman_fltr(estimated_positions["grid_based"]["coordinates"],self.Pk_1_grid,self.xk_1_grid,"grid_based")
-                        estimated_positions["grid_based"]["kalman_coordinates"]=self.xk_1_grid[:2].tolist()
-                        estimated_positions["grid_based"]["grid"]=0
+                        estimated_positions["grid_based"]["coordinates"] = self.kalman_filter.pre_filter(np.array(list(estimated_positions["grid_based"]["coordinates"])),self.xk_1_grid)
+                        self.xk_1_grid,self.Pk_1_grid = self.kalman_filter.kalman_fltr(estimated_positions["grid_based"]["coordinates"],self.Pk_1_grid,self.xk_1_grid,"grid_based")
+                        estimated_positions["grid_based"]["kalman_coordinates"] = self.xk_1_grid[:2]
+                        estimated_positions["grid_based"]["grid"] = 0
             if not self.run_loop:
                 self.localizing = False
             else:
@@ -797,7 +801,7 @@ class fusion_center():
         for receiver in receivers.values():
             receivers_samples.append(receiver.samples)
         self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels}
-
+        
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[self.results])
 
