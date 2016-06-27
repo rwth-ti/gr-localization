@@ -24,6 +24,7 @@ from pyproj import Proj, transform
 import math
 import socket
 from functools import partial
+from collections import deque
 sys.path.append("../python")
 import receiver_interface
 import rpc_manager as rpc_manager_local
@@ -66,9 +67,11 @@ class gui(QtGui.QMainWindow):
         self.bw_calibration = 1e6
         self.lo_offset_calibration = 0
         self.acquisition_time = 0
-
+        self.queue_tx_coordinates = deque()
+        self.queue_tx_coordinates_kalman = deque()
         self.results = {}
         self.new_results = False
+        self.trackplot_length = 10
 
         self.auto_calibrate = False
         self.receivers = {}
@@ -230,9 +233,10 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.checkBoxAutocalibrate, QtCore.SIGNAL("clicked()"), self.set_auto_calibrate)
         self.connect(self.gui.calibrationAverageSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_calibration_average)
         self.connect(self.gui.spinBoxAverageLength, QtCore.SIGNAL("valueChanged(int)"), self.set_location_average_length)
-        self.connect(self.gui.spinBoxMeasurementNoise, QtCore.SIGNAL("valueChanged(int)"), self.set_measurement_noise)
-        self.connect(self.gui.doubleSpinBoxDynamic, QtCore.SIGNAL("valueChanged(int)"), self.set_target_dynamic)
-        self.connect(self.gui.spinBoxMaxAcc, QtCore.SIGNAL("valueChanged(int)"), self.set_max_acc)
+        self.connect(self.gui.spinBoxMeasurementNoise, QtCore.SIGNAL("valueChanged(double)"), self.set_measurement_noise)
+        self.connect(self.gui.doubleSpinBoxDynamic, QtCore.SIGNAL("valueChanged(double)"), self.set_target_dynamic)
+        self.connect(self.gui.spinBoxMaxAcc, QtCore.SIGNAL("valueChanged(double)"), self.set_max_acc)
+        self.connect(self.gui.spinBoxTrackPlotLength, QtCore.SIGNAL("valueChanged(int)"), self.set_trackplot_length)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
         self.connect(self.gui.pushButtonLocalize, QtCore.SIGNAL("clicked()"), self.localize)
         self.connect(self.gui.pushButtonLocalizeContinuous, QtCore.SIGNAL("clicked()"), self.localize_loop)
@@ -270,7 +274,8 @@ class gui(QtGui.QMainWindow):
         # Grid based signals
         self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(double)"), self.set_TDOA_grid_based_resolution)
         self.connect(self.gui.spinGridNumCompSamps, QtCore.SIGNAL("valueChanged(int)"), self.set_TDOA_grid_based_num_samples)
-
+        #set the Spin Box value for track plot length in the gui. Integrated at this point, because it is not needed in fusion center.
+        self.set_gui_trackplot_length(self.trackplot_length)
         # start update timer
         self.update_timer.start(33)
         self.timer_register = threading.Thread(target = self.register_gui)
@@ -296,7 +301,12 @@ class gui(QtGui.QMainWindow):
             if hasattr(self, "zp"):
                 self.setting_calibration = True
                 self.zp.enabled = False
-
+    
+    def set_trackplot_length(self):
+        self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
+        #Directly update value
+        self.set_gui_trackplot_length(self.trackplot_length)
+    
     def set_calibration_average(self):
         self.calibration_average = self.gui.calibrationAverageSpin.value()
         self.rpc_manager.request("set_calibration_average",[self.calibration_average])
@@ -306,7 +316,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("set_location_average_length",[self.location_average_length])
         
     def set_target_dynamic(self):
-        self.target_dynamic = self.gui.spinBoxDynamic.value()
+        self.target_dynamic = self.gui.doubleSpinBoxDynamic.value()
         self.rpc_manager.request("set_target_dynamic",[self.target_dynamic])
         
     def set_max_acc(self):
@@ -519,20 +529,47 @@ class gui(QtGui.QMainWindow):
             if not self.transmitter_positions.has_key(algorithm[0]):
                 if self.filtering_type == "Moving average":
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
+                elif self.filtering_type == "Kalman filter":
+                    self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["kalman_coordinates"])
+                    #save value in queue
+                    self.queue_tx_coordinates_kalman.append(self.transmitter_positions[algorithm[0]].coordinates)
+                    self.queue_tx_coordinates.append(transmitter_position(algorithm[1]["coordinates"]))
+                    if len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
+                        self.queue_tx_coordinates_kalman.popleft()
+                    if len(self.queue_tx_coordinates) > self.trackplot_length:
+                        self.queue_tx_coordinates.popleft()
                 else:
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
             else:
                 if self.filtering_type == "Moving average":
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["average_coordinates"]
+                elif self.filtering_type == "Kalman filter":
+                    self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["kalman_coordinates"]
+                    #save value in queue
+                    self.queue_tx_coordinates_kalman.append(self.transmitter_positions[algorithm[0]].coordinates)
+                    self.queue_tx_coordinates.append(algorithm[1]["coordinates"])
+                    if len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
+                        self.queue_tx_coordinates_kalman.popleft()
+                    if len(self.queue_tx_coordinates) > self.trackplot_length:
+                        self.queue_tx_coordinates.popleft()
                 else:
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]
             estimated_position = self.transmitter_positions[algorithm[0]]
             if hasattr(estimated_position, "scatter"):
                 estimated_position.scatter.remove()
                 estimated_position.annotation.remove()
+            if hasattr(estimated_position, "track_plot"):
+                #revove plot item; procedure differs from scatter item!
+                estimated_position.track_plot.pop(0).remove()
+
             if hasattr(self, "ax"):
                 # save scattered point into receiver properties
                 estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9, zorder=20)
+                #plot target track (last 10 positions) if Kalman Filter is enabled:
+                if self.filtering_type == "Kalman filter":
+                    prev_coordinates_kalman = np.array(self.queue_tx_coordinates_kalman) 
+                    #print prev_coordinates_kalman
+                    estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=1)
                 # set annotation Rxi
                 text = (algorithm[0] + " " 
                                     + str(np.round(estimated_position.coordinates,2)))
@@ -564,6 +601,7 @@ class gui(QtGui.QMainWindow):
             if self.transmitter_positions.has_key("grid_based"):
                 estimated_position = self.transmitter_positions["grid_based"]
                 estimated_position.scatter.remove()
+                estimated_position.track_plot.remove()
                 estimated_position.annotation.remove()
                 del self.transmitter_positions["grid_based"]
             self.canvas.draw()
@@ -794,6 +832,10 @@ class gui(QtGui.QMainWindow):
     def set_gui_max_acc(self, max_acc):
         self.max_acc = max_acc
         self.gui.spinBoxMaxAcc.setValue(max_acc)    
+        
+    def set_gui_trackplot_length(self, trackplot_length):
+        self.trackplot_length = trackplot_length
+        self.gui.spinBoxTrackPlotLength.setValue(trackplot_length)
         
     def set_gui_frequency(self, frequency):
         self.gui.frequencySpin.setValue(frequency/1e6)

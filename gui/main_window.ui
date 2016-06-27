@@ -24,7 +24,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_1">
        <attribute name="title">
@@ -943,8 +943,12 @@ average</string>
                <layout class="QGridLayout" name="gridLayout_13">
                 <item row="0" column="0">
                  <layout class="QGridLayout" name="gridLayout_11">
-                  <item row="2" column="1">
-                   <widget class="QSpinBox" name="spinBoxMeasurementNoise"/>
+                  <item row="1" column="0">
+                   <widget class="QLabel" name="label_21">
+                    <property name="text">
+                     <string>Target dynamic(index)</string>
+                    </property>
+                   </widget>
                   </item>
                   <item row="1" column="1">
                    <widget class="QDoubleSpinBox" name="doubleSpinBoxDynamic">
@@ -977,15 +981,21 @@ average</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="1">
-                   <widget class="QSpinBox" name="spinBoxMaxAcc"/>
-                  </item>
-                  <item row="1" column="0">
-                   <widget class="QLabel" name="label_21">
+                  <item row="4" column="0">
+                   <widget class="QLabel" name="label_24">
                     <property name="text">
-                     <string>Target dynamic(index)</string>
+                     <string>Number of previous measurements  included in track plot</string>
                     </property>
                    </widget>
+                  </item>
+                  <item row="4" column="1">
+                   <widget class="QSpinBox" name="spinBoxTrackPlotLength"/>
+                  </item>
+                  <item row="3" column="1">
+                   <widget class="QDoubleSpinBox" name="spinBoxMaxAcc"/>
+                  </item>
+                  <item row="2" column="1">
+                   <widget class="QDoubleSpinBox" name="spinBoxMeasurementNoise"/>
                   </item>
                  </layout>
                 </item>
