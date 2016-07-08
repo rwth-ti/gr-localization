@@ -11,6 +11,7 @@ from gnuradio import eng_notation
 from gnuradio import uhd
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
+from numpy import genfromtxt
 import numpy as np
 import numpy.matlib
 import sys
@@ -51,14 +52,20 @@ class top_block(gr.top_block):
         self.coordinates = (float(coordinates_string[0]),float(coordinates_string[1]))
         tx_coordinates_string = options.tx_coordinates.split(",")
         self.tx_coordinates = np.array([float(tx_coordinates_string[0]),float(tx_coordinates_string[1])])
-        self.movement_type=options.movement_type
         # socket addresses
         rpc_port = 6665 + options.id_rx
         rpc_adr = "tcp://*:" + str(rpc_port)
         fusion_center_adr = "tcp://" + options.fusion_center + ":6665"
         probe_port = 5555 + options.id_rx
         probe_adr = "tcp://*:" + str(probe_port)
-
+        self.stp_cnt = 0
+        if options.movement_file != "EMPTY":
+            self.track_coordinates = genfromtxt(options.movement_file, delimiter=',')
+            print self.track_coordinates
+            self.tx_coordinates = self.track_coordinates[0,:]
+            self.track_coordinates = np.delete(self.track_coordinates,0,0)
+        else:
+            self.track_coordinates = np.array([])
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 300, True)
         self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive, self.freq)
@@ -148,13 +155,15 @@ class top_block(gr.top_block):
                     self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive_calibration, self.freq_calibration)
                 else:
                     print "Sending " + str(samples_to_receive) + " samples"
-                    if self.movement_type != "static":
+                    if self.delay == 0:
                         # calculate delay from transmitter position
                         delay = self.get_delay_from_location(self.tx_coordinates)
-                        if self.movement_type == "linear":
+                        if len(self.track_coordinates):
                             # update target location for next acquisition
-                            self.tx_coordinates = self.tx_coordinates + movements.linear_movement(np.array([1/np.sqrt(2),1/np.sqrt(2)]),3)
+                            self.tx_coordinates = self.track_coordinates[0,:]
+                            self.track_coordinates = np.delete(self.track_coordinates,0,0)
                             print self.tx_coordinates
+                            print self.track_coordinates
                     else:
                         delay = self.delay
                     #print delay
@@ -290,8 +299,8 @@ def parse_options():
                       help="Activate when using a ssh proxy")
     parser.add_option("-t", "--tx_coordinates", type="string", default="0.0,0.0",
                       help="Transmitter starting position for tracking simulations")
-    parser.add_option("", "--movement_type", type="string", default="static",
-                      help="transmitter movement behaviour (static, linear, circle or spline)")                  
+    parser.add_option("", "--movement_file", type="string", default="EMPTY",
+                      help="csv file with target coordinates. Generate e.g. with MATLAB")                  
     (options, args) = parser.parse_args()
     return options
 
