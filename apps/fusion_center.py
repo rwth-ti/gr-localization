@@ -93,12 +93,13 @@ class fusion_center():
         self.Pk_1_chan=np.array([])
         self.Pk_1_grid=np.array([])
         # ICT + surroundings
-        self.bbox = 6.0580,50.7775,6.0690,50.7810
+        #self.bbox = 6.0580,50.7775,6.0690,50.7810
+        self.bbox = 6.0606,50.77819,6.06481,50.77967
         # Football court
         #self.bbox = 6.06429,50.77697,6.07271,50.78033
         # ICT indoor
         #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
-        self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
+        #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
         # UPB Campus
         #self.bbox = -75.59124,6.24113,-75.58851,6.24261
         # Hack for Hofburg Vienna
@@ -486,7 +487,7 @@ class fusion_center():
             self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             if self.recording_results:
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", file=open(self.results_file,"a"))
+                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states", file=open(self.results_file,"a"))
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             self.start_receivers(acquisitions)
@@ -680,6 +681,7 @@ class fusion_center():
         times_calibration = []
 
         last_time_target = receivers.values()[0].tags["rx_time"]
+        #print(receivers.values()[0].tags)
         if self.auto_calibrate:
             last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
 
@@ -687,6 +689,7 @@ class fusion_center():
 
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
+                print (receivers.values()[i].tags)
                 for receiver in self.receivers.values():
                     receiver.reset_receiver()
                 return
@@ -700,6 +703,7 @@ class fusion_center():
         # all timestamps correct -> continue processing
 
         estimated_positions = {}
+        kalman_states = {}
 
         if self.auto_calibrate and len(receivers) > 1:
             correlation, delay, correlation_labels = self.correlate(receivers, True)
@@ -764,10 +768,12 @@ class fusion_center():
                         self.xk_1_grid = np.hstack((np.array(list(estimated_positions["grid_based"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
                         self.Pk_1_grid = self.kalman_filter.get_init_cov()
                         estimated_positions["grid-based"]["kalman_coordinates"] = np.array(list(estimated_positions["grid-based"]["coordinates"]))
+                        kalman_states["grid-based"] = self.xk_1_grid
                     self.xk_1_chan = np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
                     self.Pk_1_chan = self.kalman_filter.get_init_cov()
                     estimated_positions["chan"]["kalman_coordinates"] = np.array(list(estimated_positions["chan"]["coordinates"]))
                     #print (estimated_positions["chan"]["kalman_coordinates"])
+                    kalman_states["chan"] = self.xk_1_chan
                     self.init_kalman = False
                 else:
                     estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
@@ -783,6 +789,8 @@ class fusion_center():
                         self.xk_1_grid,self.Pk_1_grid = self.kalman_filter.kalman_fltr(estimated_positions["grid_based"]["coordinates"],self.Pk_1_grid,self.xk_1_grid,"grid_based")
                         estimated_positions["grid_based"]["kalman_coordinates"] = self.xk_1_grid[:2]
                         estimated_positions["grid_based"]["grid"] = 0
+                        kalman_states["grid_based"] = self.xk_1_grid
+                    kalman_states["chan"] = self.xk_1_chan
             if not self.run_loop:
                 self.localizing = False
             else:
@@ -848,7 +856,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) +","+ str(kalman_states)+"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
