@@ -20,7 +20,7 @@ import threading
 import time
 import socket
 from grc_gnuradio import blks2 as grc_blks2
-from gnuradio import digital
+#from gnuradio import digital
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 import pmt
