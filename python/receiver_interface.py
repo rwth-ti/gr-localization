@@ -99,7 +99,7 @@ class receiver_interface():
         if self.acquisition_state == "target":
             print "target"
             if tags is not None:
-                if tags["rx_freq"] == self.frequency:
+                if np.isclose(tags["rx_freq"], self.frequency):
                     self.samples = samples[300:]
                     self.tags = tags
                     self.first_packet = False
@@ -122,7 +122,7 @@ class receiver_interface():
         elif self.acquisition_state == "calibration":
             print "calibration"
             if tags is not None:
-                if tags["rx_freq"] == self.frequency_calibration:
+                if np.isclose(tags["rx_freq"], self.frequency_calibration):
                     self.samples_calibration = samples[300:]
                     self.tags_calibration = tags
                     if len(self.samples_calibration) == self.samples_to_receive_calibration:
