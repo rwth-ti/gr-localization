@@ -531,12 +531,13 @@ class gui(QtGui.QMainWindow):
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
                 elif self.filtering_type == "Kalman filter":
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["kalman_coordinates"])
-                    #save value in queue
+                    # save value in queue
                     self.queue_tx_coordinates_kalman.append(self.transmitter_positions[algorithm[0]].coordinates)
                     self.queue_tx_coordinates.append(transmitter_position(algorithm[1]["coordinates"]))
-                    if len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
+                    # remove more than one value in plot if track length is changed -> while instead of if
+                    while len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
                         self.queue_tx_coordinates_kalman.popleft()
-                    if len(self.queue_tx_coordinates) > self.trackplot_length:
+                    while len(self.queue_tx_coordinates) > self.trackplot_length:
                         self.queue_tx_coordinates.popleft()
                 else:
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
@@ -545,12 +546,13 @@ class gui(QtGui.QMainWindow):
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["average_coordinates"]
                 elif self.filtering_type == "Kalman filter":
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["kalman_coordinates"]
-                    #save value in queue
+                    # save value in queue
                     self.queue_tx_coordinates_kalman.append(self.transmitter_positions[algorithm[0]].coordinates)
                     self.queue_tx_coordinates.append(algorithm[1]["coordinates"])
-                    if len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
+                    # remove more than one value in plot if track length is changed -> while instead of if
+                    while len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
                         self.queue_tx_coordinates_kalman.popleft()
-                    if len(self.queue_tx_coordinates) > self.trackplot_length:
+                    while len(self.queue_tx_coordinates) > self.trackplot_length:
                         self.queue_tx_coordinates.popleft()
                 else:
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]
@@ -559,13 +561,13 @@ class gui(QtGui.QMainWindow):
                 estimated_position.scatter.remove()
                 estimated_position.annotation.remove()
             if hasattr(estimated_position, "track_plot"):
-                #revove plot item; procedure differs from scatter item!
+                # revove plot item; procedure differs from scatter item!
                 estimated_position.track_plot.pop(0).remove()
 
             if hasattr(self, "ax"):
                 # save scattered point into receiver properties
                 estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9, zorder=20)
-                #plot target track (last 10 positions) if Kalman Filter is enabled:
+                # plot target track (last 10 positions) if Kalman Filter is enabled:
                 if self.filtering_type == "Kalman filter":
                     prev_coordinates_kalman = np.array(self.queue_tx_coordinates_kalman) 
                     #print prev_coordinates_kalman
@@ -985,6 +987,12 @@ class gui(QtGui.QMainWindow):
             for key in self.receivers:
                 receiver = self.receivers[key]
                 # save scattered point into receiver properties
+                if hasattr(receiver, "scatter"):
+                    receiver.scatter.remove()
+                    receiver.annotation.remove()
+                if hasattr(receiver, "scatter_gps"):
+                    receiver.scatter_gps.remove()
+                    receiver.annotation_gps.remove()
                 receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9, zorder=20)
                 receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9, zorder=20)
                 # set annotation Rxi
@@ -992,7 +1000,10 @@ class gui(QtGui.QMainWindow):
                         + " " 
                         + str(np.round(receiver.coordinates,2)))
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
-                receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
+                text_gps = ("Rx" + str(self.receivers.keys().index(key) + 1)
+                        + " " 
+                        + str(np.round(receiver.coordinates_gps,2)))
+                receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
 
             self.canvas.draw()
             self.pending_receivers_to_plot = False
