@@ -37,9 +37,10 @@ class top_block(gr.top_block):
 
         self.run_loop = False
 
-        coordinates_string = options.coordinates.split(",")
+        coordinates_string = options.coordinates_m.split(",")
         self.coordinates = (float(coordinates_string[0]),float(coordinates_string[1]))
-
+        
+        
         # socket addresses
         rpc_port = 6665 + options.id_rx
         rpc_adr = "tcp://*:" + str(rpc_port)
@@ -183,7 +184,8 @@ class top_block(gr.top_block):
             print time_to_recv,time_now
             print "Can't start in the past!"
             return
-
+        # retune once to reconfigure receiver
+        self.retune(freq, lo_offset, gain, bw)
         while True:
             time_now = self.usrp_source.get_time_now().get_real_secs()
             if ((time_to_recv - time_now) < 3*acquisition_time/10.0):
@@ -192,7 +194,7 @@ class top_block(gr.top_block):
                     # get times from USRP
                     time_to_sample = uhd.time_spec(time_to_recv + 3 * acquisition_time/10.0)
                     # ask for samples at a specific time
-                    stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                    stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE )
                     # add 300 samples to the burst to get rid of transient
                     stream_cmd.num_samps = samples_to_receive + 300
                     stream_cmd.stream_now = False
@@ -201,15 +203,17 @@ class top_block(gr.top_block):
                     if autocalibrate:
                         time_to_calibrate = uhd.time_spec(time_to_recv + 7 * acquisition_time/10.0)
                         # ask for samples at a specific time
-                        stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                        stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)# change?
                         # add 300 samples to the burst to get rid of transient
                         stream_cmd.num_samps = samples_to_receive_calibration + 300
                         stream_cmd.stream_now = False
                         stream_cmd.time_spec = time_to_calibrate
                         self.usrp_source.issue_stream_cmd(stream_cmd)
-                    # synchronize LOs
-                    time_retune_1 = self.usrp_source.get_time_now().get_real_secs()
-                    self.retune(freq, lo_offset, gain, bw)
+                        # synchronize LOs
+                        self.retune(freq, lo_offset, gain, bw)
+                        time_retune_1 = self.usrp_source.get_time_now().get_real_secs()
+                        
+                        
                     time_now = self.usrp_source.get_time_now().get_real_secs()
                     if autocalibrate:
                         if (time_to_sample > time_now):
@@ -220,10 +224,10 @@ class top_block(gr.top_block):
                                 print "time_now < time_to_recv"
                                 self.scheduler.enter(((time_to_recv-time_now) + 4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
                             self.scheduler.run()
-                    print "Time retune 1:", time_retune_1
+                    #print "Time retune 1:", time_retune_1
                     print "Time to sample:", time_to_sample.get_real_secs()
                     if autocalibrate:
-                        #print "Time retune 2:", time_retune_2
+                        print "Time retune 2:", time_retune_2
                         print "Time to calibrate:", time_to_calibrate.get_real_secs()
                     usrp = self.usrp_source
                     print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
@@ -328,22 +332,28 @@ class top_block(gr.top_block):
         return nmea
 
     def get_gps_position(self):
-        nmea = self.get_gps_gprmc()
-        latitude = nmea.split(",")[3:5]
-        # the NMEA sentence may vary for each receiver. This code works for 
-        # the next structure in latitude DDMM.XXXXXX
-        if latitude[1] == "N":
-            latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+        if self.options.coordinates_wgs84 != "":
+            coordinates_wgs84_string = self.options.coordinates_wgs84.split(",")
+            latitude = float(coordinates_wgs84_string[0])
+            longitude = float(coordinates_wgs84_string[1]) 
         else:
-            latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
+            nmea = self.get_gps_gprmc()
+            latitude = nmea.split(",")[3:5]
+            # the NMEA sentence may vary for each receiver. This code works for 
+            # the next structure in latitude DDMM.XXXXXX
+            if latitude[1] == "N":
+                latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+            else:
+                latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
-        longitude = nmea.split(",")[5:7]
-        # the NMEA sentence may vary for each receiver. This code works for 
-        # the next structure in longitude DDDMM.XXXXXX
-        if longitude[1] == "E":
-            longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
-        else:
-            longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
+            longitude = nmea.split(",")[5:7]
+            # the NMEA sentence may vary for each receiver. This code works for 
+            # the next structure in longitude DDDMM.XXXXXX
+            if longitude[1] == "E":
+                longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+            else:
+                longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
+        # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
 
 ###############################################################################
@@ -362,7 +372,9 @@ def parse_options():
                       help="Receiver ID")
     parser.add_option("--mcr", type="float", default="0",
                       help="Master clock rate")
-    parser.add_option("-c", "--coordinates", type="string", default="0.0,0.0",
+    parser.add_option("", "--coordinates-m", type="string", default="0.0,0.0",
+                      help="Receiver coordinates in meters")
+    parser.add_option("", "--coordinates-wgs84", type="string", default="",
                       help="Receiver coordinates in meters")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")

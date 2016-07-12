@@ -48,7 +48,7 @@ class top_block(gr.top_block):
         self.samples_to_receive = 1000
         self.samples_to_receive_calibration = 1000
         self.freq = 550000000
-        coordinates_string = options.coordinates.split(",")
+        coordinates_string = options.coordinates_m.split(",")
         self.coordinates = (float(coordinates_string[0]),float(coordinates_string[1]))
         tx_coordinates_string = options.tx_coordinates.split(",")
         self.tx_coordinates = np.array([float(tx_coordinates_string[0]),float(tx_coordinates_string[1])])
@@ -162,11 +162,11 @@ class top_block(gr.top_block):
                             # update target location for next acquisition
                             self.tx_coordinates = self.track_coordinates[0,:]
                             self.track_coordinates = np.delete(self.track_coordinates,0,0)
-                            print self.tx_coordinates
-                            print self.track_coordinates
+                            #print self.tx_coordinates
+                            #print self.track_coordinates
                     else:
                         delay = self.delay
-                    #print delay
+                    print delay
                     self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq)
                     
                 self.seed += 1
@@ -183,11 +183,19 @@ class top_block(gr.top_block):
             time.sleep(acquisition_time)
 
     def get_gps_position(self):
-        longitude = 6.062
-        latitude = 50.7795
+        if self.options.coordinates_wgs84 != "":
+            coordinates_wgs84_string = self.options.coordinates_wgs84.split(",")
+            latitude = float(coordinates_wgs84_string[0])
+            longitude = float(coordinates_wgs84_string[1]) 
+        
+        else:
+            longitude = 6.062
+            latitude = 50.7795
+        # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
     def get_delay_from_location(self,transmitter_coordinates):
-        
+        print transmitter_coordinates
+        print self.coordinates
         delay=int((np.linalg.norm(np.array(list(self.coordinates))-transmitter_coordinates)/self.c)*self.samp_rate)
         return delay
     
@@ -291,7 +299,9 @@ def parse_options():
                       help="SNR")
     parser.add_option("-m", "--modulation", type="string", default="ofdm",
                       help="Modulation type (BPSK/OFDM)")
-    parser.add_option("-c", "--coordinates", type="string", default="0.0,0.0",
+    parser.add_option("", "--coordinates-m", type="string", default="0.0,0.0",
+                      help="Receiver coordinates in meters")
+    parser.add_option("", "--coordinates-wgs84", type="string", default="",
                       help="Receiver coordinates in meters")
     parser.add_option("", "--dot-graph", action="store_true", default=False,
                       help="Generate dot-graph file from flowgraph")
@@ -299,7 +309,7 @@ def parse_options():
                       help="Activate when using a ssh proxy")
     parser.add_option("-t", "--tx_coordinates", type="string", default="0.0,0.0",
                       help="Transmitter starting position for tracking simulations")
-    parser.add_option("", "--movement_file", type="string", default="EMPTY",
+    parser.add_option("", "--movement-file", type="string", default="EMPTY",
                       help="csv file with target coordinates. Generate e.g. with MATLAB")                  
     (options, args) = parser.parse_args()
     return options
