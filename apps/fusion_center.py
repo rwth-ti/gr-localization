@@ -962,7 +962,7 @@ def parse_options():
                       help="Gain in dB for calibration")
     parser.add_option("", "--no-auto-calibrate", action="store_true", default=False,
                       help="Deactivate reference calibration station")
-    parser.add_option("", "--acquisition-time", type="float", default="1.5",
+    parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
     (options, args) = parser.parse_args()
     return options

@@ -970,7 +970,7 @@ average</string>
                   <item row="2" column="0">
                    <widget class="QLabel" name="label_22">
                     <property name="text">
-                     <string>Measurement noise variance (in m)</string>
+                     <string>Measurement noise variance (in m^2)</string>
                     </property>
                    </widget>
                   </item>
@@ -989,13 +989,25 @@ average</string>
                    </widget>
                   </item>
                   <item row="4" column="1">
-                   <widget class="QSpinBox" name="spinBoxTrackPlotLength"/>
+                   <widget class="QSpinBox" name="spinBoxTrackPlotLength">
+                    <property name="maximum">
+                     <number>200</number>
+                    </property>
+                   </widget>
                   </item>
                   <item row="3" column="1">
-                   <widget class="QDoubleSpinBox" name="spinBoxMaxAcc"/>
+                   <widget class="QDoubleSpinBox" name="spinBoxMaxAcc">
+                    <property name="singleStep">
+                     <double>0.500000000000000</double>
+                    </property>
+                   </widget>
                   </item>
                   <item row="2" column="1">
-                   <widget class="QDoubleSpinBox" name="spinBoxMeasurementNoise"/>
+                   <widget class="QDoubleSpinBox" name="spinBoxMeasurementNoise">
+                    <property name="singleStep">
+                     <double>0.500000000000000</double>
+                    </property>
+                   </widget>
                   </item>
                  </layout>
                 </item>
@@ -1157,7 +1169,11 @@ average</string>
               </widget>
              </item>
              <item>
-              <widget class="QDoubleSpinBox" name="acquisitionTimeSpin"/>
+              <widget class="QDoubleSpinBox" name="acquisitionTimeSpin">
+               <property name="singleStep">
+                <double>0.100000000000000</double>
+               </property>
+              </widget>
              </item>
              <item>
               <spacer name="horizontalSpacer_4">
