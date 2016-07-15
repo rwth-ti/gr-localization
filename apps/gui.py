@@ -91,7 +91,9 @@ class gui(QtGui.QMainWindow):
         self.gui.comboBoxCoordinatesType.addItem("Projected")
 
         self.chats = ""
-
+        # for delay history plots
+        self.ymax_dh = 0
+        
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
@@ -162,7 +164,7 @@ class gui(QtGui.QMainWindow):
         self.toolbar = gui_helpers.NavigationToolbar(self.canvas, self)
 
         self.canvas.mpl_connect("button_release_event", self.set_position)
-        self.canvas.mpl_connect("button_release_event", self.calibrate)
+        self.canvas.mpl_connect("button_release_event", self.get_gps_coordinates)
 
         self.verticalLayoutMap.addWidget(self.toolbar)
         self.verticalLayoutMap.addWidget(self.canvas)
@@ -213,14 +215,29 @@ class gui(QtGui.QMainWindow):
         grid_correlation.setPen(pen)
         grid_correlation.attach(self.gui.qwtPlotCorrelation)
 
-        # Message box for calibration
-        self.calibration_mBox = QtGui.QMessageBox(self)
-        self.calibration_setButton = self.calibration_mBox.addButton("Set TX position", QtGui.QMessageBox.AcceptRole)
-        self.calibration_cancelButton = self.calibration_mBox.addButton("Cancel", QtGui.QMessageBox.RejectRole)
-        self.calibration_mBox.setWindowTitle("Calibrating system")
-        self.calibration_mBox.setText("Please wait until calibration process is complete.")
-        self.calibration_mBox.buttonClicked.connect(self.set_tx_calibration)
+        # Dialog box for calibration
+        self.calibration_dialog = QtGui.QDialog(self)
+        self.calibration_mBox = QtGui.QDialogButtonBox(self)
+        self.calibration_setButton = self.calibration_mBox.addButton("Get coordinates from map", QtGui.QDialogButtonBox.AcceptRole)
+        self.calibration_gpsInputButton = self.calibration_mBox.addButton("Set calibration", QtGui.QDialogButtonBox.AcceptRole)
+        self.calibration_cancelButton = self.calibration_mBox.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
+        self.calibration_mBox.clicked.connect(self.set_tx_calibration)
+        self.calibration_dialog.setWindowTitle("Calibrating system")
+        self.waitText = QtGui.QLabel("Please wait until calibration process is complete.")
+        layout = QtGui.QFormLayout()
+        layout.addRow(self.waitText)
+        self.latLabel = QtGui.QLabel("latitude (+=N ; -=S)")
+        self.lineEditLatitude = QtGui.QLineEdit() 
+        layout.addRow(self.latLabel,self.lineEditLatitude)
+        self.longLabel = QtGui.QLabel("longitude (+=E ; -=W)")
+        self.lineEditLongitude = QtGui.QLineEdit() 
+        layout.addRow(self.longLabel,self.lineEditLongitude)
+        layout.addRow(self.calibration_mBox)
+        #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
+        self.calibration_dialog.setLayout(layout)
+        
 
+        
         #Signals
         self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
@@ -285,8 +302,10 @@ class gui(QtGui.QMainWindow):
     def calibration_loop(self, status):
         if status:
             self.calibration_setButton.setEnabled(False)
+            self.calibration_gpsInputButton.setEnabled(False)
         else:
             self.calibration_setButton.setEnabled(True)
+            self.calibration_gpsInputButton.setEnabled(True)
 
     def calibration_status(self, status):
         if status:
@@ -295,13 +314,21 @@ class gui(QtGui.QMainWindow):
             self.gui.pushButtonSetCalibration.setStyleSheet("background-color: red")
 
     def set_tx_calibration(self, button):
+        print "set tx calibration"+button.text()
         if button.text() == "Cancel":
             self.rpc_manager.request("remove_calibration")
-        else:
+            self.calibration_dialog.reject()
+        elif button.text() == "Get coordinates from map" :
             if hasattr(self, "zp"):
                 self.setting_calibration = True
                 self.zp.enabled = False
-    
+        elif button.text() == "Set calibration" :
+            # calibrate with gps coordinates from line inputs
+            latitude = float(self.lineEditLatitude.text())
+            longitude = float(self.lineEditLongitude.text())
+            self.rpc_manager.request("calibrate",[self.basemap(longitude,latitude)])
+            self.calibration_dialog.accept()
+            
     def set_trackplot_length(self):
         self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
         #Directly update value
@@ -331,7 +358,7 @@ class gui(QtGui.QMainWindow):
         # run system multiple times to average calibration
         calibration_started = self.rpc_manager.request("calibration_loop", [self.frequency, self.lo_offset, self.samples_to_receive, self.calibration_average])
         if calibration_started:
-            self.calibration_mBox.show()
+            self.calibration_dialog.show()
 
     def init_map(self, bbox, map_type, map_file, coordinates_type):
         self.bbox = bbox
@@ -565,13 +592,18 @@ class gui(QtGui.QMainWindow):
                 estimated_position.track_plot.pop(0).remove()
 
             if hasattr(self, "ax"):
+                
                 # save scattered point into receiver properties
                 estimated_position.scatter = self.ax.scatter(estimated_position.coordinates[0], estimated_position.coordinates[1],linewidths=2,  marker='x', c='red', s=200, alpha=0.9, zorder=20)
                 # plot target track (last 10 positions) if Kalman Filter is enabled:
                 if self.filtering_type == "Kalman filter":
                     prev_coordinates_kalman = np.array(self.queue_tx_coordinates_kalman) 
-                    #print prev_coordinates_kalman
                     estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=1)
+                else:
+                    print "aaaaa"+str(self.queue_tx_coordinates)
+                    prev_coordinates = np.array(self.queue_tx_coordinates) 
+                    print "bbbb"+str(prev_coordinates)
+                    estimated_position.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=1)
                 # set annotation Rxi
                 text = (algorithm[0] + " " 
                                     + str(np.round(estimated_position.coordinates,2)))
@@ -685,9 +717,14 @@ class gui(QtGui.QMainWindow):
             self.grid.remove()
         self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.7)
 
-    def calibrate(self,mouse_event):
+    def get_gps_coordinates(self,mouse_event):
+        print "read function called"
         if self.setting_calibration:
-            self.rpc_manager.request("calibrate",[(mouse_event.xdata,mouse_event.ydata)])
+            print "if branch worked"
+            map_long, map_lat = self.basemap(mouse_event.xdata,mouse_event.ydata,inverse=True)
+            print map_long, map_lat
+            self.lineEditLongitude.setText(str(map_long))
+            self.lineEditLatitude.setText(str(map_lat))
             self.setting_calibration = False
             self.zp.enabled = True
 
@@ -1107,7 +1144,9 @@ class gui(QtGui.QMainWindow):
     def plot_delay_history(self, plot, samples, colour):
         if len(samples) > 0:
             y_max = np.max(np.abs(samples))
-            self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -y_max-5, y_max+5)
+            if y_max > self.ymax_dh:
+                self.ymax_dh = np.max(np.abs(samples))
+            self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -self.ymax_dh-5, self.ymax_dh+5)
             num_corr_samples = (len(samples) + 1)/2
             x = range(0,len(samples),1)
             y = samples
