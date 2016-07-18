@@ -294,9 +294,7 @@ if __name__ == "__main__":
                             if estimated_positions["grid_based"].has_key("kalman_coordinates"):
                                 grid_x_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][0])
                                 grid_y_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][1])
-                        print "delays"
-                        print "delays_calibration"
-                        print "delays_auto_calibration"
+                        
                         delays_list.append(delays)
                         delays_calibration_list.append(delays_calibration)
                         delays_auto_calibration_list.append(delays_auto_calibration)
@@ -358,11 +356,9 @@ if __name__ == "__main__":
                     kalman_states=np.vstack((kalman_states,xk_1))
                 grid_x_kalman.append=kalman_states[:,0] 
                 grid_y_kalman.append=kalman_states[:,1] 
-    print "delays"+str(delays_list)
-    print "delays_calibration"+str(delays_calibration_list)
-    print "delays_auto_calibration"+str(delays_auto_calibration_list)
     delays_not_calibrated=np.array([])
     delays_calibrated = np.array(delays_list)
+    # check if measurements done with calibration or not
     if any(delays_calibration_list) and any(delays_auto_calibration_list):
         delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
 
@@ -504,6 +500,7 @@ if __name__ == "__main__":
         ax_delay = figure_delay.add_subplot(111)
         ax_delay.set_ylabel(r'$\Delta\tau$[samples]')
         ax_delay.set_xlabel(r'Acquisitions')
+        # check if measurements done with calibration or not
         if delays_not_calibrated.any():
             ax_delay.plot(delays_not_calibrated)
         if delays_calibrated.any():
