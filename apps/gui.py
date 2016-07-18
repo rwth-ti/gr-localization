@@ -551,38 +551,48 @@ class gui(QtGui.QMainWindow):
             for h in self.hyperbolas["tdoa"]:
                 h.remove()
         self.hyperbolas["tdoa"] = self.plot_hyperbolas()
-
+        # check results for both algorithms from dict {<algorithm>:<all results>}
         for algorithm in transmitter_positions.items():
+            print "HEEEEEEEEEERE"
+            print algorithm
+            # exception for first value
             if not self.transmitter_positions.has_key(algorithm[0]):
+                print "HHHHHHHOOOOO"
+                # save value in queue
+                print "brackets" +str(transmitter_position(algorithm[1]["coordinates"]))
+                print "dot" +str(transmitter_position(algorithm[1]).coordinates["coordinates"])
+                self.queue_tx_coordinates.append(transmitter_position(algorithm[1]).coordinates["coordinates"])
                 if self.filtering_type == "Moving average":
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
                 elif self.filtering_type == "Kalman filter":
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["kalman_coordinates"])
-                    # save value in queue
+                    # save kalman value in queue
                     self.queue_tx_coordinates_kalman.append(self.transmitter_positions[algorithm[0]].coordinates)
-                    self.queue_tx_coordinates.append(transmitter_position(algorithm[1]["coordinates"]))
                     # remove more than one value in plot if track length is changed -> while instead of if
                     while len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
                         self.queue_tx_coordinates_kalman.popleft()
-                    while len(self.queue_tx_coordinates) > self.trackplot_length:
-                        self.queue_tx_coordinates.popleft()
                 else:
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["coordinates"])
+
+                while len(self.queue_tx_coordinates) > self.trackplot_length:
+                    self.queue_tx_coordinates.popleft()
             else:
+                print algorithm[1]
+                self.queue_tx_coordinates.append(algorithm[1]["coordinates"])
+                print "ASDFSDAF"+str(self.queue_tx_coordinates)
                 if self.filtering_type == "Moving average":
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["average_coordinates"]
                 elif self.filtering_type == "Kalman filter":
                     self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["kalman_coordinates"]
                     # save value in queue
                     self.queue_tx_coordinates_kalman.append(self.transmitter_positions[algorithm[0]].coordinates)
-                    self.queue_tx_coordinates.append(algorithm[1]["coordinates"])
                     # remove more than one value in plot if track length is changed -> while instead of if
                     while len(self.queue_tx_coordinates_kalman) > self.trackplot_length:
                         self.queue_tx_coordinates_kalman.popleft()
-                    while len(self.queue_tx_coordinates) > self.trackplot_length:
-                        self.queue_tx_coordinates.popleft()
                 else:
-                    self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]
+                    self.transmitter_positions[algorithm[0]].coordinates = algorithm[1]["coordinates"]            
+                while len(self.queue_tx_coordinates) > self.trackplot_length:
+                    self.queue_tx_coordinates.popleft()
             estimated_position = self.transmitter_positions[algorithm[0]]
             if hasattr(estimated_position, "scatter"):
                 estimated_position.scatter.remove()
@@ -598,12 +608,12 @@ class gui(QtGui.QMainWindow):
                 # plot target track (last 10 positions) if Kalman Filter is enabled:
                 if self.filtering_type == "Kalman filter":
                     prev_coordinates_kalman = np.array(self.queue_tx_coordinates_kalman) 
-                    estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=1)
+                    estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
                 else:
                     print "aaaaa"+str(self.queue_tx_coordinates)
                     prev_coordinates = np.array(self.queue_tx_coordinates) 
                     print "bbbb"+str(prev_coordinates)
-                    estimated_position.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=1)
+                    estimated_position.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
                 # set annotation Rxi
                 text = (algorithm[0] + " " 
                                     + str(np.round(estimated_position.coordinates,2)))
@@ -662,7 +672,7 @@ class gui(QtGui.QMainWindow):
                 hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx)
 
             if len(hyperbolas) < i:
-                h = self.ax.scatter(hyperbola[0],hyperbola[1],c=c,zorder=10,edgecolors='none')
+                h = self.ax.scatter(hyperbola[0],hyperbola[1],c=c,s=10,zorder=10,edgecolors='none')
                 hyperbolas.append(h)
             else:
                 hyperbolas[i-1] = self.ax.scatter(hyperbola[0],hyperbola[1],c=c,zorder=10,edgecolors='none')
