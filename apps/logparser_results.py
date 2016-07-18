@@ -4,7 +4,7 @@ from optparse import OptionParser
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy import array
-import sys
+import sys, warnings
 sys.path.append("../python")
 #import gui_helpers
 from pyproj import Proj, transform
@@ -127,7 +127,75 @@ class parser():
 
         f.write("\n\\end{axis}\n\\end{tikzpicture}%\n\\end{figure}\n\\end{document}")
         f.close()
+        
+def proj_basemap(bbox):
+# for coordinate transformation
+    inProj = Proj(init='epsg:4326')
+    outProj = Proj(init='epsg:3857')
+    x0, y0 = transform(inProj,outProj,bbox[0],bbox[1])
+    x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
+    x = x1-x0
+    y = y1-y0
+    scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
 
+    r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+
+    if r.status_code == 200:
+        img = Image.open(StringIO(r.content))
+    lon = bbox[0]
+    lat = bbox[1]
+    if lat>=72:
+        lat_0 = 72
+        if 0<=lon and lon<= 9:
+            lon_0 = 0
+        elif 9<=lon and lon<= 21:
+            lon_0 = 9
+        elif 21<=lon and lon<= 33:
+            lon_0 = 21
+        elif 33<=lon and lon<= 42:
+            lon_0 = 33
+        else:
+            lon_0 = int(lon/6)*6
+
+    elif 56<=lat and lat<= 64:
+        lat_0 = 56
+        if 3<=lon and lon<=12:
+            lon_0 = 3
+        else:
+            lon_0 = int(lon/6)*6
+
+    else:
+        lat_0 = int(lat/8)*8
+        lon_0 = int(lon/6)*6
+
+    basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
+                  urcrnrlon=bbox[2], urcrnrlat=bbox[3],
+                  projection='tmerc', lon_0=lon_0, lat_0=lat_0)    
+    return basemap
+               
+def gngga_reader(message):
+    """ extract information from $GNGGA NMEA mesaage"""
+    values = message.strip().split(",")[1:] # ommit the message type prefix and space, if existing; seperate values
+    timing_info = values[0]
+    #convert timing info into seconds (see ../GNGGAINFO.txt) 
+    time_seconds = 60*(60*float(timing_info[:2])+float(timing_info[2:4]))+float(timing_info[4:])
+    latitude = float(values[1][:2]) + float(values[1][2:])/60
+    if values[2] != "N":
+         latitude = -latitude
+    longitude = float(values[3][:3]) + float(values[3][3:])/60 
+    if values[4] != "E":
+         longitude = -longitude
+    fix_quality_lvl = int(values[5])
+    fix_quality  = ""
+    if fix_quality_lvl == 1:
+        fix_quality = "fix"
+    elif fix_quality_lvl == 4:
+        fix_quality = "kinematic"
+    elif fix_quality_lvl == 5:
+        fix_quality = "float"
+    return latitude, longitude, timing_info, fix_quality
+    
+     
 ###############################################################################
 # Options Parser
 ###############################################################################
@@ -141,8 +209,10 @@ def parse_options():
                       help="Do posterior Kalman filtering. Will overwrite real time filtered values.")
     parser.add_option("-c", "--config", type="str", default="./cfg_kalman_parser.cfg",
                       help="Configuration File for Kalman Filter")
-    parser.add_option("", "--mapplot_mode", type="str", default="compare",
+    parser.add_option("", "--mapplot-mode", type="str", default="compare",
                       help="Points that should be plotted on the map.\ Possible options:\nfinal: just plot filtered Locations.\nraw:just Plot algorithm results without filtering. \ncompare: plot raw and filtered locations.")
+    parser.add_option("", "--ground-truth-log", type="str", default="",
+                      help="log file (.ubx) from neo-m8p rtk-gps as ground truth reference. Will be included in map plot if given")
     parser.add_option("", "--histogram-delays", action="store_true", default=False,
                       help="Activate histogram plot")
     parser.add_option("", "--histogram-location", action="store_true", default=False,
@@ -152,7 +222,7 @@ def parse_options():
     parser.add_option("-s", "--save", action="store_true", default=False,
                       help="Save plots to files")
     parser.add_option("", "--delay-threshold", type="int", default="0",
-                                  help="Threshold to filter TDOAs")
+                      help="Threshold to filter TDOAs")
     (options, args) = parser.parse_args()
     if len(args)<1:   # if filename is not given
         parser.error('Filename not given')
@@ -180,6 +250,8 @@ if __name__ == "__main__":
     grid_y = []
     grid_x_kalman=[]
     grid_y_kalman=[]
+    gt_x_list = []
+    gt_y_list = []
     delays_list=[]
     delays_calibration_list = []
     delays_auto_calibration_list = []
@@ -222,6 +294,9 @@ if __name__ == "__main__":
                             if estimated_positions["grid_based"].has_key("kalman_coordinates"):
                                 grid_x_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][0])
                                 grid_y_kalman.append(estimated_positions["grid_based"]["kalman_coordinates"][1])
+                        print "delays"
+                        print "delays_calibration"
+                        print "delays_auto_calibration"
                         delays_list.append(delays)
                         delays_calibration_list.append(delays_calibration)
                         delays_auto_calibration_list.append(delays_auto_calibration)
@@ -244,6 +319,10 @@ if __name__ == "__main__":
     
     f.close()
     
+    
+        
+        
+        
     if options.redo_kalman: 
         #Kalman filtering the returned data
         cfg=ConfigParser.ConfigParser()
@@ -279,7 +358,12 @@ if __name__ == "__main__":
                     kalman_states=np.vstack((kalman_states,xk_1))
                 grid_x_kalman.append=kalman_states[:,0] 
                 grid_y_kalman.append=kalman_states[:,1] 
-        delays_calibrated = np.array(delays_list)
+    print "delays"+str(delays_list)
+    print "delays_calibration"+str(delays_calibration_list)
+    print "delays_auto_calibration"+str(delays_auto_calibration_list)
+    delays_not_calibrated=np.array([])
+    delays_calibrated = np.array(delays_list)
+    if any(delays_calibration_list) and any(delays_auto_calibration_list):
         delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
 
     filename = args[0].split("/")[-1].split(".")[0]
@@ -299,6 +383,22 @@ if __name__ == "__main__":
     plt.rcParams.update(params) 
 
     p = parser(bbox,filename,options)
+    basemap = proj_basemap(bbox)
+    if options.ground_truth_log != "":
+        #try:
+        fg = open(options.ground_truth_log)
+        for line in fg.readlines():
+            message_type = line.split(",")[0].strip()
+            if message_type != "$GNGGA":
+                continue
+            else:
+                gt_lat, gt_long, gt_time, gt_fix= gngga_reader(line)
+                gt_x, gt_y = basemap(gt_long,gt_lat)
+                gt_x_list.append(gt_x)
+                gt_y_list.append(gt_y)
+     
+        #except:
+        #    warnings.warn("ground-truth-log not found")
 
     if options.map:
         i = 1
@@ -329,6 +429,9 @@ if __name__ == "__main__":
                 p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2)
             if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
                 p.ax.plot(grid_x_kalman,grid_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2)
+        if len(gt_x_list)>0:
+
+            p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5)
 
         if options.save:
             plt.savefig(args[0].split(".")[0] + "_map.pdf", dpi=150)
@@ -401,9 +504,10 @@ if __name__ == "__main__":
         ax_delay = figure_delay.add_subplot(111)
         ax_delay.set_ylabel(r'$\Delta\tau$[samples]')
         ax_delay.set_xlabel(r'Acquisitions')
-
-        ax_delay.plot(delays_calibrated)
-        ax_delay.plot(delays_not_calibrated)
+        if delays_not_calibrated.any():
+            ax_delay.plot(delays_not_calibrated)
+        if delays_calibrated.any():
+            ax_delay.plot(delays_calibrated)
         if options.save:
             p.make_tikz_plot_delays(delays_calibrated, delays_not_calibrated, args[0])
 
