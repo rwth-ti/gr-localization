@@ -92,7 +92,7 @@ class gui(QtGui.QMainWindow):
 
         self.chats = ""
         # for delay history plots
-        self.ymax_dh = 0
+        self.ymax_dh = 30
         
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
@@ -1122,6 +1122,7 @@ class gui(QtGui.QMainWindow):
 
     def stop_loop(self):
         self.rpc_manager.request("stop_loop")
+        ymax_dh=30
 
     def reset_receivers(self):
         self.rpc_manager.request("reset_receivers")

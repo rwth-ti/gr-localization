@@ -237,7 +237,8 @@ class top_block(gr.top_block):
                     time_to_recv = time_to_recv + acquisition_time
                 except RuntimeError:
                     print "Can't start, flowgraph already running!"
-            time.sleep(acquisition_time/10.0)
+            if autocalibrate:
+                time.sleep(acquisition_time/10.0)
 
     def retune(self, freq, lo_offset, gain, bw):
         # synchronize LOs

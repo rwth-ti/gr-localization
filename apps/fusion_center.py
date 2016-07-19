@@ -92,6 +92,13 @@ class fusion_center():
         self.xk_1_grid=np.array([])
         self.Pk_1_chan=np.array([])
         self.Pk_1_grid=np.array([])
+        self.init_settings_kalman["model"] = self.motion_model
+        self.init_settings_kalman["delta_t"] = self.acquisition_time
+        self.init_settings_kalman["noise_factor"] = self.target_dynamic 
+        self.init_settings_kalman["filter_receivers"] = False
+        self.init_settings_kalman["noise_var_x"] = self.measurement_noise
+        self.init_settings_kalman["noise_var_y"] = self.measurement_noise
+        self.init_settings_kalman["max_acceleration"]= self.max_acc
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
         self.bbox = 6.0606,50.77819,6.06481,50.77967
@@ -461,12 +468,20 @@ class fusion_center():
         self.delay_history = []
         self.estimated_positions_history = []
         self.recording_results = self.record_results
+        if self.filtering_type == "Kalman filter" :
+            self.init_settings_kalman["model"] = self.motion_model
+            self.init_settings_kalman["delta_t"] = self.acquisition_time
+            self.init_settings_kalman["noise_factor"] = self.target_dynamic 
+            self.init_settings_kalman["filter_receivers"] = False
+            self.init_settings_kalman["noise_var_x"] = self.measurement_noise
+            self.init_settings_kalman["noise_var_y"] = self.measurement_noise
+            self.init_settings_kalman["max_acceleration"]= self.max_acc
         self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         self.recording_samples = self.record_samples
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         if self.recording_results:
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states,init_kalman", file=open(self.results_file,"a"))
+            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         self.start_receivers(acquisitions)
@@ -487,7 +502,7 @@ class fusion_center():
             self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             if self.recording_results:
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states,init_kalman", file=open(self.results_file,"a"))
+                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             self.start_receivers(acquisitions)
@@ -752,6 +767,7 @@ class fusion_center():
                         estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
             else:
                 if self.init_kalman:
+                    """
                     self.init_settings_kalman["model"] = self.motion_model
                     self.init_settings_kalman["delta_t"] = self.acquisition_time
                     self.init_settings_kalman["noise_factor"] = self.target_dynamic 
@@ -759,7 +775,8 @@ class fusion_center():
                     self.init_settings_kalman["noise_var_x"] = self.measurement_noise
                     self.init_settings_kalman["noise_var_y"] = self.measurement_noise
                     self.init_settings_kalman["max_acceleration"]= self.max_acc
-                    
+                    ommit
+                    """
                     print (self.init_settings_kalman)
                     self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
@@ -856,7 +873,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) +","+ str(kalman_states)+","+str(init_kalman)+"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) +","+ str(kalman_states)+","+str(self.init_settings_kalman)+"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
