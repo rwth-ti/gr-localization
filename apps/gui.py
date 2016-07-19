@@ -1081,8 +1081,15 @@ class gui(QtGui.QMainWindow):
                 self.gui.qwtPlotDelayHistory.clear()
                 if len(self.results["delay_history"]) > 0:
                     self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
+                    print "delay hist "+str(self.results["delay_history"][0][-1])
+                    delay_history_max = self.results["delay_history"][0][-1]
+                    delay_history_min = self.results["delay_history"][0][-1]
                     if len(self.results["delay_history"]) > 1:
                         self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
+                        delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][1][-1]) )
+                        delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][1][-1]) )
+                    self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
+                        
             if len(self.results["receivers"]) > 0:
                 self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
             if len(self.results["receivers"]) > 1:
@@ -1117,12 +1124,13 @@ class gui(QtGui.QMainWindow):
     def start_correlation(self):
         self.rpc_manager.request("start_correlation", [self.frequency, self.lo_offset, self.samples_to_receive])
 
+
     def start_correlation_loop(self):
         self.rpc_manager.request("start_correlation_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def stop_loop(self):
         self.rpc_manager.request("stop_loop")
-        ymax_dh=30
+        
 
     def reset_receivers(self):
         self.rpc_manager.request("reset_receivers")
@@ -1148,10 +1156,6 @@ class gui(QtGui.QMainWindow):
 
     def plot_delay_history(self, plot, samples, colour):
         if len(samples) > 0:
-            y_max = np.max(np.abs(samples))
-            if y_max > self.ymax_dh:
-                self.ymax_dh = np.max(np.abs(samples))
-            self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -self.ymax_dh-5, self.ymax_dh+5)
             num_corr_samples = (len(samples) + 1)/2
             x = range(0,len(samples),1)
             y = samples
