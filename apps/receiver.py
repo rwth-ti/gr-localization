@@ -186,6 +186,7 @@ class top_block(gr.top_block):
             return
         # retune once to reconfigure receiver
         self.retune(freq, lo_offset, gain, bw)
+        time_to_sample_last = 0
         while True:
             time_now = self.usrp_source.get_time_now().get_real_secs()
             if ((time_to_recv - time_now) < 3*acquisition_time/10.0):
@@ -193,13 +194,15 @@ class top_block(gr.top_block):
                 try:
                     # get times from USRP
                     time_to_sample = uhd.time_spec(time_to_recv + 3 * acquisition_time/10.0)
-                    # ask for samples at a specific time
-                    stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE )
-                    # add 300 samples to the burst to get rid of transient
-                    stream_cmd.num_samps = samples_to_receive + 300
-                    stream_cmd.stream_now = False
-                    stream_cmd.time_spec = time_to_sample
-                    self.usrp_source.issue_stream_cmd(stream_cmd)
+                    if not time_to_sample == time_to_sample_last:
+                        # ask for samples at a specific time
+                        stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE )
+                        # add 300 samples to the burst to get rid of transient
+                        stream_cmd.num_samps = samples_to_receive + 300
+                        stream_cmd.stream_now = False
+                        stream_cmd.time_spec = time_to_sample
+                        self.usrp_source.issue_stream_cmd(stream_cmd)
+                    time_to_sample_last = time_to_sample
                     if autocalibrate:
                         time_to_calibrate = uhd.time_spec(time_to_recv + 7 * acquisition_time/10.0)
                         # ask for samples at a specific time
@@ -212,10 +215,7 @@ class top_block(gr.top_block):
                         # synchronize LOs
                         self.retune(freq, lo_offset, gain, bw)
                         time_retune_1 = self.usrp_source.get_time_now().get_real_secs()
-                        
-                        
-                    time_now = self.usrp_source.get_time_now().get_real_secs()
-                    if autocalibrate:
+                        time_now = self.usrp_source.get_time_now().get_real_secs()                    
                         if (time_to_sample > time_now):
                             if (time_now > time_to_recv):
                                 print "time_now > time_to_recv"
@@ -227,7 +227,6 @@ class top_block(gr.top_block):
                     #print "Time retune 1:", time_retune_1
                     print "Time to sample:", time_to_sample.get_real_secs()
                     if autocalibrate:
-                        print "Time retune 2:", time_retune_2
                         print "Time to calibrate:", time_to_calibrate.get_real_secs()
                     usrp = self.usrp_source
                     print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
@@ -237,8 +236,7 @@ class top_block(gr.top_block):
                     time_to_recv = time_to_recv + acquisition_time
                 except RuntimeError:
                     print "Can't start, flowgraph already running!"
-            if autocalibrate:
-                time.sleep(acquisition_time/10.0)
+            time.sleep(acquisition_time/10.0)
 
     def retune(self, freq, lo_offset, gain, bw):
         # synchronize LOs
