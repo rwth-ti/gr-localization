@@ -2,6 +2,7 @@
 
 from optparse import OptionParser
 import matplotlib.pyplot as plt
+from matplotlib import patches
 import numpy as np
 from numpy import array
 import sys, warnings
@@ -10,6 +11,8 @@ sys.path.append("../python")
 from pyproj import Proj, transform
 from PIL import Image
 import math
+import datetime
+import calendar
 import requests
 from StringIO import StringIO
 from mpl_toolkits.basemap import Basemap
@@ -193,9 +196,34 @@ def gngga_reader(message):
         fix_quality = "kinematic"
     elif fix_quality_lvl == 5:
         fix_quality = "float"
-    return latitude, longitude, timing_info, fix_quality
+    return latitude, longitude, time_seconds, fix_quality
+
+
+def rmc_to_epoch_time(message):
+    #print message
+    values = message.strip().split(",")[1:]
+    date = values[8]
+    #print date
+    # years 20xx
+    day  =  int(date[:2])
+    month = int(date[2:4])
+    year = 2000+int(date[4:6])
     
-     
+    time = values[0]
+    #print time
+    hours = int(time[:2])
+    minutes = int(time[2:4])
+    seconds = int(time[4:6])
+    
+    dt = datetime.datetime(year, month, day, hours, minutes, seconds)
+    #print dt
+    # add milisecionds
+    ms = float(time[6:])
+    utime = calendar.timegm(dt.timetuple())
+    #print utime 
+    #print ms
+    return utime + ms 
+
 ###############################################################################
 # Options Parser
 ###############################################################################
@@ -250,14 +278,19 @@ if __name__ == "__main__":
     grid_y = []
     grid_x_kalman=[]
     grid_y_kalman=[]
+    t_list = []
     gt_x_list = []
     gt_y_list = []
+    gt_t_list = []
     delays_list=[]
     delays_calibration_list = []
     delays_auto_calibration_list = []
+    handles = []
+    labels = []
     for line in f:
         acquisition = eval(eval(line))
         timestamp = acquisition[0]
+        t_list.append(timestamp)
         delays = acquisition[1]
         delays_calibration = acquisition[2]
         delays_auto_calibration = acquisition[3]
@@ -333,15 +366,17 @@ if __name__ == "__main__":
             kalman = kalman_filter(init_kalman)
             measurements = np.column_stack((chan_x,chan_y))
             
-            xk_1 = np.hstack((measurements[0,:],np.zeros(kalman.get_state_size()-2)))#init state
+            xk_1 = np.array(np.hstack((measurements[0,:],np.zeros(kalman.get_state_size()-2))))#init state
+            
             kalman_states = xk_1
             Pk_1 = kalman.get_init_cov()
             for i in range(len(measurements)):
                 xk_1,Pk_1 = kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"chan")
                 if i > 0:
                     kalman_states = np.vstack((kalman_states,xk_1))
-                chan_x_kalman.append = kalman_states[:,0] 
-                chan_y_kalman.append = kalman_states[:,1]         
+                print xk_1
+                chan_x_kalman.append(xk_1[0] )
+                chan_y_kalman.append(xk_1[1] )       
         
         if grid_x:        
             init_kalman['algorithm']='grid_based'
@@ -354,8 +389,8 @@ if __name__ == "__main__":
                 xk_1,Pk_1=kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"grid_based")
                 if i>0:
                     kalman_states=np.vstack((kalman_states,xk_1))
-                grid_x_kalman.append=kalman_states[:,0] 
-                grid_y_kalman.append=kalman_states[:,1] 
+                grid_x_kalman.append(xk_1[:,0] )
+                grid_y_kalman.append(xk_1[:,1] )  
     delays_not_calibrated=np.array([])
     delays_calibrated = np.array(delays_list)
     # check if measurements done with calibration or not
@@ -385,14 +420,32 @@ if __name__ == "__main__":
         fg = open(options.ground_truth_log)
         for line in fg.readlines():
             message_type = line.split(",")[0].strip()
-            if message_type != "$GNGGA":
-                continue
-            else:
+            if message_type == "$GNGGA":
                 gt_lat, gt_long, gt_time, gt_fix= gngga_reader(line)
                 gt_x, gt_y = basemap(gt_long,gt_lat)
                 gt_x_list.append(gt_x)
                 gt_y_list.append(gt_y)
-     
+            elif message_type == "$GNRMC":
+                timestamp = rmc_to_epoch_time(line)
+                gt_t_list.append(timestamp)
+        t_list=np.array(t_list)
+        gt_t_list=np.array(gt_t_list)
+        # determine start and end time of overlapping timestamp vectors
+        start_time = max(t_list[0],gt_t_list[0])
+        end_time = min(t_list[-1],gt_t_list[-1])
+        # find indices
+        time_aligned_idx = np.where(np.logical_and(t_list>start_time, t_list<end_time))
+        gt_time_aligned_idx = np.where(np.logical_and(gt_t_list>start_time, gt_t_list<end_time))
+        # cut vectors (timestamps and locations)
+        chan_x = np.array(chan_x)[time_aligned_idx]
+        chan_y = np.array(chan_y)[time_aligned_idx]
+        gt_x_list = np.array(gt_x_list)[gt_time_aligned_idx]
+        gt_y_list = np.array(gt_y_list)[gt_time_aligned_idx]
+        print
+        chan_x_kalman = np.array(chan_x_kalman)[time_aligned_idx]
+        chan_y_kalman = np.array(chan_y_kalman)[time_aligned_idx]
+                
+                 
         #except:
         #    warnings.warn("ground-truth-log not found")
 
@@ -414,20 +467,35 @@ if __name__ == "__main__":
         #    p.figure_map.canvas.draw()
         if options.mapplot_mode in ["raw","compare"]:
             p.ax.plot(chan_x[0],chan_y[0],color="blue",marker="x",markersize=10)
-            p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2)
+            # , for assigning the plots as line objects and not as tuples
+            chan_plot = p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2,label = 'chan results')[0]
+            handles.append(chan_plot)
+            labels.append(chan_plot.get_label())
         if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
-            p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2)
+            # , for assigning the plots as line objects and not as tuples
+            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2,label = 'chan results after filtering')[0]
         #for i in range(len(measurements)):
         #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
         #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
+            handles.append(chan_kalman_plot)
+            labels.append(chan_kalman_plot.get_label())
         if len(grid_x)>0:
             if options.mapplot_mode in ["raw","compare"]:
-                p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2)
+                # , for assigning the plots as line objects and not as tuples
+                grid_plot=p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2,label='grid based results')[0]
+                handles.append(grid_plot)
+                labels.append(grid_plot.get_label())
             if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
-                p.ax.plot(grid_x_kalman,grid_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2)
+                # , for assigning the plots as line objects and not as tuples
+                grid_kalman_plot, = p.ax.plot(grid_x_kalman,grid_y_kalman,color="yellow",marker="x",linestyle="-",linewidth=0.2,label='grid based results after filtering')[0]
+                handles.append(grid_kalman_plot)
+                labels.append(grid_kalman_plot.get_label())
         if len(gt_x_list)>0:
-
-            p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5)
+            # , for assigning the plots as line objects and not as tuples
+            ground_truth_plot=p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5, label='ground truth')[0]
+            handles.append(ground_truth_plot)
+            labels.append(ground_truth_plot.get_label())
+        p.ax.legend(handles,labels)
 
         if options.save:
             plt.savefig(args[0].split(".")[0] + "_map.pdf", dpi=150)
