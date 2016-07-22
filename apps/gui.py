@@ -496,8 +496,9 @@ class gui(QtGui.QMainWindow):
                     self.bbox = bbox
                     self.init_map(bbox, map_type, map_file, coordinates_type)
                     first = False
+                    print "Registerd to fusion center at "+str(self.ip_addr)
             except:
-                print "Error: fusion center not reachable"
+                print "Warning: fusion center not reachable, retrying"
             time.sleep(10)
 
     def sync_position(self, serial, coordinates):
@@ -722,11 +723,8 @@ class gui(QtGui.QMainWindow):
         self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.7)
 
     def get_gps_coordinates(self,mouse_event):
-        print "read function called"
         if self.setting_calibration:
-            print "if branch worked"
             map_long, map_lat = self.basemap(mouse_event.xdata,mouse_event.ydata,inverse=True)
-            print map_long, map_lat
             self.lineEditLongitude.setText(str(map_long))
             self.lineEditLatitude.setText(str(map_lat))
             self.setting_calibration = False

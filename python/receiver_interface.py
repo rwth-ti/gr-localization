@@ -36,7 +36,6 @@ class receiver_interface():
         self.lo_offset_calibration = 0
         self.bw_calibration = 0
         self.acquisition_state = "target"
-
         self.selected_position = "manual"
         self.gps = ""
         self.coordinates = [0.0, 0.0]

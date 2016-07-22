@@ -431,7 +431,7 @@ class fusion_center():
             receiver.samples_to_receive_calibration = self.samples_to_receive_calibration
             receiver.gps = gps
             receiver.auto_calibrate = self.auto_calibrate
-            self.probe_manager.add_socket(receiver.probe_address, 'complex64', receiver.receive_samples)
+            self.probe_manager.add_socket(serial, receiver.probe_address, 'complex64', receiver.receive_samples)
             for gui in self.guis.values():
                 # request registration in each gui
                 gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna, receiver.gain_calibration])
@@ -441,7 +441,8 @@ class fusion_center():
             print(serial, "registered")
 
     def start_receivers(self, acquisitions=0):
-        time_to_receive = time.time() + 2
+        # reception 1 second in the future at full second
+        time_to_receive = np.ceil(time.time()) + 1
         for receiver in self.receivers.values():
             threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, acquisitions)).start()
 
@@ -451,9 +452,10 @@ class fusion_center():
             receiver.samples_calibration = []
             receiver.first_packet = True
             receiver.reception_complete = False
+            self.init_kalman = True
             receiver.set_run_loop(self.run_loop)
             if self.ntp_sync:
-                receiver.request_samples(str(time_to_receive), acquisitions, self.acquisition_time)
+                receiver.request_samples(time_to_receive, acquisitions, self.acquisition_time)
             else:
                 receiver.request_samples(None, acquisitions, self.acquisition_time)
 
@@ -513,7 +515,7 @@ class fusion_center():
         self.recording_samples = False
         self.estimated_positions_history = []
         self.localizing = False
-        self.init_kalman = True
+        
         for receiver in self.receivers.values():
             threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
 
@@ -704,7 +706,8 @@ class fusion_center():
 
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
-                print (receivers.values()[i].tags)
+                for i in range(0,len(receivers)):
+                    print (i,receivers.values()[i].serial,receivers.values()[i].tags)
                 for receiver in self.receivers.values():
                     receiver.reset_receiver()
                 return
@@ -714,7 +717,8 @@ class fusion_center():
                     for receiver in self.receivers.values():
                         receiver.reset_receiver()
                     return
-
+            
+            
         # all timestamps correct -> continue processing
 
         estimated_positions = {}
@@ -897,22 +901,26 @@ class fusion_center():
 
     def main_loop(self):
         while True:
-            time.sleep(0.01)
-            if all(self.receivers[key].reception_complete for key in self.receivers) and len(self.receivers) > 0:
-                receivers = copy.deepcopy(self.receivers)
-                threading.Thread(target = self.process_results, args = (receivers,self.delay_auto_calibration,)).start()
-                for receiver in self.receivers.values():
-                    receiver.samples = []
-                    receiver.samples_calibration = []
-                    receiver.first_packet = True
-                    receiver.reception_complete = False
-            elif any(self.receivers[key].error_detected for key in self.receivers):
-                for receiver in self.receivers.values():
-                    receiver.reset_receiver()
-            else:
-                self.probe_manager_lock.acquire()
-                self.probe_manager.watcher()
-                self.probe_manager_lock.release()
+            time.sleep(self.acquisition_time/4)
+            if len(self.receivers) > 0:
+                if all(self.receivers[key].reception_complete for key in self.receivers):
+                    receivers = copy.deepcopy(self.receivers) # get rid off
+                    threading.Thread(target = self.process_results, args = (receivers,self.delay_auto_calibration,)).start()
+                    for receiver in self.receivers.values():
+                        receiver.samples = []
+                        receiver.samples_calibration = []
+                        receiver.first_packet = True
+                        receiver.reception_complete = False
+                elif any(self.receivers[key].error_detected for key in self.receivers):
+                    for receiver in self.receivers.values():
+                        receiver.reset_receiver()
+                else:
+                    self.probe_manager_lock.acquire()
+                    reception_complete = {}
+                    for key in self.receivers:
+                        reception_complete[key] = self.receivers[key].reception_complete
+                    self.probe_manager.watcher(reception_complete)
+                    self.probe_manager_lock.release()
 
     def correlate(self, receivers, calibration=False):
         correlation = []

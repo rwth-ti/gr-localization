@@ -11,7 +11,7 @@ from gnuradio import eng_notation
 from gnuradio import uhd
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
-import numpy
+import numpy as np
 import sys
 import os
 import threading
@@ -173,11 +173,10 @@ class top_block(gr.top_block):
             infinity = True
         else:
             infinity = False
-
+        
+        
         if time_to_recv is None:
-            time_to_recv = self.usrp_source.get_time_last_pps().get_real_secs() + 1
-        else:
-            time_to_recv = float(time_to_recv)
+            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 1.5
 
         time_now = self.usrp_source.get_time_now().get_real_secs()
         if time_to_recv < time_now:
@@ -186,14 +185,20 @@ class top_block(gr.top_block):
             return
         # retune once to reconfigure receiver
         self.retune(freq, lo_offset, gain, bw)
+        usrp = self.usrp_source
+        print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
+        
         time_to_sample_last = 0
+        # receiver acquisition loop
         while True:
+            # get current time from usrp
             time_now = self.usrp_source.get_time_now().get_real_secs()
-            if ((time_to_recv - time_now) < 3*acquisition_time/10.0):
-                print "Start Flowgraph"
-                try:
-                    # get times from USRP
-                    time_to_sample = uhd.time_spec(time_to_recv + 3 * acquisition_time/10.0)
+            print "time now:",time_now
+            # without autocalibration we don't have to retune           
+            if not autocalibrate:
+                if ((time_to_recv - time_now) < acquisition_time):
+
+                    time_to_sample = uhd.time_spec(time_to_recv)
                     if not time_to_sample == time_to_sample_last:
                         # ask for samples at a specific time
                         stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE )
@@ -202,42 +207,61 @@ class top_block(gr.top_block):
                         stream_cmd.stream_now = False
                         stream_cmd.time_spec = time_to_sample
                         self.usrp_source.issue_stream_cmd(stream_cmd)
+                    # remember last sampling time
                     time_to_sample_last = time_to_sample
-                    if autocalibrate:
-                        time_to_calibrate = uhd.time_spec(time_to_recv + 7 * acquisition_time/10.0)
-                        # ask for samples at a specific time
-                        stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)# change?
-                        # add 300 samples to the burst to get rid of transient
-                        stream_cmd.num_samps = samples_to_receive_calibration + 300
-                        stream_cmd.stream_now = False
-                        stream_cmd.time_spec = time_to_calibrate
-                        self.usrp_source.issue_stream_cmd(stream_cmd)
-                        # synchronize LOs
-                        self.retune(freq, lo_offset, gain, bw)
-                        time_retune_1 = self.usrp_source.get_time_now().get_real_secs()
-                        time_now = self.usrp_source.get_time_now().get_real_secs()                    
-                        if (time_to_sample > time_now):
-                            if (time_now > time_to_recv):
-                                print "time_now > time_to_recv"
-                                self.scheduler.enter((4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
-                            else:
-                                print "time_now < time_to_recv"
-                                self.scheduler.enter(((time_to_recv-time_now) + 4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
-                            self.scheduler.run()
-                    #print "Time retune 1:", time_retune_1
+                    # update the reception time for next acquisition
+                    time_to_recv = time_to_recv + acquisition_time
+                    print "Time to sample:", time_to_sample.get_real_secs()
+                    print "time to receive:", time_to_recv
+                    acquisitions -= 1
+                    if not self.run_loop or (acquisitions <= 0 and not infinity):
+                        break
+                time.sleep(acquisition_time/4)
+                
+            else:
+                if ((time_to_recv - time_now) < 3 *acquisition_time/10):
+                    # get times from USRP
+                    time_to_sample = uhd.time_spec(time_to_recv + 3 * acquisition_time/10.0)
+                    # ask for samples at a specific time
+                    stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                    # add 300 samples to the burst to get rid of transient
+                    stream_cmd.num_samps = samples_to_receive + 300
+                    stream_cmd.stream_now = False
+                    stream_cmd.time_spec = time_to_sample
+                    self.usrp_source.issue_stream_cmd(stream_cmd)
+                    time_to_calibrate = uhd.time_spec(time_to_recv + 7 * acquisition_time/10.0)
+                    # ask for samples at a specific time
+                    stream_cmd = uhd.stream_cmd(uhd.stream_cmd_t.STREAM_MODE_NUM_SAMPS_AND_DONE)
+                    # add 300 samples to the burst to get rid of transient
+                    stream_cmd.num_samps = samples_to_receive_calibration + 300
+                    stream_cmd.stream_now = False
+                    stream_cmd.time_spec = time_to_calibrate
+                    self.usrp_source.issue_stream_cmd(stream_cmd)
+                    # synchronize LOs
+                    time_retune_1 = self.usrp_source.get_time_now().get_real_secs()
+                    self.retune(freq, lo_offset, gain, bw)
+                    time_now = self.usrp_source.get_time_now().get_real_secs()
+                    if (time_to_sample > time_now):
+                        if (time_now > time_to_recv):
+                            print "time_now > time_to_recv"
+                            self.scheduler.enter((4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
+                        else:
+                            print "time_now < time_to_recv"
+                            self.scheduler.enter(((time_to_recv-time_now) + 4 * acquisition_time/10.0), 1, self.retune, ([freq_calibration, lo_offset_calibration, gain_calibration, bw_calibration]))
+                        self.scheduler.run()
+                    print "Time retune 1:", time_retune_1
                     print "Time to sample:", time_to_sample.get_real_secs()
                     if autocalibrate:
+                        #print "Time retune 2:", time_retune_2
                         print "Time to calibrate:", time_to_calibrate.get_real_secs()
                     usrp = self.usrp_source
                     print "Parameters:", usrp.get_center_freq(0),usrp.get_gain(0),usrp.get_samp_rate(),usrp.get_bandwidth(0),samples_to_receive,usrp.get_antenna(0)
                     acquisitions -= 1
+                    time_to_recv = time_to_recv + acquisition_time
                     if not self.run_loop or (acquisitions <= 0 and not infinity):
                         break
-                    time_to_recv = time_to_recv + acquisition_time
-                except RuntimeError:
-                    print "Can't start, flowgraph already running!"
-            time.sleep(acquisition_time/10.0)
-
+                
+        
     def retune(self, freq, lo_offset, gain, bw):
         # synchronize LOs
         time_retune_2 = self.usrp_source.get_time_now().get_real_secs()
