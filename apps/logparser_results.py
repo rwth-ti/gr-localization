@@ -309,6 +309,9 @@ if __name__ == "__main__":
         receivers_antenna = acquisition[16]
         receivers_gain = acquisition[17]
         estimated_positions = acquisition[18]
+        ref_receiver = acquisition[19]
+        auto_calibrate = acquisition[20]
+        acquisition_time = acquisition[21]
         if len(acquisition) > 19:
             ref_receiver = acquisition[19]
         if (options.delay_threshold > 0):
@@ -412,6 +415,11 @@ if __name__ == "__main__":
           'font.size' : 16,
           }
     plt.rcParams.update(params) 
+    
+    t_list=np.array(t_list)
+    if any(np.diff(t_list) != acquisition_time):
+        print "warning: measurements missing"
+        print np.diff(t_list)    
 
     p = parser(bbox,filename,options)
     basemap = proj_basemap(bbox)
@@ -428,8 +436,11 @@ if __name__ == "__main__":
             elif message_type == "$GNRMC":
                 timestamp = rmc_to_epoch_time(line)
                 gt_t_list.append(timestamp)
-        t_list=np.array(t_list)
+        
         gt_t_list=np.array(gt_t_list)
+        if any(np.diff(gt_t_list) != acquisition_time):
+            print "warning: references missing"
+            print np.diff(gt_t_list)
         # determine start and end time of overlapping timestamp vectors
         start_time = max(t_list[0],gt_t_list[0])
         end_time = min(t_list[-1],gt_t_list[-1])
@@ -441,7 +452,6 @@ if __name__ == "__main__":
         chan_y = np.array(chan_y)[time_aligned_idx]
         gt_x_list = np.array(gt_x_list)[gt_time_aligned_idx]
         gt_y_list = np.array(gt_y_list)[gt_time_aligned_idx]
-        print
         chan_x_kalman = np.array(chan_x_kalman)[time_aligned_idx]
         chan_y_kalman = np.array(chan_y_kalman)[time_aligned_idx]
                 

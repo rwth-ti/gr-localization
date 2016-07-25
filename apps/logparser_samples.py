@@ -3,6 +3,7 @@
 from optparse import OptionParser
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import interpolate
 import sys
 import math
 import requests
@@ -40,11 +41,20 @@ if __name__ == "__main__":
     for line in f:
         if line_number == options.acquisition:
             acquisition = eval(eval(line))
-            correlation = acquisition[0]
-            receivers = acquisition[1]
+            receivers  = acquisition[0]
+            interpolation = acquisition[1]
+            ref_receiver = acquisition[2]
         line_number+=1
     f.close()
-
+    idx=0
+    for receiver in receivers:          
+        x = np.linspace(0,len(receiver),len(receiver))
+        f = interpolate.interp1d(x, receiver)
+        x_interpolated = np.linspace(0,len(receiver),len(receiver) * interpolation)
+        receiver = f(x_interpolated)
+        if idx != ref_receiver:
+            correlation = np.absolute(np.correlate(receiver, receivers[ref_receiver], "full", False))
+        idx += 1
     filename = args[0].split("/")[-1].split(".")[0]
 
     plt.rc('text', usetex=True)
@@ -56,7 +66,8 @@ if __name__ == "__main__":
        r'\usepackage[EULERGREEK]{sansmath}',  # load up the sansmath so that math -> helvet
        r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
        ]
-
+       
+    # rework (recalculate correlation)
 
     if options.cross_correlation:
         figure_correlation = plt.figure()

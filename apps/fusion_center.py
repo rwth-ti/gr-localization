@@ -12,6 +12,7 @@ import pprint
 from gnuradio import zeromq
 import signal
 import numpy as np
+from scipy import interpolate
 import time
 import threading
 import json
@@ -483,7 +484,7 @@ class fusion_center():
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         if self.recording_results:
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
+            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         self.start_receivers(acquisitions)
@@ -504,7 +505,7 @@ class fusion_center():
             self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             if self.recording_results:
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
+                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             self.start_receivers(acquisitions)
@@ -717,6 +718,28 @@ class fusion_center():
                     for receiver in self.receivers.values():
                         receiver.reset_receiver()
                     return
+        
+        # log samples before interpolation to get logs of capable size and faster logging. Interpolation can be redone in parser. 
+        if self.recording_samples:
+            f_s = open(self.samples_file,"a")
+            receiver_samples = []
+            for receiver in receivers.values():
+                receiver_samples.append(receiver.samples.tolist())
+            pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
+            f_s.close()   
+                    
+        # interpolate samples
+          
+        for receiver in receivers.values():          
+            x = np.linspace(0,len(receiver.samples),len(receiver.samples))
+            f = interpolate.interp1d(x, receiver.samples)
+            x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * receiver.interpolation)
+            receiver.samples = f(x_interpolated)
+            if receiver.auto_calibrate:
+                x = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration))
+                f = interpolate.interp1d(x, receiver.samples_calibration)
+                x_interpolated = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration) * receiver.interpolation)
+                receiver.samples_calibration = f(x_interpolated)
             
             
         # all timestamps correct -> continue processing
@@ -877,18 +900,12 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) +","+ str(kalman_states)+","+str(self.init_settings_kalman)+"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
 
-            if self.recording_samples:
-                f_s = open(self.samples_file,"a")
-                receiver_samples = []
-                for receiver in self.results["receivers"]:
-                    receiver_samples.append(receiver.tolist())
-                pprint.pprint("[" + str(self.results["correlation"]) + "," + str(receiver_samples) + "]",f_s,width=9000)
-                f_s.close()
+            
 
         if self.calibrating:
             self.calibration_loop_delays.append(delay)

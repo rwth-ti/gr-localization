@@ -2,6 +2,7 @@
 
 from optparse import OptionParser
 import numpy as np
+from scipy import interpolate
 import sys,os,pdb
 import math
 import requests
@@ -24,7 +25,7 @@ def parse_options():
     parser.add_option("-g", "--geographical", action="store_true", default=False,
                       help="Geographical Map")
     parser.add_option("", "--enable_kalman", action="store_true", default=False,
-                      help="Do posterior Kalman filtering. Will overwrite real time filtered values.")
+                      help="Do posterior Kalman filtering. Will ignore real time filtered values.")
     parser.add_option("-c", "--config", type="str", default="./cfg_kalman_parser.cfg",
                       help="Configuration File for Kalman Filter")
     (options, args) = parser.parse_args()
@@ -110,7 +111,7 @@ if __name__ == "__main__":
     
     for line_number, line in enumerate(f_samples):  
         acquisition = eval(eval(line))
-        receivers_samples=acquisition[1]
+        receivers_samples=acquisition[0]
         receivers=dict()
         for receiver_idx in range(len(receivers_samples)):
             receivers[receiver_idx]=receiver_interface.receiver_interface(None,None,receiver_idx)
@@ -121,14 +122,23 @@ if __name__ == "__main__":
             receivers[receiver_idx].samp_rate = sampling_rate
             receivers[receiver_idx].samples_to_receive = samples_to_receive
             receivers[receiver_idx].samples =receivers_samples[receiver_idx] 
+        for receiver in receivers.values():          
+            x = np.linspace(0,len(receiver.samples),len(receiver.samples))
+            f = interpolate.interp1d(x, receiver.samples)
+            x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * interpolation)
+            receiver.samples = f(x_interpolated)
+            if receiver != ref_receiver:
+                correlation = np.absolute(np.correlate(receiver.samples, receivers[ref_receiver].samples, "full", False))
+                print correlation
         receivers_steps.append(receivers)
+
     f_samples.close()
     #pdb.set_trace()  
     results_file="../log/results_post_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-    f=open(    results_file,"w")
-    print("##########################################################################################################################################################################################", f)
-    print("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", f)
-    print("##########################################################################################################################################################################################", f)
+    f=open(results_file,"w")
+    pprint.pprint("##########################################################################################################################################################################################", f)
+    pprint.pprint("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate", f)
+    pprint.pprint("##########################################################################################################################################################################################", f)
     
     
     if options.enable_kalman: 
@@ -187,7 +197,7 @@ if __name__ == "__main__":
                 estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],np.round(basemap(bbox[2],bbox[3])),1,interpolation*samples_to_receive,ref_receiver)
                 estimated_positions["grid_based"]["grid"]=0
             line = "[" + str(time.time()) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver)  + "]"
-
+            print line
             pprint.pprint(line,f,width=9000)
     f.close()
        
