@@ -62,11 +62,20 @@ class fusion_center():
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
         self.calibration_average = 3
+        
+        # postprocessing
         self.location_average_length = 3
         self.target_dynamic = 0.8
         self.max_acc = 4
         self.measurement_noise = 14
+        self.filtering_types = ["No filtering","Moving average","Kalman filter"]
+        self.motion_models = ["maneuvering","simple"]
+        self.filtering_type = "No filtering"
+        self.motion_model = "maneuvering"
         self.init_settings_kalman=dict()
+        
+        self.processing = False
+        
         self.record_results = False
         self.record_samples = False
         self.recording_results = False
@@ -77,14 +86,13 @@ class fusion_center():
         self.results = None
         self.run_loop = False
         self.localizing = False
-        self.init_kalman = True
         self.ntp_sync = False
         self.calibrating = False
-
-        self.filtering_types = ["No filtering","Moving average","Kalman filter"]
-        self.motion_models = ["maneuvering","simple"]
-        self.filtering_type = "No filtering"
-        self.motion_model = "maneuvering"
+        
+        
+        
+        
+        
         self.map_type = "Online"
         self.map_file = ""
         self.coordinates_type = "Geographical"
@@ -432,7 +440,9 @@ class fusion_center():
             receiver.samples_to_receive_calibration = self.samples_to_receive_calibration
             receiver.gps = gps
             receiver.auto_calibrate = self.auto_calibrate
+            self.probe_manager_lock.acquire()
             self.probe_manager.add_socket(serial, receiver.probe_address, 'complex64', receiver.receive_samples)
+            self.probe_manager_lock.release()
             for gui in self.guis.values():
                 # request registration in each gui
                 gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna, receiver.gain_calibration])
@@ -693,7 +703,6 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_grid_based_active",[grid_based_active])
 
     def process_results(self, receivers, delay_auto_calibration):
-
         # check if timestamps are equal for all the receivers
         times_target = []
         times_calibration = []
@@ -905,8 +914,6 @@ class fusion_center():
             pprint.pprint(line,f,width=9000)
             f.close()
 
-            
-
         if self.calibrating:
             self.calibration_loop_delays.append(delay)
             print(len(self.calibration_loop_delays))
@@ -914,20 +921,26 @@ class fusion_center():
                 self.run_loop = False
                 for gui in self.guis.values():
                     gui.rpc_manager.request("calibration_loop",[False])
-
+        
+        # set flags to enable new reception
+        for receiver in receivers.values():
+            receiver.samples = []
+            receiver.samples_calibration = []
+            receiver.first_packet = True
+            receiver.reception_complete = False
+        self.processing=False
 
     def main_loop(self):
         while True:
             time.sleep(self.acquisition_time/4)
             if len(self.receivers) > 0:
                 if all(self.receivers[key].reception_complete for key in self.receivers):
-                    receivers = copy.deepcopy(self.receivers) # get rid off
-                    threading.Thread(target = self.process_results, args = (receivers,self.delay_auto_calibration,)).start()
-                    for receiver in self.receivers.values():
-                        receiver.samples = []
-                        receiver.samples_calibration = []
-                        receiver.first_packet = True
-                        receiver.reception_complete = False
+                    '''receivers = copy.deepcopy(self.receivers) # get rid off
+                        threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()'''
+                    if not self.processing:
+                        self.processing = True
+                        #self.process_results(self.receivers,self.delay_auto_calibration)
+                        threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()
                 elif any(self.receivers[key].error_detected for key in self.receivers):
                     for receiver in self.receivers.values():
                         receiver.reset_receiver()
@@ -935,7 +948,7 @@ class fusion_center():
                     self.probe_manager_lock.acquire()
                     reception_complete = {}
                     for key in self.receivers:
-                        reception_complete[key] = self.receivers[key].reception_complete
+                        reception_complete[key] = self.receivers[key].reception_complete                      
                     self.probe_manager.watcher(reception_complete)
                     self.probe_manager_lock.release()
 
@@ -1006,6 +1019,7 @@ def parse_options():
                       help="Deactivate reference calibration station")
     parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
+                      
     (options, args) = parser.parse_args()
     return options
 
