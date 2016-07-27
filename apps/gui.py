@@ -605,10 +605,10 @@ class gui(QtGui.QMainWindow):
                 # plot target track (last 10 positions) if Kalman Filter is enabled:
                 if self.filtering_type == "Kalman filter":
                     prev_coordinates_kalman = np.array(self.queue_tx_coordinates_kalman) 
-                    estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
+                    estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='magenta',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
                 else:
                     prev_coordinates = np.array(self.queue_tx_coordinates) 
-                    estimated_position.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='red',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
+                    estimated_position.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='magenta',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
                 # set annotation Rxi
                 text = (algorithm[0] + " " 
                                     + str(np.round(estimated_position.coordinates,2)))
