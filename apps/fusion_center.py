@@ -1011,9 +1011,9 @@ def parse_options():
                       help="Bandwidth for calibration")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")
-    parser.add_option("", "--gain", type="float", default="30",
+    parser.add_option("", "--gain", type="float", default="36",
                       help="Gain in dB")
-    parser.add_option("", "--gain-calibration", type="float", default="30",
+    parser.add_option("", "--gain-calibration", type="float", default="36",
                       help="Gain in dB for calibration")
     parser.add_option("", "--no-auto-calibrate", action="store_true", default=False,
                       help="Deactivate reference calibration station")

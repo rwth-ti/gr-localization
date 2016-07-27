@@ -53,8 +53,8 @@ class gui(QtGui.QMainWindow):
 
         self.calibration_average = 10
         self.location_average_length = 10
-        self.target_dynamic = 0.8
-        self.max_acc = 4
+        self.target_dynamic = 0.6
+        self.max_acc = 3.5
         self.measurement_noise = 14
         self.samples_to_receive = 1000
         self.frequency = 2.4e9
@@ -71,7 +71,7 @@ class gui(QtGui.QMainWindow):
         self.queue_tx_coordinates_kalman = deque()
         self.results = {}
         self.new_results = False
-        self.trackplot_length = 10
+        self.trackplot_length = 180
 
         self.auto_calibrate = False
         self.receivers = {}
