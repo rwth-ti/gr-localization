@@ -21,6 +21,10 @@ from kalman import kalman_filter
 import ConfigParser
 from ConfigSectionMap import ConfigSectionMap
 
+
+# print with approopriate resolution
+np.set_printoptions(precision=20)
+
 class parser():
     def __init__(self,bbox,filename,options):
         self.options = options
@@ -419,6 +423,8 @@ if __name__ == "__main__":
     t_list=np.array(t_list)
     if any(np.diff(t_list) != acquisition_time):
         print "warning: measurements missing"
+        print t_list[np.where(np.diff(t_list) != acquisition_time)]
+        print t_list[np.add(np.where(np.diff(t_list) != acquisition_time),1)]
         print np.diff(t_list)    
 
     p = parser(bbox,filename,options)
@@ -454,19 +460,30 @@ if __name__ == "__main__":
         gt_y_list = np.array(gt_y_list)[gt_time_aligned_idx]
         chan_x_kalman = np.array(chan_x_kalman)[time_aligned_idx]
         chan_y_kalman = np.array(chan_y_kalman)[time_aligned_idx]
-                
+        if len(chan_x) == 0 and len(grid_x) == 0:
+            sys.exit('no timestamp matches with ground-truth!')       
                  
         #except:
         #    warnings.warn("ground-truth-log not found")
-
+    
+    
+    print "ref_receiver",ref_receiver
     if options.map:
-        i = 1
+        i = 1 
+        
         for rx in receivers_positions:
             p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation RXx
             text = "RX" + str(i)
+            # index of logged reference receiver starts at 0 not at 1
+            if i != (ref_receiver+1):
+                p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+            else:
+                print "annotation color should be different"
+                p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='r', alpha=0.9, color="red"))
             i += 1
-            p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+            
+                
 
         p.figure_map.canvas.draw()
 
@@ -478,12 +495,12 @@ if __name__ == "__main__":
         if options.mapplot_mode in ["raw","compare"]:
             p.ax.plot(chan_x[0],chan_y[0],color="blue",marker="x",markersize=10)
             # , for assigning the plots as line objects and not as tuples
-            chan_plot = p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2,label = 'chan results')[0]
+            chan_plot = p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2,label = 'raw locations (chan)')[0]
             handles.append(chan_plot)
             labels.append(chan_plot.get_label())
         if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
             # , for assigning the plots as line objects and not as tuples
-            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2,label = 'chan results after filtering')[0]
+            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2,label = 'kalman filtered (chan)')[0]
         #for i in range(len(measurements)):
         #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
         #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
@@ -492,17 +509,17 @@ if __name__ == "__main__":
         if len(grid_x)>0:
             if options.mapplot_mode in ["raw","compare"]:
                 # , for assigning the plots as line objects and not as tuples
-                grid_plot=p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2,label='grid based results')[0]
+                grid_plot=p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2,label='raw locations (grid-based)')[0]
                 handles.append(grid_plot)
                 labels.append(grid_plot.get_label())
             if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
                 # , for assigning the plots as line objects and not as tuples
-                grid_kalman_plot, = p.ax.plot(grid_x_kalman,grid_y_kalman,color="yellow",marker="x",linestyle="-",linewidth=0.2,label='grid based results after filtering')[0]
+                grid_kalman_plot, = p.ax.plot(grid_x_kalman,grid_y_kalman,color="yellow",marker="x",linestyle="-",linewidth=0.2,label='kalman filtered (grid-based)')[0]
                 handles.append(grid_kalman_plot)
                 labels.append(grid_kalman_plot.get_label())
         if len(gt_x_list)>0:
             # , for assigning the plots as line objects and not as tuples
-            ground_truth_plot=p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5, label='ground truth')[0]
+            ground_truth_plot=p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5, label='ground truth (GPS-RTK)')[0]
             handles.append(ground_truth_plot)
             labels.append(ground_truth_plot.get_label())
         p.ax.legend(handles,labels)
