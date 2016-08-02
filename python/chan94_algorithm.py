@@ -50,12 +50,14 @@ def localize(receivers, ref_receiver, bbox):
     y2 = pos_rx[1][1]
     x3 = pos_rx[2][0]
     y3 = pos_rx[2][1]
-
+    
+    center_triangle = ((x1+x2+x3)/3,(y1+y2+y3)/3)
+    r21 = c * d12
+    r31 = c * d13
+    #print "r21:"+str(r21)+"r31:"+str(r31)
     try:
         # Estimated distance difference from receivers to transmiter
-        r21 = c * d12
-        r31 = c * d13
-
+        
         # Parameters of equation (5) from the reference paper
         K1 = pow(x1,2) + pow(y1,2)
         K2 = pow(x2,2) + pow(y2,2)
@@ -69,19 +71,19 @@ def localize(receivers, ref_receiver, bbox):
         #print "r21:"+str(r21)+"r31:"+str(r31)
         rmax21= np.sqrt(x21**2+y21**2)
         rmax31= np.sqrt(x31**2+y31**2)
-        eps= 0.5
+        
         #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, clip it to maximum value.
         if r21>rmax21:
-            r21=rmax21-eps
+            r21=rmax21
             print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r21<-rmax21:
-            r21=-(rmax21-eps)
+            r21=-(rmax21)
             print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r31>rmax31:
-            r31=rmax31-eps  
+            r31=rmax31 
             print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
         if r31<-rmax31:
-            r31=-(rmax31-eps ) 
+            r31=-(rmax31 ) 
             print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
             
         # Solve equations system
@@ -103,7 +105,7 @@ def localize(receivers, ref_receiver, bbox):
         xy = np.real((valid_roots*A+B,valid_roots*C+D)).T
         # Calculate position with the solution in the roi
         if len(xy) > 1:
-            if np.linalg.norm(xy[0]-np.array(bbox)/2) < np.linalg.norm(xy[1]-np.array(bbox)/2):
+            if np.linalg.norm(xy[0]-center_triangle) < np.linalg.norm(xy[1]-center_triangle):
                 print "1"
                 xy = xy[0]#changed:different solution gets chosen(closer to the center!)
             else:
@@ -114,8 +116,8 @@ def localize(receivers, ref_receiver, bbox):
             xy = xy[0]
         xy = (xy[0],xy[1])
     except:
-        print "Singular matrix, setting location to center of roi."
-        xy = (bbox[0]/2,bbox[1]/2)
+        print "Singular matrix, setting location to center of receivers."
+        xy = center_triangle
     t_used = time.time()-t
     print "Chan results: ",xy," time: ", t_used
     return {"coordinates": xy,"t_used":t_used}

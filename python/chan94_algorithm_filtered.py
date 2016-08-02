@@ -51,7 +51,9 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
     y2 = pos_rx[1][1]
     x3 = pos_rx[2][0]
     y3 = pos_rx[2][1]
-
+    
+    center_triangle = ((x1+x2+x3)/3,(y1+y2+y3)/3)
+    
     try:
         # Estimated distance difference from receivers to transmiter
         r21 = c * d12
@@ -70,22 +72,22 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
         #print "r21: "+str(r21)+" r31: "+str(r31)
         rmax21= np.sqrt(x21**2+y21**2)
         rmax31= np.sqrt(x31**2+y31**2)
-        eps= 0.5
+        eps = 0
         #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, clip it to maximum value.
         if r21>rmax21:
-            r21=rmax21-eps
+            r21=rmax21 -eps
             invalid_21=True
             print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r21<-rmax21:
-            r21=-(rmax21-eps)
+            r21=-(rmax21)+eps
             invalid_21=True
             print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r31>rmax31:
-            r31=rmax31-eps  
+            r31=rmax31  -eps
             invalid_31=True
             print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
         if r31<-rmax31:
-            r31=-(rmax31-eps ) 
+            r31=-(rmax31) +eps
             invalid_31=True
             print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
         if invalid_31 and invalid_21:
@@ -108,16 +110,17 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
         valid_roots = np.array(valid_roots)
         xy = np.real((valid_roots*A+B,valid_roots*C+D)).T
         # Calculate position with the solution in the roi
+        #print xy
         if len(xy) > 1:
-            if not xk_prio.any():
+            if  xk_prio.any():
                 if np.linalg.norm(xy[0]-xk_prio) < np.linalg.norm(xy[1]-xk_prio):
-                    print "1"
+                    print "1" 
                     xy = xy[0]#changed:different solution gets chosen(closer to the center!)
                 else:
                     print "2"
                     xy = xy[1]
             else:
-                if np.linalg.norm(xy[0]-np.array(bbox)/2) < np.linalg.norm(xy[1]-np.array(bbox)/2):
+                if np.linalg.norm(xy[0]-center_triangle) < np.linalg.norm(xy[1]-center_triangle):
                     print "1"
                     xy = xy[0]#changed:different solution gets chosen(closer to the center!)
                 else:
@@ -133,8 +136,9 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
         if xk_prio.any():
             xy=xk_prio+np.random.normal()
         else:
-            xy = (bbox[0]/2,bbox[1]/2)
-        invalid_total=True
+            print "Singular matrix, setting location to center of receivers."
+            xy = center_triangle
+        #invalid_total=True
     t_used = time.time()-t
     print "Chan results: ",xy," time: ", t_used
     return {"coordinates": xy,"t_used":t_used}
