@@ -76,6 +76,10 @@ class gui(QtGui.QMainWindow):
         self.auto_calibrate = False
         self.receivers = {}
         self.ref_receiver = ""
+        
+        self.reference_selections = []
+        self.reference_selection = ""
+        
         self.transmitter_positions = {}
         self.filtering_types = []
         self.filtering_type = ""
@@ -123,6 +127,8 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_channel_model",self.set_gui_TDOA_grid_based_channel_model)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_measurement_type",self.set_gui_TDOA_grid_based_measurement_type)
         self.rpc_manager.add_interface("set_gui_ref_receiver",self.set_gui_ref_receiver)
+        self.rpc_manager.add_interface("set_gui_reference_selections",self.set_gui_reference_selections)
+        self.rpc_manager.add_interface("set_gui_reference_selection",self.set_gui_reference_selection)
         self.rpc_manager.add_interface("set_gui_filtering_type",self.set_gui_filtering_type)
         self.rpc_manager.add_interface("set_gui_motion_model",self.set_gui_motion_model)
         self.rpc_manager.add_interface("set_gui_map_type",self.set_gui_map_type)
@@ -273,6 +279,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.loOffsetCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset_calibration)
         self.connect(self.gui.samplesToReceiveCalibrationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive_calibration)
         self.connect(self.gui.comboBoxRefReceiver, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_ref_receiver)
+        self.connect(self.gui.comboBoxReferenceSelection, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_reference_selection)
         self.connect(self.gui.comboBoxFilteringType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_filtering_type)
         self.connect(self.gui.comboBoxMotionModel, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_motion_model)
         self.connect(self.gui.comboBoxMapType, QtCore.SIGNAL("currentIndexChanged(int)"), self.set_map_type)
@@ -314,7 +321,6 @@ class gui(QtGui.QMainWindow):
             self.gui.pushButtonSetCalibration.setStyleSheet("background-color: red")
 
     def set_tx_calibration(self, button):
-        print "set tx calibration"+button.text()
         if button.text() == "Cancel":
             self.rpc_manager.request("remove_calibration")
             self.calibration_dialog.reject()
@@ -517,7 +523,11 @@ class gui(QtGui.QMainWindow):
             text = ("Rx" + str(self.receivers.keys().index(serial) + 1)
                         + " "
                         + str(np.round(receiver.coordinates,2)))
-            receiver.annotation = self.ax.annotate(text, coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+                        
+            if serial != self.ref_receiver:
+                receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
+            else:
+                receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='r', alpha=0.9, zorder=20))
             self.canvas.draw()
         else:
             # ax not rendered yet, so update position when available
@@ -536,11 +546,15 @@ class gui(QtGui.QMainWindow):
             # save scattered point into receiver properties
             receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation Rxi
-            text = ("Rx" + str(self.receivers.keys().index(serial) + 1) 
+            text_gps = ("Rx" + str(self.receivers.keys().index(serial) + 1) 
                         + " " 
                         + str(np.round(receiver.coordinates_gps,2)))
-            receiver.annotation_gps = self.ax.annotate(text, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9))
-            self.canvas.draw()
+                        
+            if serial != self.ref_receiver:
+                receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
+            else:
+                receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='c', alpha=0.9, zorder=20))
+                    
         else:
             # ax not rendered yet, so update position when available
             self.pending_receivers_to_plot = True
@@ -803,6 +817,10 @@ class gui(QtGui.QMainWindow):
     def set_ref_receiver(self):
         self.ref_receiver = self.gui.comboBoxRefReceiver.currentText()
         self.rpc_manager.request("set_ref_receiver",[str(self.ref_receiver)])
+        
+    def set_reference_selection(self):
+        self.reference_selection = self.gui.comboBoxReferenceSelection.currentText()
+        self.rpc_manager.request("set_reference_selection",[str(self.reference_selection)])
 
     def set_filtering_type(self):
         self.filtering_type = self.gui.comboBoxFilteringType.currentText()
@@ -924,11 +942,19 @@ class gui(QtGui.QMainWindow):
         for i in range(0,len(self.receivers)):
             if self.receivers.keys()[i] == ref_receiver:
                 self.gui.comboBoxRefReceiver.setCurrentIndex(i)
-
+              
+    def set_gui_reference_selection(self, reference_selection):
+        for i in range(0,len(self.reference_selections)):
+            if self.reference_selections[i] == reference_selection:
+                self.gui.comboBoxReferenceSelection.setCurrentIndex(i)
+                
+             
     def set_gui_filtering_type(self, filtering_type):
         for i in range(0,len(self.filtering_types)):
             if self.filtering_types[i] == filtering_type:
                 self.gui.comboBoxFilteringType.setCurrentIndex(i)
+                
+                
     def set_gui_motion_model(self, motion_model):
         for i in range(0,len(self.motion_models)):
             if self.motion_models[i] == motion_model:
@@ -992,6 +1018,13 @@ class gui(QtGui.QMainWindow):
         else:
             self.gui.checkBoxRecordSamples.setChecked(0)
 
+    def set_gui_reference_selections(self, reference_selections):
+        self.reference_selections = reference_selections
+        self.gui.comboBoxReferenceSelection.clear()
+        for f_type in self.reference_selections:
+            self.gui.comboBoxReferenceSelection.addItem(f_type)
+        self.gui.comboBoxReferenceSelection.setCurrentIndex(0)
+
     def set_gui_filtering_types(self, filtering_types):
         self.filtering_types = filtering_types
         self.gui.comboBoxFilteringType.clear()
@@ -1022,6 +1055,11 @@ class gui(QtGui.QMainWindow):
         self.new_results = True
 
     def process_results(self):
+        # new reference selected => update plot 
+        if "ref_receiver" in self.results:
+            if self.ref_receiver != self.results["ref_receiver"]:
+                self.pending_receivers_to_plot = True
+                self.ref_receiver = self.results["ref_receiver"]
         if hasattr(self, "ax") and self.pending_receivers_to_plot:
             for key in self.receivers:
                 receiver = self.receivers[key]
@@ -1035,15 +1073,25 @@ class gui(QtGui.QMainWindow):
                 receiver.scatter = self.ax.scatter(receiver.coordinates[0], receiver.coordinates[1], marker='x',linewidths=2, c='b', s=200, alpha=0.9, zorder=20)
                 receiver.scatter_gps = self.ax.scatter(receiver.coordinates_gps[0], receiver.coordinates_gps[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9, zorder=20)
                 # set annotation Rxi
+                
                 text = ("Rx" + str(self.receivers.keys().index(key) + 1)
                         + " " 
                         + str(np.round(receiver.coordinates,2)))
-                receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
+                        
+                if key != self.ref_receiver:
+                    receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
+                else:
+                    receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='r', alpha=0.9, zorder=20))
+                    
                 text_gps = ("Rx" + str(self.receivers.keys().index(key) + 1)
                         + " " 
                         + str(np.round(receiver.coordinates_gps,2)))
-                receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
-
+                        
+                if key != self.ref_receiver:
+                    receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
+                else:
+                    receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='b', alpha=0.9, zorder=20))
+                    
             self.canvas.draw()
             self.pending_receivers_to_plot = False
 

@@ -10,9 +10,10 @@ import sys
 import os
 import pprint
 from gnuradio import zeromq
-import signal
+import signal 
 import numpy as np
-from scipy import interpolate
+from scipy import interpolate 
+from scipy import signal as sig
 import time
 import threading
 import json
@@ -68,9 +69,11 @@ class fusion_center():
         self.target_dynamic = 0.8
         self.max_acc = 4
         self.measurement_noise = 14
+        self.reference_selections = ["Manual","Max signal power","Min signal power"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
-        self.filtering_type = "No filtering"
+        self.reference_selection = "Min signal power"
+        self.filtering_type = "Kalman filter"
         self.motion_model = "maneuvering"
         self.init_settings_kalman=dict()
         
@@ -161,6 +164,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_ref_receiver",self.set_ref_receiver)
+        self.rpc_manager.add_interface("set_reference_selection",self.set_reference_selection)
         self.rpc_manager.add_interface("set_filtering_type",self.set_filtering_type)
         self.rpc_manager.add_interface("set_motion_model",self.set_motion_model)
         self.rpc_manager.add_interface("set_map_type",self.set_map_type)
@@ -384,7 +388,9 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_record_results",[self.record_results])
             gui.rpc_manager.request("set_gui_record_samples",[self.record_samples])
             gui.rpc_manager.request("set_gui_filtering_types",[self.filtering_types])
+            gui.rpc_manager.request("set_gui_reference_selections",[self.reference_selections])
             gui.rpc_manager.request("set_gui_filtering_type",[self.filtering_type])
+            gui.rpc_manager.request("set_gui_reference_selection",[self.reference_selection])
             gui.rpc_manager.request("set_gui_motion_models",[self.motion_models])
             gui.rpc_manager.request("set_gui_motion_model",[self.motion_model])
             gui.rpc_manager.request("set_gui_map_type",[self.map_type])
@@ -626,11 +632,17 @@ class fusion_center():
         self.ref_receiver = ref_receiver
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_ref_receiver",[ref_receiver])
-
+            
+    def set_reference_selection(self, reference_selection):
+        self.reference_selection = reference_selection
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_reference_selection",[reference_selection])        
+    
     def set_filtering_type(self, filtering_type):
         self.filtering_type = filtering_type
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_filtering_type",[filtering_type])
+            
     def set_motion_model(self, motion_model):
         self.motion_model = motion_model
         for gui in self.guis.values():
@@ -738,7 +750,7 @@ class fusion_center():
             f_s.close()   
                     
         # interpolate samples
-          
+        signal_strength = []
         for receiver in receivers.values():          
             x = np.linspace(0,len(receiver.samples),len(receiver.samples))
             f = interpolate.interp1d(x, receiver.samples)
@@ -749,7 +761,17 @@ class fusion_center():
                 f = interpolate.interp1d(x, receiver.samples_calibration)
                 x_interpolated = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration) * receiver.interpolation)
                 receiver.samples_calibration = f(x_interpolated)
-            
+            # find receiver with highest signal strength
+            if self.reference_selection in ["Min signal power","Max signal power"]:
+                freq,Pxx = sig.periodogram(receiver.samples,receiver.samp_rate*receiver.interpolation)
+                idxs = np.where(np.logical_and(freq>=-receiver.samp_rate, freq<=receiver.samp_rate))
+                signal_strength.append(np.mean(Pxx[idxs]))
+                
+        if self.reference_selection == "Max signal power":
+            self.ref_receiver = receivers.keys()[np.argmax(signal_strength)]
+        elif self.reference_selection == "Min signal power":
+            self.ref_receiver = receivers.keys()[np.argmin(signal_strength)]
+        print (self.ref_receiver)
             
         # all timestamps correct -> continue processing
 
@@ -803,16 +825,6 @@ class fusion_center():
                         estimated_positions["grid_based"]["average_coordinates"] = np.array(average_grid).mean(0)
             else:
                 if self.init_kalman:
-                    """
-                    self.init_settings_kalman["model"] = self.motion_model
-                    self.init_settings_kalman["delta_t"] = self.acquisition_time
-                    self.init_settings_kalman["noise_factor"] = self.target_dynamic 
-                    self.init_settings_kalman["filter_receivers"] = False
-                    self.init_settings_kalman["noise_var_x"] = self.measurement_noise
-                    self.init_settings_kalman["noise_var_y"] = self.measurement_noise
-                    self.init_settings_kalman["max_acceleration"]= self.max_acc
-                    ommit
-                    """
                     print (self.init_settings_kalman)
                     self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
@@ -861,7 +873,7 @@ class fusion_center():
         receivers_samples = []
         for receiver in receivers.values():
             receivers_samples.append(receiver.samples)
-        self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels}
+        self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels,"ref_receiver": self.ref_receiver}
         
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[self.results])
