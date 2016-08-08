@@ -25,6 +25,7 @@ import probe_manager as probe_manager_local
 import receiver_interface
 import chan94_algorithm, chan94_algorithm_filtered, kalman
 import grid_based_algorithm
+from dop import reference_selection_dop
 
 class fusion_center():
     def __init__(self, options):
@@ -69,7 +70,7 @@ class fusion_center():
         self.target_dynamic = 0.8
         self.max_acc = 4
         self.measurement_noise = 14
-        self.reference_selections = ["Manual","Max signal power","Min signal power"]
+        self.reference_selections = ["Manual","Max signal power","Min signal power","Min DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
         self.reference_selection = "Min signal power"
@@ -740,6 +741,8 @@ class fusion_center():
                         receiver.reset_receiver()
                     return
         
+        # all timestamps correct -> continue processing
+        
         # log samples before interpolation to get logs of capable size and faster logging. Interpolation can be redone in parser. 
         if self.recording_samples:
             f_s = open(self.samples_file,"a")
@@ -772,8 +775,11 @@ class fusion_center():
         elif self.reference_selection == "Min signal power":
             self.ref_receiver = receivers.keys()[np.argmin(signal_strength)]
         print (self.ref_receiver)
-            
-        # all timestamps correct -> continue processing
+        
+        if self.reference_selection == "Min DOP" and  self.xk_1_chan.any():
+            self.ref_receiver = reference_selection_dop(self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2],receivers)
+        
+        
 
         estimated_positions = {}
         kalman_states = {}
@@ -925,7 +931,12 @@ class fusion_center():
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
-
+        # select new reference after acquisition if no prediction is available
+        
+        if self.reference_selection == "Min DOP" and not self.xk_1_chan.any():
+            self.ref_receiver = reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+        
+        
         if self.calibrating:
             self.calibration_loop_delays.append(delay)
             print(len(self.calibration_loop_delays))
