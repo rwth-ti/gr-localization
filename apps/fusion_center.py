@@ -67,9 +67,9 @@ class fusion_center():
         
         # postprocessing
         self.location_average_length = 3
-        self.target_dynamic = 0.8
-        self.max_acc = 4
-        self.measurement_noise = 14
+        self.target_dynamic = 0.2
+        self.max_acc = 2
+        self.measurement_noise = 2
         self.reference_selections = ["Manual","Max signal power","Min signal power","Min DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
