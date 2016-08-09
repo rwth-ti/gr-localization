@@ -200,6 +200,8 @@ def gngga_reader(message):
         fix_quality = "kinematic"
     elif fix_quality_lvl == 5:
         fix_quality = "float"
+    else:
+        fix_quality = "invalid"
     return latitude, longitude, time_seconds, fix_quality
 
 
@@ -286,6 +288,7 @@ if __name__ == "__main__":
     gt_x_list = []
     gt_y_list = []
     gt_t_list = []
+    gt_fix_list = []
     delays_list=[]
     delays_calibration_list = []
     delays_auto_calibration_list = []
@@ -314,10 +317,14 @@ if __name__ == "__main__":
         receivers_gain = acquisition[17]
         estimated_positions = acquisition[18]
         ref_receiver = acquisition[19]
-        auto_calibrate = acquisition[20]
-        acquisition_time = acquisition[21]
-        if len(acquisition) > 19:
-            ref_receiver = acquisition[19]
+        if len(acquisition) > 20:
+            try:
+                auto_calibrate = acquisition[20]
+                acquisition_time = acquisition[21]
+                kalman_states = acquisition[22]
+                init_settings_kalman = acquisition[23]
+            except:
+                pass
         if (options.delay_threshold > 0):
             if all(abs(d)<options.delay_threshold for d in delays):
                 if all(abs(d_c)<options.delay_threshold for d_c in delays_calibration):
@@ -354,7 +361,6 @@ if __name__ == "__main__":
             delays_list.append(delays)
             delays_calibration_list.append(delays_calibration)
             delays_auto_calibration_list.append(delays_auto_calibration)
-    
     f.close()
     
     
@@ -381,7 +387,6 @@ if __name__ == "__main__":
                 xk_1,Pk_1 = kalman.kalman_fltr(measurements[i-1,:],Pk_1,xk_1,"chan")
                 if i > 0:
                     kalman_states = np.vstack((kalman_states,xk_1))
-                print xk_1
                 chan_x_kalman.append(xk_1[0] )
                 chan_y_kalman.append(xk_1[1] )       
         
@@ -425,7 +430,7 @@ if __name__ == "__main__":
         print "warning: measurements missing"
         print t_list[np.where(np.diff(t_list) != acquisition_time)]
         print t_list[np.add(np.where(np.diff(t_list) != acquisition_time),1)]
-        print np.diff(t_list)    
+        print np.diff(t_list)  
 
     p = parser(bbox,filename,options)
     basemap = proj_basemap(bbox)
@@ -439,6 +444,7 @@ if __name__ == "__main__":
                 gt_x, gt_y = basemap(gt_long,gt_lat)
                 gt_x_list.append(gt_x)
                 gt_y_list.append(gt_y)
+                gt_fix_list.append(gt_fix)
             elif message_type == "$GNRMC":
                 timestamp = rmc_to_epoch_time(line)
                 gt_t_list.append(timestamp)
@@ -458,16 +464,28 @@ if __name__ == "__main__":
         chan_y = np.array(chan_y)[time_aligned_idx]
         gt_x_list = np.array(gt_x_list)[gt_time_aligned_idx]
         gt_y_list = np.array(gt_y_list)[gt_time_aligned_idx]
-        chan_x_kalman = np.array(chan_x_kalman)[time_aligned_idx]
-        chan_y_kalman = np.array(chan_y_kalman)[time_aligned_idx]
+        gt_fix_list = np.array(gt_fix_list)[gt_time_aligned_idx]
+        if any(chan_x_kalman):
+            chan_x_kalman = np.array(chan_x_kalman)[time_aligned_idx]
+            chan_y_kalman = np.array(chan_y_kalman)[time_aligned_idx]
         if len(chan_x) == 0 and len(grid_x) == 0:
             sys.exit('no timestamp matches with ground-truth!')       
-                 
+         
+        xdiff_chan = chan_x - gt_x 
+        ydiff_chan = chan_y - gt_y
+        err_chan = np.sqrt(np.square(xdiff_chan) + np.square(ydiff_chan))
+        mean_err_chan = np.mean(err_chan)
+        print "chan mean error: ",mean_err_chan
+        if any(chan_x_kalman):
+            xdiff_chan_kalman = chan_x_kalman - gt_x 
+            ydiff_chan_kalman = chan_y_kalman - gt_y
+            err_chan_kalman = np.sqrt(np.square(xdiff_chan_kalman) + np.square(ydiff_chan_kalman))
+            mean_err_chan_kalman = np.mean(err_chan_kalman) 
+            print "chan mean error with kalman filter: ",mean_err_chan_kalman  
         #except:
         #    warnings.warn("ground-truth-log not found")
     
     
-    print "ref_receiver",ref_receiver
     if options.map:
         i = 1 
         
@@ -479,7 +497,6 @@ if __name__ == "__main__":
             if i != (ref_receiver+1):
                 p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
             else:
-                print "annotation color should be different"
                 p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='r', alpha=0.9, color="red"))
             i += 1
             
@@ -522,6 +539,10 @@ if __name__ == "__main__":
             ground_truth_plot=p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5, label='ground truth (GPS-RTK)')[0]
             handles.append(ground_truth_plot)
             labels.append(ground_truth_plot.get_label())
+            for i in range(len(gt_fix_list)):
+                if gt_fix_list[i] not in ["fix","kinematic"]:
+                    print "rtk not fixed!"
+                    float_scatter = p.ax.scatter(gt_x_list[i],gt_y_list[i],color="m",marker="x")
         p.ax.legend(handles,labels)
 
         if options.save:

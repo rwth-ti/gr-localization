@@ -934,7 +934,10 @@ class fusion_center():
         # select new reference after acquisition if no prediction is available
         
         if self.reference_selection == "Min DOP" and not self.xk_1_chan.any():
-            self.ref_receiver = reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+            try:
+                self.ref_receiver = reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+            except:
+                print ("reference selection not possible, localizing already stopped")
         
         
         if self.calibrating:
