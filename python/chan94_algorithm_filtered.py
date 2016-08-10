@@ -16,6 +16,7 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
     sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
     y = []
     pos_rx = []
+    # maybe change (cofusing)
     for key in receivers:
         receiver = receivers[key]
         if key == ref_receiver:
@@ -72,23 +73,22 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
         #print "r21: "+str(r21)+" r31: "+str(r31)
         rmax21= np.sqrt(x21**2+y21**2)
         rmax31= np.sqrt(x31**2+y31**2)
-        eps = 0
-        #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, clip it to maximum value.
+        #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, construct valid hyperbola from prediction
         if r21>rmax21:
-            r21=rmax21 -eps
+            r21 =  np.sqrt(np.norm(np.array([x2,y2])-xk_prio))  - np.sqrt(np.norm(np.array([x1,y1])-xk_prio))
             invalid_21=True
             print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r21<-rmax21:
-            r21=-(rmax21)+eps
+            r21 =  np.sqrt(np.norm(np.array([x2,y2])-xk_prio))  - np.sqrt(np.norm(np.array([x1,y1])-xk_prio))
             invalid_21=True
             print "Warning: invalid TDOA between r2 & r1. Set to greatest value possible."
         if r31>rmax31:
-            r31=rmax31  -eps
-            invalid_31=True
+            r31 =  np.sqrt(np.norm(np.array([x3,y3])-xk_prio))  - np.sqrt(np.norm(np.array([x1,y1])-xk_prio))
+            invalid_31 = True
             print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
-        if r31<-rmax31:
-            r31=-(rmax31) +eps
-            invalid_31=True
+        if r31 < -rmax31:
+            r31 =  np.sqrt(np.norm(np.array([x3,y3])-xk_prio))  - np.sqrt(np.norm(np.array([x1,y1])-xk_prio))
+            invalid_31 = True
             print "Warning: invalid TDOA between r3 & r1. Set to greatest value possible."
         if invalid_31 and invalid_21:
             raise ValueError
@@ -115,14 +115,14 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
             if  xk_prio.any():
                 if np.linalg.norm(xy[0]-xk_prio) < np.linalg.norm(xy[1]-xk_prio):
                     print "1" 
-                    xy = xy[0]#changed:different solution gets chosen(closer to the center!)
+                    xy = xy[0]#changed:different solution gets chosen(closer to prediction!)
                 else:
                     print "2"
                     xy = xy[1]
             else:
                 if np.linalg.norm(xy[0]-center_triangle) < np.linalg.norm(xy[1]-center_triangle):
                     print "1"
-                    xy = xy[0]#changed:different solution gets chosen(closer to the center!)
+                    xy = xy[0]#changed:different solution gets chosen(closer to prediction!)
                 else:
                     print "2"
                     xy = xy[1]
