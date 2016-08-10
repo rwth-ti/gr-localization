@@ -608,9 +608,10 @@ class gui(QtGui.QMainWindow):
             if hasattr(estimated_position, "scatter"):
                 estimated_position.scatter.remove()
                 estimated_position.annotation.remove()
-            if hasattr(estimated_position, "track_plot"):
+            if hasattr(self, "track_plot"):
                 # revove plot item; procedure differs from scatter item!
-                estimated_position.track_plot.pop(0).remove()
+                if any(self.track_plot):
+                    self.track_plot.pop(0).remove()
 
             if hasattr(self, "ax"):
                 
@@ -619,10 +620,10 @@ class gui(QtGui.QMainWindow):
                 # plot target track (last 10 positions) if Kalman Filter is enabled:
                 if self.filtering_type == "Kalman filter":
                     prev_coordinates_kalman = np.array(self.queue_tx_coordinates_kalman) 
-                    estimated_position.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='magenta',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
+                    self.track_plot = self.ax.plot(prev_coordinates_kalman [:,0], prev_coordinates_kalman [:,1], c='magenta',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
                 else:
                     prev_coordinates = np.array(self.queue_tx_coordinates) 
-                    estimated_position.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='magenta',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
+                    self.track_plot = self.ax.plot(prev_coordinates[:,0], prev_coordinates[:,1], c='magenta',alpha=0.9, zorder=20,linestyle="-",linewidth=2)
                 # set annotation Rxi
                 text = (algorithm[0] + " " 
                                     + str(np.round(estimated_position.coordinates,2)))
@@ -654,7 +655,7 @@ class gui(QtGui.QMainWindow):
             if self.transmitter_positions.has_key("grid_based"):
                 estimated_position = self.transmitter_positions["grid_based"]
                 estimated_position.scatter.remove()
-                estimated_position.track_plot.remove()
+                self.track_plot.remove()
                 estimated_position.annotation.remove()
                 del self.transmitter_positions["grid_based"]
             self.canvas.draw()
@@ -1165,6 +1166,11 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("localize", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def localize_loop(self):
+        if hasattr(self, "track_plot"):
+        # revove plot item; procedure differs from scatter item!
+            self.track_plot.pop(0).remove()
+            self.queue_tx_coordinates_kalman = deque()
+            self.queue_tx_coordinates = deque()
         self.rpc_manager.request("localize_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def start_correlation(self):
@@ -1172,6 +1178,11 @@ class gui(QtGui.QMainWindow):
 
 
     def start_correlation_loop(self):
+        if hasattr(self, "track_plot"):
+        # revove plot item; procedure differs from scatter item!
+            self.track_plot.pop(0).remove()
+            self.queue_tx_coordinates_kalman = deque()
+            self.queue_tx_coordinates = deque()
         self.rpc_manager.request("start_correlation_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def stop_loop(self):
