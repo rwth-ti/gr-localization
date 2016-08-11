@@ -554,7 +554,7 @@ class gui(QtGui.QMainWindow):
                 receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
             else:
                 receiver.annotation_gps = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='c', alpha=0.9, zorder=20))
-                    
+            self.canvas.draw()      
         else:
             # ax not rendered yet, so update position when available
             self.pending_receivers_to_plot = True
