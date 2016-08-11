@@ -766,9 +766,8 @@ class fusion_center():
                 receiver.samples_calibration = f(x_interpolated)
             # find receiver with highest signal strength
             if self.reference_selection in ["Min signal power","Max signal power"]:
-                freq,Pxx = sig.periodogram(receiver.samples,receiver.samp_rate*receiver.interpolation)
-                idxs = np.where(np.logical_and(freq>=-receiver.samp_rate, freq<=receiver.samp_rate))
-                signal_strength.append(np.mean(Pxx[idxs]))
+                # parseval theorem 
+                signal_strength.append(np.sum(np.square(np.abs(receiver.samples))))
                 
         if self.reference_selection == "Max signal power":
             self.ref_receiver = receivers.keys()[np.argmax(signal_strength)]
