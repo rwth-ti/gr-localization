@@ -25,7 +25,7 @@ import probe_manager as probe_manager_local
 import receiver_interface
 import chan94_algorithm, chan94_algorithm_filtered, kalman
 import grid_based_algorithm
-from dop import reference_selection_dop
+import dop
 
 class fusion_center():
     def __init__(self, options):
@@ -63,17 +63,17 @@ class fusion_center():
         self.delay_calibration = []
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
-        self.calibration_average = 3
+        self.calibration_average = 60
         
         # postprocessing
         self.location_average_length = 3
         self.target_dynamic = 0.2
-        self.max_acc = 2
-        self.measurement_noise = 2
-        self.reference_selections = ["Manual","Max signal power","Min signal power","Min DOP"]
+        self.max_acc = 1.2
+        self.measurement_noise = 0.5
+        self.reference_selections = ["Manual","Max-signal-power","Min-signal-power","Min-DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
-        self.reference_selection = "Min signal power"
+        self.reference_selection = "Min-DOP"
         self.filtering_type = "Kalman filter"
         self.motion_model = "maneuvering"
         self.init_settings_kalman=dict()
@@ -501,7 +501,7 @@ class fusion_center():
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         if self.recording_results:
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
+            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         self.start_receivers(acquisitions)
@@ -522,7 +522,7 @@ class fusion_center():
             self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             if self.recording_results:
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,self.init_settings_kalman", file=open(self.results_file,"a"))
+                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
                 print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             self.run_loop = True
             self.start_receivers(acquisitions)
@@ -765,18 +765,20 @@ class fusion_center():
                 x_interpolated = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration) * receiver.interpolation)
                 receiver.samples_calibration = f(x_interpolated)
             # find receiver with highest signal strength
-            if self.reference_selection in ["Min signal power","Max signal power"]:
+            if self.reference_selection in ["Min-signal-power","Max-signal-power"]:
                 # parseval theorem 
                 signal_strength.append(np.sum(np.square(np.abs(receiver.samples))))
                 
-        if self.reference_selection == "Max signal power":
+        if self.reference_selection == "Max-signal-power":
             self.ref_receiver = receivers.keys()[np.argmax(signal_strength)]
-        elif self.reference_selection == "Min signal power":
+        elif self.reference_selection == "Min-signal-power":
             self.ref_receiver = receivers.keys()[np.argmin(signal_strength)]
         print (self.ref_receiver)
         
-        if self.reference_selection == "Min DOP" and  self.xk_1_chan.any():
-            self.ref_receiver = reference_selection_dop(self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2],receivers)
+        if self.reference_selection == "Min-DOP" and  self.xk_1_chan.any():
+            self.ref_receiver,dop_location = dop.reference_selection_dop(self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2],receivers)
+        elif self.xk_1_chan.any():
+            dop_location=dop.calc_dop(self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2],receivers,self.ref_receiver)
         
         
 
@@ -846,6 +848,11 @@ class fusion_center():
                     kalman_states["chan"] = self.xk_1_chan
                     self.init_kalman = False
                 else:
+                    if dop_location < 1:
+                        dop_location = 1
+                    if dop_location > 10:
+                        dop_location = 10
+                    self.kalman_filter.scale_measurement_noise(dop_location)
                     estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
                     #print (estimated_positions["chan"]["coordinates"])
                     estimated_positions["chan"]["coordinates"] = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
@@ -926,15 +933,15 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+str(self.reference_selection)+"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
         # select new reference after acquisition if no prediction is available
         
-        if self.reference_selection == "Min DOP" and not self.xk_1_chan.any():
+        if self.reference_selection == "Min-DOP" and not self.xk_1_chan.any():
             try:
-                self.ref_receiver = reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+                self.ref_receiver,dop_location = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
             except:
                 print ("reference selection not possible, localizing already stopped")
         
@@ -985,10 +992,12 @@ class fusion_center():
             if not self.ref_receiver == receiver:
                 if not calibration:
                     correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full", False)).tolist())
-                    delay = (np.argmax(correlation, axis=1) - self.samples_to_receive * self.interpolation + 1).tolist()
+                    #correlation.append(np.absolute(gcc_phat(receivers[receiver].samples, receivers[self.ref_receiver].samples)).tolist())
+                    delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive * self.interpolation)+ 1).tolist()
                 else:
                     correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full", False)).tolist())
-                    delay = (np.argmax(correlation, axis=1) - self.samples_to_receive_calibration * self.interpolation + 1).tolist()
+                    #correlation.append(gcc_phat(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration)).tolist())
+                    delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.interpolation) + 1).tolist()
                 correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))
             i +=1
         print("Delay:", delay, "samples")

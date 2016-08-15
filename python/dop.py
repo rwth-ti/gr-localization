@@ -19,7 +19,7 @@ def calc_dop(target_position,receivers,ref_receiver):
             tdoa_gradient = ((distance_target/np.linalg.norm(distance_target))-(distance_reference/np.linalg.norm(distance_reference))).T
             H[idx,:] = tdoa_gradient
             idx += 1
-    DOP = np.sqrt(np.trace(inv(np.dot(H.T,H)))**-1)
+    DOP = np.sqrt(np.trace(inv(np.dot(H.T,H))))
     return DOP
     
 def reference_selection_dop(target_position,receivers):
@@ -27,6 +27,11 @@ def reference_selection_dop(target_position,receivers):
     dop_references = []
     for idx in range(len(receivers)): 
         dop_references.append(calc_dop(target_position,receivers,receivers.keys()[idx]))
-    print dop_references
     reference_idx = np.argmin(dop_references)
-    return receivers.keys()[reference_idx]
+    return receivers.keys()[reference_idx],np.argmin(dop_references)
+    
+def get_min_dop(target_position,receivers):
+    dop_references = []
+    for idx in range(len(receivers)): 
+        dop_references.append(calc_dop(target_position,receivers,receivers.keys()[idx]))
+    return np.amin(dop_references)

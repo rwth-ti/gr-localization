@@ -20,6 +20,8 @@ class kalman_filter():
                      [-0.135,  1]])*init_settings["noise_var_x"]
         self.R_cs =    array( [[  1,  -0.14],
                      [-0.14,  1]])*init_settings["noise_var_x"]
+        
+        self.R_dop=np.array([])
              
         self.B =0 
         self.state_noise=(self.delta_t**2)*self.noise_factor  #if performance decreases -> back to delta_t
@@ -113,14 +115,24 @@ class kalman_filter():
             self.cnt_invalid_locations=0
             self.cnt_valid_locations=self.cnt_valid_locations+1
         return measurement
+        
+        
+    def scale_measurement_noise(self,dop):
+        # scale kalman filter measurement matrix depending on dilution of precision
+        self.R_dop = self.R_chan*dop
+    
+    
     def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm):
-    #measurement:vector,Pk_1:mxm matrix,xk_1: size m-vector, self:containing state propagation matrices, delta_t:time distance between measurements
-        if algorithm == "chan":
-            R=self.R_chan
-        elif algorithm == "grid_based":
-            R=self.R_cs
+        # measurement:vector,Pk_1:mxm matrix,xk_1: size m-vector, self:containing state propagation matrices, delta_t:time distance between measurements
+        if not self.R_dop.any():
+            if algorithm == "chan":
+                R=self.R_chan
+            elif algorithm == "grid_based":
+                R=self.R_cs
+            else:
+                sys.exit('algorithm does not exist')
         else:
-            sys.exit('algorithm does not exist')
+            R = self.R_dop
 
         #a priori estimations
         #Time Update
