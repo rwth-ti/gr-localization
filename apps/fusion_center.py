@@ -26,6 +26,7 @@ import receiver_interface
 import chan94_algorithm, chan94_algorithm_filtered, kalman
 import grid_based_algorithm
 import dop
+#from gcc_phat import gcc_phat
 
 class fusion_center():
     def __init__(self, options):
@@ -67,9 +68,9 @@ class fusion_center():
         
         # postprocessing
         self.location_average_length = 3
-        self.target_dynamic = 0.2
+        self.target_dynamic = 0.04
         self.max_acc = 1.2
-        self.measurement_noise = 0.5
+        self.measurement_noise = 0.8
         self.reference_selections = ["Manual","Max-signal-power","Min-signal-power","Min-DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
@@ -933,7 +934,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+str(self.reference_selection)+"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
