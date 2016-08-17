@@ -16,8 +16,8 @@ class kalman_filter():
         self.cnt_valid_locations=0
         self.cnt_invalid_locations=0
         self.max_acceleration=init_settings["max_acceleration"]
-        self.R_chan =   array( [[  1,  -0.135],
-                     [-0.135,  1]])*init_settings["noise_var_x"]
+        self.R_chan =   array( [[  1,  0],
+                     [0,  1]])*init_settings["noise_var_x"]
         self.R_cs =    array( [[  1,  -0.14],
                      [-0.14,  1]])*init_settings["noise_var_x"]
         
@@ -120,6 +120,11 @@ class kalman_filter():
     def scale_measurement_noise(self,dop):
         # scale kalman filter measurement matrix depending on dilution of precision
         self.R_dop = self.R_chan*dop
+    def scale_measurement_noise_H(self,H):
+        # scale kalman filter measurement matrix depending on dilution of precision
+        P_inv = inv(dot(H.T,H))
+        self.R_dop = dot(dot(dot(dot(P_inv,H.T),self.R_chan),H),P_inv)
+        print self.R_dop
     
     
     def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm):

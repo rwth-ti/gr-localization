@@ -68,9 +68,9 @@ class fusion_center():
         
         # postprocessing
         self.location_average_length = 3
-        self.target_dynamic = 0.04
+        self.target_dynamic = 0.09
         self.max_acc = 1.2
-        self.measurement_noise = 0.8
+        self.measurement_noise = 3.2
         self.reference_selections = ["Manual","Max-signal-power","Min-signal-power","Min-DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
@@ -720,7 +720,7 @@ class fusion_center():
         # check if timestamps are equal for all the receivers
         times_target = []
         times_calibration = []
-
+        H = np.array([])
         last_time_target = receivers.values()[0].tags["rx_time"]
         #print(receivers.values()[0].tags)
         if self.auto_calibrate:
@@ -776,10 +776,6 @@ class fusion_center():
             self.ref_receiver = receivers.keys()[np.argmin(signal_strength)]
         print (self.ref_receiver)
         
-        if self.reference_selection == "Min-DOP" and  self.xk_1_chan.any():
-            self.ref_receiver,dop_location = dop.reference_selection_dop(self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2],receivers)
-        elif self.xk_1_chan.any():
-            dop_location=dop.calc_dop(self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2],receivers,self.ref_receiver)
         
         
 
@@ -812,6 +808,11 @@ class fusion_center():
 
             if not self.filtering_type=="Kalman filter":
                 estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                if self.reference_selection == "Min-DOP" :
+                    try:
+                        self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+                    except:
+                        print ("reference selection not possible, localizing already stopped")
                 if self.grid_based_active:
                     estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
 
@@ -849,14 +850,22 @@ class fusion_center():
                     kalman_states["chan"] = self.xk_1_chan
                     self.init_kalman = False
                 else:
+                    '''
                     if dop_location < 1:
                         dop_location = 1
                     if dop_location > 10:
                         dop_location = 10
-                    self.kalman_filter.scale_measurement_noise(dop_location)
+                    '''
+                    
                     estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
                     #print (estimated_positions["chan"]["coordinates"])
                     estimated_positions["chan"]["coordinates"] = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
+                    if self.reference_selection == "Min-DOP" :
+                        try:
+                            self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+                        except:
+                            print ("reference selection not possible, localizing already stopped")
+                    self.kalman_filter.scale_measurement_noise_H(H)
                     self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),self.Pk_1_chan,self.xk_1_chan,"chan")    
                     estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]
                     #print (estimated_positions["chan"]["kalman_coordinates"])
@@ -940,11 +949,7 @@ class fusion_center():
             f.close()
         # select new reference after acquisition if no prediction is available
         
-        if self.reference_selection == "Min-DOP" and not self.xk_1_chan.any():
-            try:
-                self.ref_receiver,dop_location = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
-            except:
-                print ("reference selection not possible, localizing already stopped")
+        
         
         
         if self.calibrating:
