@@ -1,4 +1,5 @@
 import numpy as np
+from collections import deque
 from numpy import dot,array,identity
 from numpy.linalg import inv
 import sys, math
@@ -7,6 +8,9 @@ import pdb
 class kalman_filter():
 
     def __init__(self,init_settings):
+        self.window_size = 7
+        self.correction_sequences = deque([])
+        self.xk_1=[]
         self.model=init_settings["model"]
         self.delta_t=init_settings["delta_t"]
         self.noise_factor=init_settings["noise_factor"] 
@@ -16,8 +20,8 @@ class kalman_filter():
         self.cnt_valid_locations=0
         self.cnt_invalid_locations=0
         self.max_acceleration=init_settings["max_acceleration"]
-        self.R_chan =   array( [[  1,  0],
-                     [0,  1]])*init_settings["noise_var_x"]
+        self.R_chan =   array( [[  1,  0.5],
+                     [0.5,  1]])*init_settings["noise_var_x"]
         self.R_cs =    array( [[  1,  -0.14],
                      [-0.14,  1]])*init_settings["noise_var_x"]
         
@@ -48,7 +52,7 @@ class kalman_filter():
         if self.model == "maneuvering":
             self.state_size=6 
             #correlation coefficient
-            self.rho=0.1 
+            self.rho=0.15
             
 
             self.init_cov =array( [[self.noise_var_x, 0, self.noise_var_x/self.delta_t, 0, 0, 0] ,
@@ -106,11 +110,13 @@ class kalman_filter():
     def get_a_priori_est(self,xk_1):
         return dot(self.phi,xk_1.transpose())
     def pre_filter(self,measurement,xk_1):
-        if np.sqrt((np.linalg.norm((measurement[0]-xk_1[0])/self.delta_t-xk_1[2]))**2+(np.linalg.norm((measurement[1]-xk_1[1])/self.delta_t-xk_1[3]))**2)/(2*self.delta_t)>self.max_acceleration and self.cnt_valid_locations>5 and self.cnt_invalid_locations<5:
+        if np.sqrt((np.linalg.norm((measurement[0]-xk_1[0])/self.delta_t-xk_1[2]))**2+(np.linalg.norm((measurement[1]-xk_1[1])/self.delta_t-xk_1[3]))**2)/(2*self.delta_t)>self.max_acceleration and self.cnt_valid_locations>5 and self.cnt_invalid_locations<3:
             measurement=xk_1[:2]+np.random.normal()
-            self.cnt_valid_locations=0
+            
             self.cnt_invalid_locations=self.cnt_invalid_locations+1
             print "acceleration exeeds the greatest value allowed. The Kalman-Filter prediction will be used."
+            if self.cnt_invalid_locations==3:
+                self.cnt_valid_locations=0
         else:
             self.cnt_invalid_locations=0
             self.cnt_valid_locations=self.cnt_valid_locations+1
@@ -120,15 +126,22 @@ class kalman_filter():
     def scale_measurement_noise(self,dop):
         # scale kalman filter measurement matrix depending on dilution of precision
         self.R_dop = self.R_chan*dop
-    def scale_measurement_noise_H(self,H):
+    def adapt_R(self,H):
         # scale kalman filter measurement matrix depending on dilution of precision
         P_inv = inv(dot(H.T,H))
         self.R_dop = dot(dot(dot(dot(P_inv,H.T),self.R_chan),H),P_inv)
-        print self.R_dop
+        
+    def adapt_Q(self,Pk,Pk_1):
+        if len(self.correction_sequences) == self.window_size:
+            
+            self.Q = np.divide(np.sum(np.array(self.correction_sequences),0),self.window_size)#-dot(dot(self.phi,Pk_1),self.phi.transpose())+Pk
+            
+        print self.Q
     
     
     def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm):
         # measurement:vector,Pk_1:mxm matrix,xk_1: size m-vector, self:containing state propagation matrices, delta_t:time distance between measurements
+        self
         if not self.R_dop.any():
             if algorithm == "chan":
                 R=self.R_chan
@@ -149,6 +162,16 @@ class kalman_filter():
         #Measurement Update
         Pk=dot((identity(self.full_state_size)-dot(Kk,self.M)),Pk_prio)
         xk= (xk_prio+dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))).transpose()
-
+        '''
+        if any(self.xk_1):
+            self.correction_sequences.append(dot(np.array([dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))]).T,np.array([dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))]))
+)       
+        if len(self.correction_sequences) > self.window_size:
+            self.correction_sequences.popleft()
+            '''
+        self.xk_1 = xk
+        #self.adapt_Q(Pk,Pk_1)
         return xk ,Pk
+        
+        
 
