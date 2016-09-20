@@ -68,9 +68,9 @@ class fusion_center():
         
         # postprocessing
         self.location_average_length = 3
-        self.target_dynamic = 0.09
-        self.max_acc = 1.2
-        self.measurement_noise = 3.2
+        self.target_dynamic = 0.22
+        self.max_acc = 1.5
+        self.measurement_noise = 10
         self.reference_selections = ["Manual","Max-signal-power","Min-signal-power","Min-DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
@@ -116,6 +116,8 @@ class fusion_center():
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
         self.bbox = 6.0606,50.77819,6.06481,50.77967
+        # closeup of meadow in front of ict cubes
+        #self.bbox = (6.06210,50.77865,6.06306,50.77923)
         # Football court
         #self.bbox = 6.06429,50.77697,6.07271,50.78033
         # ICT indoor
@@ -721,6 +723,8 @@ class fusion_center():
         times_target = []
         times_calibration = []
         H = np.array([])
+        x_cov=0
+        y_cov=0
         last_time_target = receivers.values()[0].tags["rx_time"]
         #print(receivers.values()[0].tags)
         if self.auto_calibrate:
@@ -848,6 +852,8 @@ class fusion_center():
                     estimated_positions["chan"]["kalman_coordinates"] = np.array(list(estimated_positions["chan"]["coordinates"]))
                     #print (estimated_positions["chan"]["kalman_coordinates"])
                     kalman_states["chan"] = self.xk_1_chan
+                    x_cov = self.Pk_1_chan[0,0]
+                    y_cov = self.Pk_1_chan[1,1]
                     self.init_kalman = False
                 else:
                     '''
@@ -862,14 +868,17 @@ class fusion_center():
                     estimated_positions["chan"]["coordinates"] = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
                     if self.reference_selection == "Min-DOP" :
                         try:
-                            self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
-                        except:
+                    self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+                       except:
                             print ("reference selection not possible, localizing already stopped")
-                    self.kalman_filter.scale_measurement_noise_H(H)
+                    else:
+                        dop_location,H = calc_dop(estimated_positions["chan"]["coordinates"],receivers,self.ref_receiver)
+                    self.kalman_filter.adapt_R(H)
                     self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),self.Pk_1_chan,self.xk_1_chan,"chan")    
                     estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]
                     #print (estimated_positions["chan"]["kalman_coordinates"])
-
+                    x_cov = self.Pk_1_chan[0,0]
+                    y_cov = self.Pk_1_chan[1,1]
                     if self.grid_based_active:
                         estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
                         estimated_positions["grid_based"]["coordinates"] = self.kalman_filter.pre_filter(np.array(list(estimated_positions["grid_based"]["coordinates"])),self.xk_1_grid)
@@ -943,7 +952,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+","+str(x_cov) + ","+str(y_cov) +"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
