@@ -6,16 +6,22 @@ import pdb
 def calc_dop(target_position,receivers,ref_receiver):
     "calculate dilution of precision for given szenario"
     target_position = np.array(list(target_position))
-    reference_position  = np.array(list(receivers[ref_receiver].coordinates))
+    if receivers[ref_receiver].selected_position == "manual":
+        reference_position  = np.array(list(receivers[ref_receiver].coordinates))
+    else:
+        reference_position  = np.array(list(receivers[ref_receiver].coordinates_gps))
     distance_reference = target_position - reference_position
-    #print target_position
     H = np.ndarray(shape=[len(receivers)-1,len(target_position)])
     idx = 0
     for key in receivers.keys():
         #print "ref_receiver: " ,ref_receiver,"receiver: ",receivers[key]
         if key != ref_receiver:
-            
-            distance_target = target_position - np.array(receivers[key].coordinates)
+            if receivers[key].selected_position == "manual":
+                receiver_position  = np.array(list(receivers[key].coordinates))
+            else:
+                receiver_position  = np.array(list(receivers[key].coordinates_gps))
+
+            distance_target = target_position - receiver_position
             tdoa_gradient = ((distance_target/np.linalg.norm(distance_target))-(distance_reference/np.linalg.norm(distance_reference))).T
             H[idx,:] = tdoa_gradient
             idx += 1
