@@ -929,7 +929,7 @@ average</string>
                   <item row="2" column="0">
                    <widget class="QLabel" name="label_22">
                     <property name="text">
-                     <string>Measurement noise variance (in m^2)</string>
+                     <string>Measurement noise variance (in ns^2)</string>
                     </property>
                    </widget>
                   </item>
