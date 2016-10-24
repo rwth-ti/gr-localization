@@ -16,7 +16,7 @@ In order to execute the gr-localization you will need to install the following p
 - python-mpltoolkits.basemap
 
 
-Optional
+Recommended:
 --------------
 Install ntp server:
 - ntp
@@ -40,21 +40,37 @@ First make sure all the computers are reachable and firewalls are not blocking t
 
 To run a basic scenario with one fusion center, one GUI and several receivers and integrated LCXO disciplined oscilators run the following from the apps folder:
 
+Option 1:
+
 Computer 1 (Fusion center, GUI and receiver):
 
     ./fusion_center.py
     ./gui.py
-    ./receiver_flowgraph.py
+    ./receiver.py --ntp-server
 
 Computers 2 and 3 (receiver):
 
-    ./receiver_flowgraph.py --fusion-center "fusion_center_ip_addr"
+    ./receiver.py --fusion-center "fusion_center_ip_addr"
+
+To reach a longer battery runtime and faster processing, outrsourcing the fusion center to a faster Desktop computer is recommended:
+
+Computer 1 (Fusion center):
+
+    ./fusion_center.py
+
+Computers 2 to 4(receivers):
+
+    ./receiver.py --fusion-center "fusion_center_ip_addr"
+    
+    and at one or more of them:
+    
+    ./gui.py --fusion-center "fusion_center_ip_addr"
 
 Several receivers or GUIs can be run in the system specifying the fusion center ip address.
 If more than one receiver or GUI is going to be executed in the same computer, specify an index with -i option:
 
-    ./receiver_flowgraph.py -i 1 --fusion-center "fusion_center_ip_addr"
-    ./receiver_flowgraph.py -i 2 --fusion-center "fusion_center_ip_addr"
+    ./receiver.py -i 1 --fusion-center "fusion_center_ip_addr"
+    ./receiver.py -i 2 --fusion-center "fusion_center_ip_addr"
     ./gui.py -i 1 --fusion-center "fusion_center_ip_addr"
     ./gui.py -i 2 --fusion-center "fusion_center_ip_addr"
 
@@ -62,10 +78,10 @@ In order to have more accurate results, NTP usage is recommended. Run one of the
 
     ./receiver_flowgraph.py --fusion-center "fusion_center_ip_addr" --ntp-server
 
-If the clock reference is not the LCXO use -g option with one of the compatible devices:
+If the clock reference is not the internal oscillator use -g option with one of the compatible devices:
 
-    ./receiver_flowgraph.py -g lte_lite
-    ./receiver_flowgraph.py -g octoclock
+    ./receiver.py -g lte_lite
+    ./receiverpy -g octoclock
 
 Once everything is running the different components should appear in the setup tab of the GUI.
 
