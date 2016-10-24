@@ -22,7 +22,7 @@ def calc_dop(target_position,receivers,ref_receiver):
                 receiver_position  = np.array(list(receivers[key].coordinates_gps))
 
             distance_target = target_position - receiver_position
-            tdoa_gradient = ((distance_target/np.linalg.norm(distance_target))-(distance_reference/np.linalg.norm(distance_reference))).T
+            tdoa_gradient = np.divide(((distance_target/np.linalg.norm(distance_target))-(distance_reference/np.linalg.norm(distance_reference))).T,0.3)#divide by c*10^s-9
             H[idx,:] = tdoa_gradient
             idx += 1
     DOP = np.sqrt(np.trace(inv(np.dot(H.T,H))))

@@ -865,16 +865,16 @@ class fusion_center():
                     
                     estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
                     #print (estimated_positions["chan"]["coordinates"])
-                    estimated_positions["chan"]["coordinates"] = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
+                    measurement = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
                     if self.reference_selection == "Min-DOP" :
                         try:
-                    self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
-                       except:
+                            self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
+                        except:
                             print ("reference selection not possible, localizing already stopped")
                     else:
                         dop_location,H = calc_dop(estimated_positions["chan"]["coordinates"],receivers,self.ref_receiver)
                     self.kalman_filter.adapt_R(H)
-                    self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(estimated_positions["chan"]["coordinates"])),self.Pk_1_chan,self.xk_1_chan,"chan")    
+                    self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(measurement)),self.Pk_1_chan,self.xk_1_chan,"chan")    
                     estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]
                     #print (estimated_positions["chan"]["kalman_coordinates"])
                     x_cov = self.Pk_1_chan[0,0]
@@ -952,7 +952,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+","+str(x_cov) + ","+str(y_cov) +"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states["chan"])+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+","+str(x_cov) + ","+str(y_cov) +"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
