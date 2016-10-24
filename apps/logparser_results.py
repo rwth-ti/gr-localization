@@ -6,6 +6,7 @@ from matplotlib import patches
 import numpy as np
 from numpy import array
 import sys, warnings
+import pdb
 sys.path.append("../python")
 #import gui_helpers
 from pyproj import Proj, transform
@@ -20,6 +21,7 @@ import time
 from kalman import kalman_filter
 import ConfigParser
 from ConfigSectionMap import ConfigSectionMap
+from procrustres import procrustes
 
 
 # print with approopriate resolution
@@ -28,7 +30,7 @@ np.set_printoptions(precision=20)
 class parser():
     def __init__(self,bbox,filename,options):
         self.options = options
-        if options.map:
+        if options.map or options.plot_live:
             # map configuration
             self.figure_map = plt.figure(figsize=(16,10))
             self.figure_map.canvas.set_window_title(filename + "_map")
@@ -53,7 +55,7 @@ class parser():
         #img = Image.open("../maps/ict_cubes.png")
 
         self.ax = self.figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
-
+        
         #
         # create basemap
         #
@@ -87,9 +89,10 @@ class parser():
 
         self.basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
                       urcrnrlon=bbox[2], urcrnrlat=bbox[3],
-                      projection='tmerc', ax=self.ax, lon_0=lon_0, lat_0=lat_0)
-
+                      projection='tmerc', ax=self.ax, lon_0=lon_0, lat_0=lat_0,suppress_ticks=False)
+        
         self.basemap.imshow(img, interpolation='lanczos', origin='upper')
+        #TODO: axis ticks -> bad documentation
 
         #self.zp = gui_helpers.ZoomPan()
         #figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
@@ -99,6 +102,7 @@ class parser():
         #self.figure_map.patch.set_visible(False)
         self.ax.axis('off')
         #plt.show(block=False)
+        
 
     def make_tikz_plot_delays(self, delay, correction, filename):
         filename = filename.split(".")[0] + ".tex"
@@ -257,6 +261,18 @@ def parse_options():
                       help="Save plots to files")
     parser.add_option("", "--delay-threshold", type="int", default="0",
                       help="Threshold to filter TDOAs")
+    parser.add_option("", "--histogram-errors", action="store_true", default=False,
+                      help="Activate error histogram")
+    parser.add_option("", "--procrustes", action="store_true", default=False,
+                      help="error calculation with procrustes analysis")
+    parser.add_option("", "--lineplot-velocity", action="store_true", default=False,
+                      help="Activate velocity plot")
+    parser.add_option("", "--lineplot-cov", action="store_true", default=False,
+                      help="Activate velocity plot")
+    parser.add_option("", "--plot-live", action="store_true", default=False,
+                      help="real time plotting of measurements and ground-truth(if passed)")
+    parser.add_option("", "--skip-acquisitions", type="int", default=0,
+                      help="skip the first x acquisitons.")
     (options, args) = parser.parse_args()
     if len(args)<1:   # if filename is not given
         parser.error('Filename not given')
@@ -278,23 +294,26 @@ if __name__ == "__main__":
     f.readline()
     chan_x = []
     chan_y = []
-    chan_x_kalman=[]
-    chan_y_kalman=[]
+    chan_x_kalman = []
+    chan_y_kalman = []
+    velocity_estimates = []
     grid_x = []
     grid_y = []
-    grid_x_kalman=[]
-    grid_y_kalman=[]
+    grid_x_kalman = []
+    grid_y_kalman = []
     t_list = []
     gt_x_list = []
     gt_y_list = []
     gt_t_list = []
     gt_fix_list = []
+    cov_x_list = []
+    cov_y_list = []
     delays_list=[]
     delays_calibration_list = []
     delays_auto_calibration_list = []
     handles = []
     labels = []
-    for line in f:
+    for line in f.readlines()[options.skip_acquisitions:]:
         acquisition = eval(eval(line))
         timestamp = acquisition[0]
         t_list.append(timestamp)
@@ -323,6 +342,12 @@ if __name__ == "__main__":
                 acquisition_time = acquisition[21]
                 kalman_states = acquisition[22]
                 init_settings_kalman = acquisition[23]
+                if len(acquisition) > 23:
+                    try:
+                        cov_x_list.append(acquisition[25])
+                        cov_y_list.append(acquisition[26])
+                    except:
+                        pass
             except:
                 pass
         if (options.delay_threshold > 0):
@@ -361,6 +386,9 @@ if __name__ == "__main__":
             delays_list.append(delays)
             delays_calibration_list.append(delays_calibration)
             delays_auto_calibration_list.append(delays_auto_calibration)
+        if kalman_states and options.lineplot_velocity:
+            v=np.array((kalman_states[2:4]))
+            velocity_estimates.append(np.sum(np.square(v)))
     f.close()
     
     
@@ -433,6 +461,7 @@ if __name__ == "__main__":
         print np.diff(t_list)  
 
     p = parser(bbox,filename,options)
+    
     basemap = proj_basemap(bbox)
     if options.ground_truth_log != "":
         #try:
@@ -452,7 +481,7 @@ if __name__ == "__main__":
         gt_t_list=np.array(gt_t_list)
         if any(np.diff(gt_t_list) != acquisition_time):
             print "warning: references missing"
-            print np.diff(gt_t_list)
+            print np.where(np.diff(gt_t_list) != acquisition_time)
         # determine start and end time of overlapping timestamp vectors
         start_time = max(t_list[0],gt_t_list[0])
         end_time = min(t_list[-1],gt_t_list[-1])
@@ -470,34 +499,123 @@ if __name__ == "__main__":
             chan_y_kalman = np.array(chan_y_kalman)[time_aligned_idx]
         if len(chan_x) == 0 and len(grid_x) == 0:
             sys.exit('no timestamp matches with ground-truth!')       
-         
-        xdiff_chan = chan_x - gt_x 
-        ydiff_chan = chan_y - gt_y
-        err_chan = np.sqrt(np.square(xdiff_chan) + np.square(ydiff_chan))
-        mean_err_chan = np.mean(err_chan)
-        print "chan mean error: ",mean_err_chan
+        if options.procrustes:
+            d, Z_chan, tform = procrustes( np.vstack((gt_x_list,gt_y_list)).T,np.vstack((chan_x,chan_y)).T)
+            print d
+        else:
+            Z_chan = np.vstack((chan_x,chan_y)).T
+        xdiff_chan = Z_chan[:,0] -gt_x_list
+        ydiff_chan = Z_chan[:,1] -gt_y_list
+        err_chan = np.square(xdiff_chan) + np.square(ydiff_chan)
+        rmse_chan = np.sqrt(np.mean(err_chan))
+        
+        err_chan_kalman = np.array([])
         if any(chan_x_kalman):
-            xdiff_chan_kalman = chan_x_kalman - gt_x 
-            ydiff_chan_kalman = chan_y_kalman - gt_y
-            err_chan_kalman = np.sqrt(np.square(xdiff_chan_kalman) + np.square(ydiff_chan_kalman))
-            mean_err_chan_kalman = np.mean(err_chan_kalman) 
-            print "chan mean error with kalman filter: ",mean_err_chan_kalman  
+            if options.procrustes:
+                d, Z_chan_kalman, tform = procrustes( np.vstack((gt_x_list,gt_y_list)).T,np.vstack((chan_x_kalman,chan_y_kalman)).T)
+                Z_chan = np.dot(np.dot(tform["scale"],np.vstack((chan_x,chan_y)).T),tform["rotation"])+tform["translation"]
+                print d
+            else:
+                Z_chan_kalman = np.vstack((chan_x_kalman,chan_y_kalman)).T
+            xdiff_chan = Z_chan[:,0] -gt_x_list
+            ydiff_chan = Z_chan[:,1] -gt_y_list
+            err_chan = np.square(xdiff_chan) + np.square(ydiff_chan)
+            rmse_chan = np.sqrt(np.mean(err_chan))
+            #print "chan mean error: ",mean_err_chan
+            xdiff_chan_kalman = Z_chan_kalman[:,0] -gt_x_list
+            ydiff_chan_kalman = Z_chan_kalman[:,1] -gt_y_list
+            err_chan_kalman = np.square(xdiff_chan_kalman) + np.square(ydiff_chan_kalman)
+            rmse_chan_kalman = np.sqrt(np.mean(err_chan_kalman) )
+            #print "chan mean error with kalman filter: ",mean_err_chan_kalman  
         #except:
         #    warnings.warn("ground-truth-log not found")
+        if options.histogram_errors:
+            err_handles = []
+            err_labels = []
+            figure_errors = plt.figure()
+            figure_errors.canvas.set_window_title(filename + "_histogram_errors")
+            ax_errors = figure_errors.add_subplot(111)
+            ax_errors.set_ylabel(r'$(\Delta s)^2 [m^2]$')
+            ax_errors.set_xlabel(r'Acquisitions')
+            ax_errors.set_ylim([0,20])
+            chan_error_plot,=ax_errors.plot(err_chan,label="chan square error"+ '\n$RMSE =' + "{0:.3f}".format(rmse_chan)+"m$")
+            
+            handles.append(chan_error_plot)
+            labels.append(chan_error_plot.get_label())
+            if err_chan_kalman.any():
+                chan_error_plot_kalman,=ax_errors.plot(err_chan_kalman,color="red",label="Kalman filtered square error(chan)"+ '\n$RMSE =' + "{0:.3f}".format(rmse_chan_kalman)+"m$")
+                handles.append(chan_error_plot_kalman)
+                labels.append(chan_error_plot_kalman.get_label())
+            ax_errors.legend(handles,labels)
+            if options.save:
+                if options.procrustes:
+                    plt.savefig(args[0].split("/")[-1].split(".")[0]+ "_procrustes"+ "_histogram_rmse.pdf")
+                else:
+                    plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_rmse.pdf")
     
-    
-    if options.map:
+    if options.plot_live:
         i = 1 
-        
+        p.ax.axis([80,180,30,130])
         for rx in receivers_positions:
             p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation RXx
             text = "RX" + str(i)
             # index of logged reference receiver starts at 0 not at 1
-            if i != (ref_receiver+1):
-                p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9))
+            
+            if i != (ref_receiver+1): #and options.reference_selection == "Manual":
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='w', alpha=0.9))
             else:
-                p.ax.annotate(text, rx,fontweight='bold',bbox=dict(facecolor='r', alpha=0.9, color="red"))
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='r', alpha=0.9, color="red"))
+            i += 1
+            
+        p.figure_map.canvas.draw()
+
+        #for i in range(0,len(chan_x)):
+        #    p.ax.scatter(chan_x[i],chan_y[i],color="blue",marker="x")
+        #    p.ax.scatter(grid_x[i],grid_y[i],color="red",marker="x")
+        #    time.sleep(0.1)
+        #    p.figure_map.canvas.draw()
+        plt.ion()
+        for it in range(len(chan_x)):
+            if options.mapplot_mode in ["raw","compare"]:
+                # , for assigning the plots as line objects and not as tuples
+                chan_scatter = p.ax.scatter(chan_x[it],chan_y[it],color="blue",marker="x")
+            if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
+                # , for assigning the plots as line objects and not as tuples
+                chan_kalman_scatter=p.ax.scatter(chan_x_kalman[it],chan_y_kalman[it],color="red",marker="x")
+            if len(grid_x)>0:
+                if options.mapplot_mode in ["raw","compare"]:
+                    # , for assigning the plots as line objects and not as tuples
+                    grid_scatter=p.ax.scatter(grid_x[it],grid_y[it],color="black",marker="x")
+
+                if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
+                    # , for assigning the plots as line objects and not as tuples
+                    grid_kalman_scatter = p.ax.scatter(grid_x_kalman[it],grid_y_kalman[it],color="yellow",marker="x")
+            if len(gt_x_list)>0:
+                # , for assigning the plots as line objects and not as tuples
+                ground_truth_scatter=p.ax.scatter(gt_x_list[it],gt_y_list[it],color="cyan",marker="x")
+            
+            plt.pause(0.001)
+    
+    if options.map:
+        i = 1 
+        
+        p.ax.axis([80,180,30,130])
+        """
+        p.ax.set_xticks(np.linspace(80,180,int(10)))
+        p.ax.set_yticks(np.linspace(30,130,int(10)))
+        """
+        p.basemap.drawmapscale(lon=6.06194, lat=50.77855, lon0=6.06194, lat0=50.77855, length=20,  units='m',barstyle='fancy')
+        for rx in receivers_positions:
+            p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
+            # set annotation RXx
+            text = "RX" + str(i)
+            # index of logged reference receiver starts at 0 not at 1
+            
+            if i != (ref_receiver+1): #and options.reference_selection == "Manual":
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='w', alpha=0.9))
+            else:
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='r', alpha=0.9, color="red"))
             i += 1
             
                 
@@ -517,7 +635,7 @@ if __name__ == "__main__":
             labels.append(chan_plot.get_label())
         if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
             # , for assigning the plots as line objects and not as tuples
-            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2,label = 'kalman filtered (chan)')[0]
+            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2,label = 'Kalman filtered (chan)')[0]
         #for i in range(len(measurements)):
         #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
         #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
@@ -531,7 +649,7 @@ if __name__ == "__main__":
                 labels.append(grid_plot.get_label())
             if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
                 # , for assigning the plots as line objects and not as tuples
-                grid_kalman_plot, = p.ax.plot(grid_x_kalman,grid_y_kalman,color="yellow",marker="x",linestyle="-",linewidth=0.2,label='kalman filtered (grid-based)')[0]
+                grid_kalman_plot, = p.ax.plot(grid_x_kalman,grid_y_kalman,color="yellow",marker="x",linestyle="-",linewidth=0.2,label='Kalman filtered (grid-based)')[0]
                 handles.append(grid_kalman_plot)
                 labels.append(grid_kalman_plot.get_label())
         if len(gt_x_list)>0:
@@ -542,11 +660,15 @@ if __name__ == "__main__":
             for i in range(len(gt_fix_list)):
                 if gt_fix_list[i] not in ["fix","kinematic"]:
                     print "rtk not fixed!"
-                    float_scatter = p.ax.scatter(gt_x_list[i],gt_y_list[i],color="m",marker="x")
+                    #float_scatter = p.ax.scatter(gt_x_list[i],gt_y_list[i],color="m",marker="x")
         p.ax.legend(handles,labels)
 
         if options.save:
-            plt.savefig(args[0].split(".")[0] + "_map.pdf", dpi=150)
+            
+            plt.savefig(args[0].split("/")[-1].split(".")[0]+options.mapplot_mode + "_map.pdf", dpi=150)
+
+
+
 
     if options.histogram_location:
         chan_x_mean = np.mean(chan_x)
@@ -583,9 +705,9 @@ if __name__ == "__main__":
             bins = np.arange(np.min(grid_y)-1,np.max(grid_y)+1,estimated_positions["grid_based"]["resolution"])
             n, bins, patches = ax_hist_m_y.hist(grid_y, bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=label_grid_y)
         plt.legend()
-
+        plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:
-            plt.savefig(args[0].split(".")[0] + "_histogram_location.pdf")
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_location.pdf")
 
     if options.histogram_delays:
         d21mean = np.mean(delays_calibrated[:,0])
@@ -606,9 +728,9 @@ if __name__ == "__main__":
         bins = np.arange(np.min(delays_calibrated[:,1])-1,np.max(delays_calibrated[:,1])+1)
         ax_hist.hist(delays_calibrated[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
         plt.legend()
-
+        plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:
-            plt.savefig(args[0].split(".")[0] + "_histogram_delays.pdf")
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_delays.pdf")
 
     if options.delay:
         figure_delay = plt.figure()
@@ -621,7 +743,77 @@ if __name__ == "__main__":
             ax_delay.plot(delays_not_calibrated)
         if delays_calibrated.any():
             ax_delay.plot(delays_calibrated)
+        plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:
             p.make_tikz_plot_delays(delays_calibrated, delays_not_calibrated, args[0])
-
+            
+            
+            
+    if options.lineplot_velocity:
+        figure_velocity = plt.figure()
+        figure_velocity.canvas.set_window_title(filename + "_velocity")
+        ax_velocity = figure_velocity.add_subplot(111)
+        ax_velocity.set_ylabel(r'$v$[m/s]')
+        ax_velocity.set_xlabel(r'Acquisitions')
+        # check if measurements done with calibration or not
+        if velocity_estimates:
+            
+            ax_velocity.plot(velocity_estimates)
+        plt.autoscale(enable=True, axis='x', tight=True)
+        if options.save:
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_lineplot_velocity.pdf")
+            pass
+            
+    if options.lineplot_cov:
+        handles_cov=[]
+        labels_cov=[]
+        figure_cov = plt.figure()
+        figure_cov.canvas.set_window_title(filename + "_cov")
+        ax_cov = figure_cov.add_subplot(111)
+        ax_cov.set_ylabel(r'$\sigma^2[m^2]$')
+        ax_cov.set_xlabel(r'Acquisitions')
+        print cov_x_list
+        print cov_y_list
+        # check if measurements done with calibration or not
+        if cov_x_list:
+            
+            cov_x_plot, = ax_cov.plot(cov_x_list, label =r"$\sigma_x^2$ estimate")
+            handles_cov.append(cov_x_plot)
+            labels_cov.append(cov_x_plot.get_label())
+            cov_y_plot, = ax_cov.plot(cov_y_list,color="red",label =r"$\sigma_y^2$ estimate")
+            handles_cov.append(cov_y_plot)
+            labels_cov.append(cov_y_plot.get_label())
+            ax_cov.legend(handles_cov,labels_cov)
+        plt.autoscale(enable=True, axis='x', tight=True)
+        if options.save:
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_lineplot_cov.pdf")
+            pass
+    '''        
+    if options.histogram_errors:
+        # histogram of errors
+        xdiff_chan = chan_x - gt_x 
+        ydiff_chan = chan_y - gt_y
+        err_chan = np.sqrt(np.square(xdiff_chan) + np.square(ydiff_chan))
+        mean_err_chan = np.mean(err_chan)
+        print "chan error: ",err_chan
+        if any(chan_x_kalman):
+            xdiff_chan_kalman = chan_x_kalman - gt_x 
+            ydiff_chan_kalman = chan_y_kalman - gt_y
+            err_chan_kalman = np.sqrt(np.square(xdiff_chan_kalman) + np.square(ydiff_chan_kalman))
+            mean_err_chan_kalman = np.mean(err_chan_kalman) 
+            print "chan error with kalman filter: ",mean_err_chan_kalman
+        if any(grid_x):
+            xdiff_grid = grid_x - gt_x 
+            ydiff_grid = grid_y - gt_y
+            err_grid = np.sqrt(np.square(xdiff_grid) + np.square(ydiff_grid))
+            mean_err_grid = np.mean(err_grid)
+            print "chan error: ",err_chan
+        if any(grid_x_kalman):
+            xdiff_grid_kalman = grid_x_kalman - gt_x 
+            ydiff_grid_kalman = grid_y_kalman - gt_y
+            err_grid = np.sqrt(np.square(xdiff_grid_kalman) + np.square(ydiff_grid_kalman))
+            mean_err_grid_kalman = np.mean(err_grid_kalman)
+            print "chan error with kalman filter: ",mean_err_chan_kalman'''
+    if not (options.map or options.plot_live):
+        plt.autoscale(enable=True, axis='x', tight=True)
     plt.show()
