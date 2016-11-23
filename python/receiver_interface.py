@@ -71,11 +71,19 @@ class receiver_interface():
         self.rpc_mgr.request("sync_time")
 
     def request_samples(self, time_to_receive, acquisitions, acquisition_time):
+        
         self.samples = []
         self.samples_calibration = []
-        self.first_packet = True
         self.reception_complete = False
-        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions, acquisition_time])
+        self.coordinates_gps = [0,0]
+        #check if coordinates have been set
+        if (self.selected_position == "manual" and all(coordinate > 0 for coordinate in self.coordinates ))or(self.selected_position == "GPS" and all(coordinate > 0 for coordinate in self.coordinates_gps) ):
+            #self.first_packet = True
+
+            self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions, acquisition_time])
+        else:
+            #self.first_packet = True
+            print "Set receiver positions at first!"
 
     def reset_receiver(self):
         print "Reset receiver: ", self.serial
@@ -90,8 +98,11 @@ class receiver_interface():
         if tags is not None:
             print self.serial, tags, "num_samples", len(samples)
         else:
+            self.error_detected = True
             print self.serial, "tags == None", len(samples)
+            print "reception incomplete: samples and tags missing"
         if self.frequency == self.frequency_calibration:
+            
             print "Warning: calibration frequency should not be equal to target frequency"
 
         # state machine to toggle between target and calibration samples
@@ -134,6 +145,7 @@ class receiver_interface():
                     print "Error: USRP-source tag shows unexpected calibration carrier frequency"
             elif tags is None:
                 if len(self.samples_calibration) < self.samples_to_receive_calibration:
+                    self.error_detected = True
                     self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
                     if len(self.samples_calibration) == self.samples_to_receive_calibration:
                         self.acquisition_state = "target"

@@ -23,12 +23,24 @@ from PIL import Image
 from pyproj import Proj, transform
 import math
 import socket
+import urllib2
 from functools import partial
 from collections import deque
 sys.path.append("../python")
 import receiver_interface
 import rpc_manager as rpc_manager_local
 import gui_helpers
+
+def check_OSM():
+    try:
+        header = {"pragma" : "no-cache"} # Tells the server to send fresh copy
+        req = urllib2.Request("http://www.openstreetmap.org", headers=header)
+        response=urllib2.urlopen(req,timeout=2)
+        print "you are connected"
+        return True
+    except urllib2.URLError as err:
+        print "Openstreetmap.org not availabe. Check your internet connection"
+        return False
 
 class gui(QtGui.QMainWindow):
     signal_error_set_map = QtCore.pyqtSignal()
@@ -398,16 +410,22 @@ class gui(QtGui.QMainWindow):
         x = x1-x0
         y = y1-y0
         scale = math.ceil(math.sqrt(abs(x*y/0.3136))) * 2
+        
+        # check if OSM is available at first 
 
-        if self.map_type == "Online":
-            print "Setting online map"
-            r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+        if self.map_type == "Online" and check_OSM():
+            #if loding image from open street map fails, retry until succeed
+            while True:
+                print "Setting online map"
+                r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+                
+                if r.status_code == 200:
+                    img = Image.open(StringIO(r.content))
+                    if not os.path.exists("../maps"):
+                            os.makedirs("../maps")
+                    img.save("../maps/map.png")
+                    break
 
-            if r.status_code == 200:
-                img = Image.open(StringIO(r.content))
-                if not os.path.exists("../maps"):
-                        os.makedirs("../maps")
-                img.save("../maps/map.png")
 
         else:
             print "Setting offline map", self.map_file
@@ -709,10 +727,13 @@ class gui(QtGui.QMainWindow):
         B = np.linalg.norm(pos_rx[1]-pos_rx[0])
 
         # Asign alpha0 angle depending on the sensors relative position
-        if pos_rx[1][0]>pos_rx[0][0]:
-            alpha0 = -np.arcsin((pos_rx[1][1]-pos_rx[0][1])/B)
-        else:
-            alpha0 = np.arcsin((pos_rx[1][1]-pos_rx[0][1])/B)+np.pi
+        try:
+            if pos_rx[1][0]>pos_rx[0][0]:
+                alpha0 = -np.arcsin((pos_rx[1][1]-pos_rx[0][1])/B)
+            else:
+                alpha0 = np.arcsin((pos_rx[1][1]-pos_rx[0][1])/B)+np.pi
+        except:
+            print "receiver positions are invalid!"
 
         # Calculate parametric points of the hyperbola
         Hx = []
