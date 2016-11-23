@@ -1,6 +1,6 @@
 import numpy as np
 import time
-
+#from gcc_phat import gcc_phat
 
 
 def estimate_delay(y1, y2):
@@ -8,6 +8,13 @@ def estimate_delay(y1, y2):
     delay = (np.argmax(correlation) - len(y1) + 1).tolist()
     return delay
 
+'''    
+def estimate_delay_gcc_phat(y1, y2,dmax):
+    correlation = np.absolute(np.correlate(y1, y2, "full", False)).tolist()
+    #correlation = np.absolute(gcc_phat(y1, y2)).tolist()
+    delay = (np.argmax(np.hstack((np.zeros(200),correlation[200:-200],np.zeros(200)))) - len(y1) + 1).tolist()
+    return delay
+'''
 
 def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
     invalid_21=False
@@ -16,6 +23,9 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
     sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
     y = []
     pos_rx = []
+    dmax = []
+    
+    
     # maybe change (cofusing)
     for key in receivers:
         receiver = receivers[key]
@@ -33,9 +43,32 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
                 pos_rx.insert(0, receiver.coordinates_gps)
             else:
                 pos_rx.append(receiver.coordinates_gps)
+                
+    # Set receivers position.
+    x1 = pos_rx[0][0]
+    y1 = pos_rx[0][1]
+    x2 = pos_rx[1][0]
+    y2 = pos_rx[1][1]
+    x3 = pos_rx[2][0]
+    y3 = pos_rx[2][1]
+    
+    # Define position differences[0]
+    x21 = x2 - x1
+    x31 = x3 - x1
+    y21 = y2 - y1
+    y31 = y3 - y1
+    
+    center_triangle = ((x1+x2+x3)/3,(y1+y2+y3)/3)
+    rmax21= np.sqrt(x21**2+y21**2)
+    rmax31= np.sqrt(x31**2+y31**2)
+    
+    
 
     c = 299700000
-
+    '''
+    dmax.append(np.ceil(rmax12/c))
+    dmax.append(np.ceil(rmax13/c))
+    '''
     #cross correlations
     d = []
     for receiver in receivers:
@@ -45,15 +78,7 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
     d13 = d[1]
     #print "d21: "+str(d12)+" d31: "+str(d13)
 
-    # Set receivers position.
-    x1 = pos_rx[0][0]
-    y1 = pos_rx[0][1]
-    x2 = pos_rx[1][0]
-    y2 = pos_rx[1][1]
-    x3 = pos_rx[2][0]
-    y3 = pos_rx[2][1]
-    
-    center_triangle = ((x1+x2+x3)/3,(y1+y2+y3)/3)
+
     
     try:
         # Estimated distance difference from receivers to transmiter
@@ -65,14 +90,8 @@ def localize(receivers, ref_receiver, bbox,xk_prio=np.array([])):
         K2 = pow(x2,2) + pow(y2,2)
         K3 = pow(x3,2) + pow(y3,2)
 
-        # Define position differences[0]
-        x21 = x2 - x1
-        x31 = x3 - x1
-        y21 = y2 - y1
-        y31 = y3 - y1
-        #print "r21: "+str(r21)+" r31: "+str(r31)
-        rmax21= np.sqrt(x21**2+y21**2)
-        rmax31= np.sqrt(x31**2+y31**2)
+
+
         #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, construct valid hyperbola from prediction
         if r21>rmax21:
             r21 =  np.sqrt(np.norm(np.array([x2,y2])-xk_prio))  - np.sqrt(np.norm(np.array([x1,y1])-xk_prio))

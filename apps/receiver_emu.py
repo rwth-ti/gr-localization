@@ -101,6 +101,7 @@ class top_block(gr.top_block):
         self.run_loop = run_loop
 
     def set_samp_rate(self,samp_rate):
+        print "samp_rate set to", samp_rate
         self.samp_rate = samp_rate
     def set_bw(self,bw):
         return
@@ -138,7 +139,7 @@ class top_block(gr.top_block):
 
         times = 1
         if auto_calibrate: times = 2
-        
+        # change loop structure? (confusing)
         while True:
             for i in range(0,times):
                 self.samples_to_receive = samples_to_receive
@@ -178,6 +179,8 @@ class top_block(gr.top_block):
                 time.sleep(0.2)
 
             acquisitions -= 1
+            
+            
             if not self.run_loop or (acquisitions <= 0 and not infinity):
                 break
             time.sleep(acquisition_time)
@@ -194,8 +197,7 @@ class top_block(gr.top_block):
         # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
     def get_delay_from_location(self,transmitter_coordinates):
-        print transmitter_coordinates
-        print self.coordinates
+
         delay=int((np.linalg.norm(np.array(list(self.coordinates))-transmitter_coordinates)/self.c)*self.samp_rate)
         return delay
     

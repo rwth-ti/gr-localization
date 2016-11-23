@@ -126,11 +126,24 @@ class kalman_filter():
     def scale_measurement_noise(self,dop):
         # scale kalman filter measurement matrix depending on dilution of precision
         self.R_dop = self.R_chan*dop
+
     def adapt_R(self,H):
         # scale kalman filter measurement matrix depending on dilution of precision
+        
         P_inv = inv(dot(H.T,H))
         self.R_dop = dot(dot(dot(dot(P_inv,H.T),self.R_chan),H),P_inv)
         
+        idxs=np.where(self.R_dop>20)
+        print idxs
+        if idxs[0].any() or idxs[1].any():
+            self.R_dop[idxs]=20
+        idxs=np.where(self.R_dop<-20)
+        print idxs
+        if idxs[0].any() or idxs[1].any():
+            self.R_dop[idxs]=-20
+        print self.R_dop
+        
+    '''
     def adapt_Q(self,Pk,Pk_1):
         if len(self.correction_sequences) == self.window_size:
             
@@ -138,7 +151,7 @@ class kalman_filter():
             
         print self.Q
     
-    
+    '''
     def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm):
         # measurement:vector,Pk_1:mxm matrix,xk_1: size m-vector, self:containing state propagation matrices, delta_t:time distance between measurements
         self
