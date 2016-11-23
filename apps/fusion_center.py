@@ -49,7 +49,7 @@ class fusion_center():
         self.gain = float(options.gain)
         self.gain_calibration = float(options.gain_calibration)
         self.antenna = options.antenna
-        self.auto_calibrate = options.no_auto_calibrate
+        self.auto_calibrate = options.auto_calibrate 
         self.acquisition_time = float(options.acquisition_time)
 
         self.receivers = {}
@@ -69,7 +69,7 @@ class fusion_center():
         # postprocessing
         self.location_average_length = 3
         self.target_dynamic = 0.22
-        self.max_acc = 1.5
+        self.max_acc = 5
         self.measurement_noise = 10
         self.reference_selections = ["Manual","Max-signal-power","Min-signal-power","Min-DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
@@ -87,7 +87,7 @@ class fusion_center():
         self.recording_samples = False
         self.results_file = ""
         if not os.path.exists("../log"):
-                os.makedirs("../log")
+            os.makedirs("../log")
         self.results = None
         self.run_loop = False
         self.localizing = False
@@ -1064,8 +1064,8 @@ def parse_options():
                       help="Gain in dB")
     parser.add_option("", "--gain-calibration", type="float", default="36",
                       help="Gain in dB for calibration")
-    parser.add_option("", "--no-auto-calibrate", action="store_true", default=False,
-                      help="Deactivate reference calibration station")
+    parser.add_option("", "--auto-calibrate", action="store_true", default=False,
+                      help="Activate reference calibration station")
     parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
                       
