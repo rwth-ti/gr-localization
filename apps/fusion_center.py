@@ -463,9 +463,11 @@ class fusion_center():
 
     def start_receivers(self, acquisitions=0):
         # reception 1 second in the future at full second
-        time_to_receive = np.ceil(time.time()) + 1
-        for receiver in self.receivers.values():
-            threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, acquisitions)).start()
+        if not self.processing:
+            time_to_receive = np.ceil(time.time()) + 1
+            self.init_kalman = True
+            for receiver in self.receivers.values():
+                threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, acquisitions)).start()
 
 
     def start_receiver(self, receiver, time_to_receive, acquisitions):
@@ -473,7 +475,6 @@ class fusion_center():
             receiver.samples_calibration = []
             receiver.first_packet = True
             receiver.reception_complete = False
-            self.init_kalman = True
             receiver.set_run_loop(self.run_loop)
             if self.ntp_sync:
                 receiver.request_samples(time_to_receive, acquisitions, self.acquisition_time)

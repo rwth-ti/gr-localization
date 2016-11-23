@@ -215,6 +215,7 @@ class top_block(gr.top_block):
                     print "time to receive:", time_to_recv
                     acquisitions -= 1
                     if not self.run_loop or (acquisitions <= 0 and not infinity):
+                        time.sleep(acquisition_time/4)
                         break
                 time.sleep(acquisition_time/4)
                 
