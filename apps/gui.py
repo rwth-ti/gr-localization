@@ -1168,7 +1168,7 @@ class gui(QtGui.QMainWindow):
     def localize_loop(self):
         if hasattr(self, "track_plot"):
             # revove plot item; procedure differs from scatter item!
-            if self.track_plot[0]:
+            if self.track_plot:
                 self.track_plot.pop(0).remove()
             self.queue_tx_coordinates_kalman = deque()
             self.queue_tx_coordinates = deque()
@@ -1181,7 +1181,8 @@ class gui(QtGui.QMainWindow):
     def start_correlation_loop(self):
         if hasattr(self, "track_plot"):
         # revove plot item; procedure differs from scatter item!
-            self.track_plot.pop(0).remove()
+            if self.track_plot:
+                self.track_plot.pop(0).remove()
             self.queue_tx_coordinates_kalman = deque()
             self.queue_tx_coordinates = deque()
         self.rpc_manager.request("start_correlation_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
