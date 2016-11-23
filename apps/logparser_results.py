@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 from optparse import OptionParser
+import matplotlib
+matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['text.latex.unicode'] = True
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import numpy as np
@@ -26,13 +29,15 @@ from procrustres import procrustes
 
 # print with approopriate resolution
 np.set_printoptions(precision=20)
+plt.rc('text', usetex=True)
+plt.rc('font', family='serif')
 
 class parser():
     def __init__(self,bbox,filename,options):
         self.options = options
         if options.map or options.plot_live:
             # map configuration
-            self.figure_map = plt.figure(figsize=(16,10))
+            self.figure_map = plt.figure(figsize=(14,10))
             self.figure_map.canvas.set_window_title(filename + "_map")
             self.init_map(bbox)
 
@@ -273,6 +278,8 @@ def parse_options():
                       help="real time plotting of measurements and ground-truth(if passed)")
     parser.add_option("", "--skip-acquisitions", type="int", default=0,
                       help="skip the first x acquisitons.")
+    parser.add_option("", "--crop-ict", action="store_true", default= True, 
+                      help="hack to crop the default gui map to the region in front of the receiers")
     (options, args) = parser.parse_args()
     if len(args)<1:   # if filename is not given
         parser.error('Filename not given')
@@ -285,6 +292,7 @@ def parse_options():
 # Main
 ###############################################################################
 if __name__ == "__main__":
+
     options,args = parse_options()
     if options.mapplot_mode not in ["final","raw","compare"]:
         sys.exit("invalid option %s:check logparser_results.py --help"%options.mapplot_mode)
@@ -555,17 +563,20 @@ if __name__ == "__main__":
     
     if options.plot_live:
         i = 1 
-        p.ax.axis([80,180,30,130])
+        if options.crop_ict:
+            p.ax.axis([80,180,30,130])
+
+            
         for rx in receivers_positions:
             p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation RXx
-            text = "RX" + str(i)
+            text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
             
             if i != (ref_receiver+1): #and options.reference_selection == "Manual":
-                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='w', alpha=0.9))
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 18,bbox=dict(facecolor='w', alpha=0.9))
             else:
-                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='r', alpha=0.9, color="red"))
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 18,bbox=dict(facecolor='r', alpha=0.9, color="red"))
             i += 1
             
         p.figure_map.canvas.draw()
@@ -599,23 +610,27 @@ if __name__ == "__main__":
     
     if options.map:
         i = 1 
-        
-        p.ax.axis([80,180,30,130])
+        if options.crop_ict:
+            p.ax.axis([88,172,57,114])
+            p.basemap.drawmapscale(lon=6.06201, lat=50.77874, lon0=6.06201, lat0=50.77874, length=20,  units='m',barstyle='fancy',fontsize = 30, yoffset=1.2)
+        else:
+            p.basemap.drawmapscale(lon=bbox[0]+0.0002, lat=bbox[1]+0.00015, lon0=bbox[0]+0.0002, lat0=bbox[1]+0.00015, length=20,  units='m',barstyle='fancy',fontsize = 30,yoffset=1.2)
+            
         """
         p.ax.set_xticks(np.linspace(80,180,int(10)))
         p.ax.set_yticks(np.linspace(30,130,int(10)))
         """
-        p.basemap.drawmapscale(lon=6.06194, lat=50.77855, lon0=6.06194, lat0=50.77855, length=20,  units='m',barstyle='fancy')
+        
         for rx in receivers_positions:
             p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
             # set annotation RXx
-            text = "RX" + str(i)
+            text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
-            
+            rx = (rx[0]+2,rx[1]-0.5)
             if i != (ref_receiver+1): #and options.reference_selection == "Manual":
-                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='w', alpha=0.9))
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='w', alpha=0.9))
             else:
-                p.ax.annotate(text, rx,fontweight='bold', fontsize = 7,bbox=dict(facecolor='r', alpha=0.9, color="red"))
+                p.ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='r', alpha=0.7, color="red"))
             i += 1
             
                 
@@ -630,12 +645,12 @@ if __name__ == "__main__":
         if options.mapplot_mode in ["raw","compare"]:
             p.ax.plot(chan_x[0],chan_y[0],color="blue",marker="x",markersize=10)
             # , for assigning the plots as line objects and not as tuples
-            chan_plot = p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.2,label = 'raw locations (chan)')[0]
+            chan_plot = p.ax.plot(chan_x,chan_y,color="blue",marker="x",linestyle="--",linewidth=0.5,label = 'Raw locations (TDOA)')[0]
             handles.append(chan_plot)
             labels.append(chan_plot.get_label())
         if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
             # , for assigning the plots as line objects and not as tuples
-            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="-",linewidth=0.2,label = 'Kalman filtered (chan)')[0]
+            chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="--",linewidth=0.5,label = 'Kalman filtered')[0]
         #for i in range(len(measurements)):
         #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
         #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
@@ -644,7 +659,7 @@ if __name__ == "__main__":
         if len(grid_x)>0:
             if options.mapplot_mode in ["raw","compare"]:
                 # , for assigning the plots as line objects and not as tuples
-                grid_plot=p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.2,label='raw locations (grid-based)')[0]
+                grid_plot=p.ax.plot(grid_x,grid_y,color="black",marker="x",linestyle="--",linewidth=0.5,label='Raw locations (grid-based)')[0]
                 handles.append(grid_plot)
                 labels.append(grid_plot.get_label())
             if len (grid_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
@@ -654,17 +669,17 @@ if __name__ == "__main__":
                 labels.append(grid_kalman_plot.get_label())
         if len(gt_x_list)>0:
             # , for assigning the plots as line objects and not as tuples
-            ground_truth_plot=p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5, label='ground truth (GPS-RTK)')[0]
+            ground_truth_plot=p.ax.plot(gt_x_list,gt_y_list,color="cyan",marker="x",linestyle="-",linewidth=0.5, label='Ground truth (GPS-RTK)')[0]
             handles.append(ground_truth_plot)
             labels.append(ground_truth_plot.get_label())
             for i in range(len(gt_fix_list)):
                 if gt_fix_list[i] not in ["fix","kinematic"]:
                     print "rtk not fixed!"
                     #float_scatter = p.ax.scatter(gt_x_list[i],gt_y_list[i],color="m",marker="x")
-        p.ax.legend(handles,labels)
-
+        p.ax.legend(handles,labels,fontsize = 30)
+        #plt.subplots_adjust(left=0.15, right=0.85)
         if options.save:
-            
+            #p.figure_map.tight_layout()
             plt.savefig(args[0].split("/")[-1].split(".")[0]+options.mapplot_mode + "_map.pdf", dpi=150)
 
 
