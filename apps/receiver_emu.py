@@ -39,7 +39,7 @@ class top_block(gr.top_block):
         self.run_loop = False
         self.samp_rate = 50000000
         self.hostname = os.uname()[1]
-        self.gps = "dummy"
+        self.gps = "emu_"
         self.id_rx = options.id_rx
         self.noise_amp = 1/np.sqrt(np.power(10,options.snr/10))
         self.modulation = options.modulation
@@ -117,7 +117,7 @@ class top_block(gr.top_block):
         first = True
         while(True):
             # register receiver [hostname, usrp_serial, rx_id]
-            self.rpc_manager.request("register_receiver",[self.ip_addr, "dummy" + self.hostname + str(options.id_rx), self.options.id_rx, self.gps, first, self.coordinates])
+            self.rpc_manager.request("register_receiver",[self.ip_addr, self.hostname + "_emu" +  str(options.id_rx), self.options.id_rx, self.gps, first, self.coordinates])
             first = False
             time.sleep(10)
 

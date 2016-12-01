@@ -99,7 +99,7 @@ class fusion_center():
         
         
         self.map_type = "Online"
-        self.map_file = ""
+        self.map_file = "../maps/map.png"
         self.coordinates_type = "Geographical"
         #kalman filtering
         self.xk_1_chan=np.array([])
@@ -471,8 +471,8 @@ class fusion_center():
 
 
     def start_receiver(self, receiver, time_to_receive, acquisitions):
-            receiver.samples = []
-            receiver.samples_calibration = []
+            receiver.samples = np.array([])
+            receiver.samples_calibration = np.array([])
             receiver.first_packet = True
             receiver.reception_complete = False
             receiver.set_run_loop(self.run_loop)
@@ -764,7 +764,7 @@ class fusion_center():
             x = np.linspace(0,len(receiver.samples),len(receiver.samples))
             f = interpolate.interp1d(x, receiver.samples)
             x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * receiver.interpolation)
-            receiver.samples = f(x_interpolated)
+            receiver.samples = np.array(f(x_interpolated))
             if receiver.auto_calibrate:
                 x = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration))
                 f = interpolate.interp1d(x, receiver.samples_calibration)
@@ -972,8 +972,8 @@ class fusion_center():
         
         # set flags to enable new reception
         for receiver in receivers.values():
-            receiver.samples = []
-            receiver.samples_calibration = []
+            receiver.samples = np.array([])
+            receiver.samples_calibration = np.array([])
             receiver.first_packet = True
             receiver.reception_complete = False
         self.processing=False
@@ -1007,11 +1007,11 @@ class fusion_center():
         for receiver in receivers:
             if not self.ref_receiver == receiver:
                 if not calibration:
-                    correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full", False)).tolist())
+                    correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full")).tolist())
                     #correlation.append(np.absolute(gcc_phat(receivers[receiver].samples, receivers[self.ref_receiver].samples)).tolist())
                     delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive * self.interpolation)+ 1).tolist()
                 else:
-                    correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full", False)).tolist())
+                    correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full")).tolist())
                     #correlation.append(gcc_phat(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration)).tolist())
                     delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.interpolation) + 1).tolist()
                 correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))

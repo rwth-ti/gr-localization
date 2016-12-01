@@ -4,7 +4,7 @@ import time
 
 
 def estimate_delay(y1, y2):
-    correlation = np.absolute(np.correlate(y1, y2, "full", False)).tolist()
+    correlation = np.absolute(np.correlate(y1, y2, "full")).tolist()
     delay = (np.argmax(correlation) - len(y1) + 1).tolist()
     return delay
 

@@ -21,8 +21,8 @@ class receiver_interface():
         self.first_packet = True
         self.reception_complete = False
         self.auto_calibrate = False
-        self.samples_calibration = []
-        self.samples = []
+        self.samples_calibration = np.array([])
+        self.samples = np.array([])
         self.tags = None
         self.tags_calibration = None
         self.samples_to_receive = 0
@@ -72,8 +72,8 @@ class receiver_interface():
 
     def request_samples(self, time_to_receive, acquisitions, acquisition_time):
         
-        self.samples = []
-        self.samples_calibration = []
+        #self.samples = []
+        #self.samples_calibration = []
         self.reception_complete = False
         self.coordinates_gps = [0,0]
         #check if coordinates have been set
@@ -87,14 +87,16 @@ class receiver_interface():
 
     def reset_receiver(self):
         print "Reset receiver: ", self.serial
-        self.samples = []
-        self.samples_calibration = []
+        self.samples = np.array([])
+        self.samples_calibration = np.array([])
         self.reception_complete = False
         self.first_packet = True
         self.error_detected = False
         self.acquisition_state = "target"
 
     def receive_samples(self, samples, tags):
+        print type(self.samples)
+        print type(samples)
         if tags is not None:
             print self.serial, tags, "num_samples", len(samples)
         else:
@@ -110,7 +112,7 @@ class receiver_interface():
             print "target"
             if tags is not None:
                 if np.isclose(tags["rx_freq"], self.frequency):
-                    self.samples = samples[300:]
+                    self.samples = np.array(samples[300:])
                     self.tags = tags
                     self.first_packet = False
                     if len(self.samples) == self.samples_to_receive and self.auto_calibrate:
@@ -122,7 +124,10 @@ class receiver_interface():
                     print "Error: USRP-source tag shows unexpected target carrier frequency"
             elif tags is None:
                 if len(self.samples) < self.samples_to_receive:
-                    self.samples = np.concatenate((self.samples, samples), axis=1)
+                    self.error_detected = True
+                    
+                    if self.samples.any() and samples.any():
+                        self.samples = np.concatenate((self.samples, samples),axis=0)
                     if len(self.samples) == self.samples_to_receive and self.auto_calibrate:
                         self.acquisition_state = "calibration"
                 else:
@@ -146,7 +151,7 @@ class receiver_interface():
             elif tags is None:
                 if len(self.samples_calibration) < self.samples_to_receive_calibration:
                     self.error_detected = True
-                    self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=1)
+                    self.samples_calibration = np.concatenate((self.samples_calibration, samples), axis=0)
                     if len(self.samples_calibration) == self.samples_to_receive_calibration:
                         self.acquisition_state = "target"
                 else:

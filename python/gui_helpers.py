@@ -3,7 +3,7 @@
 #sip.setapi('QVariant', 2)
 
 from PyQt4 import QtCore, QtGui
-from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg as NavigationToolbar
+from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 
 class receiver_item():
     def __init__(self, gain, antenna, gain_calibration):
