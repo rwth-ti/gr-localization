@@ -755,9 +755,11 @@ class gui(QtGui.QMainWindow):
         return [Hx,Hy]
 
     def plot_grid(self, s):
-        if hasattr(self,"grid"):
-            self.grid.remove()
-        self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.7)
+        if hasattr(s, "__getitem__"):
+            if hasattr(self,"grid"):
+                self.grid.remove()
+        
+            self.grid = self.ax.pcolor(np.array(s[0]),np.array(s[1]),np.array(s[2]), cmap='coolwarm', alpha=0.7)
 
     def get_gps_coordinates(self,mouse_event):
         if self.setting_calibration:

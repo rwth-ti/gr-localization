@@ -843,11 +843,11 @@ class fusion_center():
                     self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
                     if self.grid_based_active:
-                        estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                        estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
                         self.xk_1_grid = np.hstack((np.array(list(estimated_positions["grid_based"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
                         self.Pk_1_grid = self.kalman_filter.get_init_cov()
-                        estimated_positions["grid-based"]["kalman_coordinates"] = np.array(list(estimated_positions["grid-based"]["coordinates"]))
-                        kalman_states["grid-based"] = self.xk_1_grid
+                        estimated_positions["grid_based"]["kalman_coordinates"] = np.array(list(estimated_positions["grid_based"]["coordinates"]))
+                        kalman_states["grid_based"] = self.xk_1_grid
                     self.xk_1_chan = np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
                     self.Pk_1_chan = self.kalman_filter.get_init_cov()
                     estimated_positions["chan"]["kalman_coordinates"] = np.array(list(estimated_positions["chan"]["coordinates"]))
@@ -881,7 +881,7 @@ class fusion_center():
                     x_cov = self.Pk_1_chan[0,0]
                     y_cov = self.Pk_1_chan[1,1]
                     if self.grid_based_active:
-                        estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                        estimated_positions["grid_based"] = estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
                         estimated_positions["grid_based"]["coordinates"] = self.kalman_filter.pre_filter(np.array(list(estimated_positions["grid_based"]["coordinates"])),self.xk_1_grid)
                         self.xk_1_grid,self.Pk_1_grid = self.kalman_filter.kalman_fltr(estimated_positions["grid_based"]["coordinates"],self.Pk_1_grid,self.xk_1_grid,"grid_based")
                         estimated_positions["grid_based"]["kalman_coordinates"] = self.xk_1_grid[:2]
