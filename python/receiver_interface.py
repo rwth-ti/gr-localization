@@ -95,8 +95,7 @@ class receiver_interface():
         self.acquisition_state = "target"
 
     def receive_samples(self, samples, tags):
-        print type(self.samples)
-        print type(samples)
+
         if tags is not None:
             print self.serial, tags, "num_samples", len(samples)
         else:
