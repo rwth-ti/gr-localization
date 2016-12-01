@@ -415,16 +415,17 @@ class gui(QtGui.QMainWindow):
 
         if self.map_type == "Online" and check_OSM():
             #if loding image from open street map fails, retry until succeed
-            while True:
-                print "Setting online map"
-                r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-                
-                if r.status_code == 200:
-                    img = Image.open(StringIO(r.content))
-                    if not os.path.exists("../maps"):
-                            os.makedirs("../maps")
-                    img.save("../maps/map.png")
-                    break
+
+            print "Setting online map"
+            r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+
+            if r.status_code == 200:
+                img = Image.open(StringIO(r.content))
+                if not os.path.exists("../maps"):
+                        os.makedirs("../maps")
+                img.save("../maps/map.png")
+            else:
+                sys.exit("Could not set up online map")
 
 
         else:
