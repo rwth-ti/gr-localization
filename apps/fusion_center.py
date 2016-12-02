@@ -873,7 +873,7 @@ class fusion_center():
                         except:
                             print ("reference selection not possible, localizing already stopped")
                     else:
-                        dop_location,H = calc_dop(estimated_positions["chan"]["coordinates"],receivers,self.ref_receiver)
+                        dop_location,H = dopcalc_dop(estimated_positions["chan"]["coordinates"],receivers,self.ref_receiver)
                     self.kalman_filter.adapt_R(H)
                     self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(measurement)),self.Pk_1_chan,self.xk_1_chan,"chan")    
                     estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]
