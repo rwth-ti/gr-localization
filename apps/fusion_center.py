@@ -760,15 +760,17 @@ class fusion_center():
                     
         # interpolate samples
         signal_strength = []
-        for receiver in receivers.values():          
-            x = np.linspace(0,len(receiver.samples),len(receiver.samples))
-            f = interpolate.interp1d(x, receiver.samples)
-            x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * receiver.interpolation)
-            receiver.samples = np.array(f(x_interpolated))
-            if receiver.auto_calibrate:
-                x = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration))
-                f = interpolate.interp1d(x, receiver.samples_calibration)
-                x_interpolated = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration) * receiver.interpolation)
+        for receiver in receivers.values():    
+            #do not interpolate if sector is set to 1 for system speedup
+            if self.interpolation > 1:      
+                x = np.linspace(0,len(receiver.samples),len(receiver.samples))
+                f = interpolate.interp1d(x, receiver.samples)
+                x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * receiver.interpolation)
+                receiver.samples = np.array(f(x_interpolated))
+                if receiver.auto_calibrate:
+                    x = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration))
+                    f = interpolate.interp1d(x, receiver.samples_calibration)
+                    x_interpolated = np.linspace(0,len(receiver.samples_calibration),len(receiver.samples_calibration) * receiver.interpolation)
                 receiver.samples_calibration = f(x_interpolated)
             # find receiver with highest signal strength
             if self.reference_selection in ["Min-signal-power","Max-signal-power"]:
@@ -779,7 +781,7 @@ class fusion_center():
             self.ref_receiver = receivers.keys()[np.argmax(signal_strength)]
         elif self.reference_selection == "Min-signal-power":
             self.ref_receiver = receivers.keys()[np.argmin(signal_strength)]
-        print (self.ref_receiver)
+        #print (self.ref_receiver)
         
         
         
