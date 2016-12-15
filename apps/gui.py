@@ -72,7 +72,8 @@ class gui(QtGui.QMainWindow):
         self.frequency = 2.4e9
         self.samp_rate = 10e6
         self.bw = 1e6
-        self.interpolation = 10
+        self.sample_interpolation = 1
+        self.correlation_interpolation = True
         self.lo_offset = 0
         self.samples_to_receive_calibration = 1000
         self.frequency_calibration = 2.4e9
@@ -123,6 +124,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_samp_rate",self.set_gui_samp_rate)
         self.rpc_manager.add_interface("set_gui_bw",self.set_gui_bw)
         self.rpc_manager.add_interface("set_gui_interpolation",self.set_gui_interpolation)
+        self.rpc_manager.add_interface("set_gui_correlation_interpolation",self.set_gui_correlation_interpolation)
         self.rpc_manager.add_interface("set_gui_lo_offset",self.set_gui_lo_offset)
         self.rpc_manager.add_interface("set_gui_samples_to_receive",self.set_gui_samples_to_receive)
         self.rpc_manager.add_interface("set_gui_frequency_calibration",self.set_gui_frequency_calibration)
@@ -198,7 +200,7 @@ class gui(QtGui.QMainWindow):
         title = Qwt.QwtText("Amplitude")
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
-        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
+        self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
         self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.RightLegend);
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
@@ -284,6 +286,7 @@ class gui(QtGui.QMainWindow):
         self.connect(self.gui.bwSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_bw)
         self.connect(self.gui.sampRateSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_samp_rate)
         self.connect(self.gui.interpolationSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_interpolation)
+        self.connect(self.gui.checkBoxSplineInt, QtCore.SIGNAL("clicked()"), self.set_correlation_interpolation)
         self.connect(self.gui.loOffsetSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_lo_offset)
         self.connect(self.gui.samplesToReceiveSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_samples_to_receive)
         self.connect(self.gui.frequencyCalibrationSpin, QtCore.SIGNAL("valueChanged(double)"), self.set_frequency_calibration)
@@ -503,7 +506,7 @@ class gui(QtGui.QMainWindow):
         title = Qwt.QwtText("Amplitude")
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         qwtPlot.setAxisTitle(Qwt.QwtPlot.yLeft, title)
-        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive * self.interpolation)
+        qwtPlot.setAxisScale(Qwt.QwtPlot.xBottom, 0, self.samples_to_receive * self.sample_interpolation)
         pen = Qt.QPen(Qt.Qt.DotLine)
         pen.setColor(Qt.Qt.black)
         pen.setWidth(0)
@@ -740,7 +743,7 @@ class gui(QtGui.QMainWindow):
         Hx = []
         Hy = []
         if delay is not None:
-            delta_rx1_rx2 = delay / (self.samp_rate * self.interpolation) * 299700000
+            delta_rx1_rx2 = delay / (self.samp_rate * self.sample_interpolation) * 299700000
         else:
             delta_rx1_rx2 = np.linalg.norm(pos_tx-pos_rx[0])-np.linalg.norm(pos_tx-pos_rx[1])
         [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
@@ -808,8 +811,12 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("set_bw",[self.bw])
 
     def set_interpolation(self):
-        self.interpolation = self.gui.interpolationSpin.value()
-        self.rpc_manager.request("set_interpolation",[self.interpolation])
+        self.sample_interpolation = self.gui.interpolationSpin.value()
+        self.rpc_manager.request("set_interpolation",[self.sample_interpolation])
+
+    def set_correlation_interpolation(self):
+        self.correlation_interpolation = self.gui.checkBoxSplineInt.isChecked()
+        self.rpc_manager.request("set_correlation_interpolation",[self.correlation_interpolation])
 
     def set_frequency_calibration(self):
         self.frequency_calibration = self.gui.frequencyCalibrationSpin.value()*1e6
@@ -938,6 +945,12 @@ class gui(QtGui.QMainWindow):
 
     def set_gui_interpolation(self, interpolation):
         self.gui.interpolationSpin.setValue(interpolation)
+
+    def set_gui_correlation_interpolation(self, correlation_interpolation):
+        if correlation_interpolation:
+            self.gui.checkBoxSplineInt.setChecked(1)
+        else:
+            self.gui.checkBoxSplineInt.setChecked(0)
 
     def set_gui_frequency_calibration(self, frequency):
         self.gui.frequencyCalibrationSpin.setValue(frequency/1e6)
@@ -1139,15 +1152,18 @@ class gui(QtGui.QMainWindow):
             if self.results["correlation"] != None:
                 print "Delay:",self.results["delay"]
                 if self.gui.checkBoxCorrelation.isChecked():
-                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
+                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -20*self.sample_interpolation,20*self.sample_interpolation)
                 else:
-                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
-                self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(self.results["delay"]) + " samples")
+                    self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
+                #self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(["{:.3f}".format(delay) for delay in self.results["delay"]]) + " samples")
+                self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str([round(delay,4) for delay in self.results["delay"]]) + " samples")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()
-                self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
+                self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][0], self.results["delay"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
                 if len(self.results["correlation"]) > 1:
-                    self.plot_correlation(self.gui.qwtPlotCorrelation, self.results["correlation"][1],Qt.Qt.red, self.results["correlation_labels"][1])
+                    self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][1], self.results["delay"][1],Qt.Qt.red, self.results["correlation_labels"][1])
+                self.gui.qwtPlotCorrelation.replot()
+
                 # clear the previous points from the plot
                 self.gui.qwtPlotDelayHistory.clear()
                 if len(self.results["delay_history"]) > 0:
@@ -1160,7 +1176,8 @@ class gui(QtGui.QMainWindow):
                         delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][1][-1]) )
                         delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][1][-1]) )
                     self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
-                        
+                    self.gui.qwtPlotDelayHistory.replot()
+
             if len(self.results["receivers"]) > 0:
                 self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
             if len(self.results["receivers"]) > 1:
@@ -1226,33 +1243,35 @@ class gui(QtGui.QMainWindow):
         threading.Thread(target=runit).start()
 
     # plot cross correlation
-    def plot_correlation(self, plot, samples, colour, label):
-        num_corr_samples = (len(samples) + 1)/2
-        x = range(-num_corr_samples+1,num_corr_samples,1)
-        y = samples
+    def plot_correlation_delay(self, plot, values, delay, color, label):
+        correlation_length = (len(values) + 1)/2
+        x = range(-correlation_length+1,correlation_length,1)
+        y = values
         # draw curve with new points and plot
         curve = Qwt.QwtPlotCurve(label)
-        curve.setPen(Qt.QPen(colour, 2))
+        curve.setPen(Qt.QPen(color, 2))
         curve.attach(plot)
         curve.setData(x, y)
-        plot.replot()
-
-    def plot_delay_history(self, plot, samples, colour):
+        marker_max = Qwt.QwtPlotMarker()
+        marker_max.setLineStyle(Qwt.QwtPlotMarker.VLine)
+        marker_max.setLinePen(Qt.QPen(color, 1))
+        marker_max.attach(plot)
+        marker_max.setXValue(delay)
+        
+    def plot_delay_history(self, plot, samples, color):
         if len(samples) > 0:
-            num_corr_samples = (len(samples) + 1)/2
             x = range(0,len(samples),1)
             y = samples
             # draw curve with new points and plot
             curve = Qwt.QwtPlotCurve()
-            curve.setPen(Qt.QPen(colour, 2))
+            curve.setPen(Qt.QPen(color, 2))
             curve.attach(plot)
             curve.setData(x, y)
-            plot.replot()
 
     def plot_receiver(self, qwtPlot, checkBoxFFT, samples):
         if checkBoxFFT.isChecked():
             y = 10*np.log10(np.absolute(np.fft.fftshift(np.fft.fft(samples))))
-            x = np.linspace((self.frequency-self.samp_rate*self.interpolation/2)/1000000000,(self.frequency+self.samp_rate*self.interpolation/2)/1000000000,len(y))
+            x = np.linspace((self.frequency-self.samp_rate*self.sample_interpolation/2)/1000000000,(self.frequency+self.samp_rate*self.sample_interpolation/2)/1000000000,len(y))
             title = Qwt.QwtText("Frequency [GHz]")
             title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
             qwtPlot.setAxisTitle(Qwt.QwtPlot.xBottom, title)
@@ -1276,9 +1295,9 @@ class gui(QtGui.QMainWindow):
 
     def refresh_correlation(self):
         if self.gui.checkBoxCorrelation.isChecked():
-            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -100,100)
+            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -20*self.sample_interpolation,20*self.sample_interpolation)
         else:
-            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.interpolation, self.samples_to_receive * self.interpolation)
+            self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
         self.gui.qwtPlotCorrelation.replot()
 
     def refresh_plot(self, receiver):

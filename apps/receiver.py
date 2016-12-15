@@ -165,7 +165,8 @@ class top_block(gr.top_block):
 
     def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions, acquisition_time):
         threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions, acquisition_time)).start()
-
+[MESSAGES CONTROL]
+disable=locally-disabled
 
     def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions, acquisition_time):
 

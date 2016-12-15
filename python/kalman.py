@@ -134,14 +134,14 @@ class kalman_filter():
         self.R_dop = dot(dot(dot(dot(P_inv,H.T),self.R_chan),H),P_inv)
         
         idxs=np.where(self.R_dop>20)
-        print idxs
+        #print idxs
         if idxs[0].any() or idxs[1].any():
             self.R_dop[idxs]=20
         idxs=np.where(self.R_dop<-20)
         print idxs
         if idxs[0].any() or idxs[1].any():
             self.R_dop[idxs]=-20
-        print self.R_dop
+        #print self.R_dop
         
     '''
     def adapt_Q(self,Pk,Pk_1):

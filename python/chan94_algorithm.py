@@ -1,5 +1,6 @@
 import numpy as np
 import time
+from interpolation import *
 
 
 
@@ -8,6 +9,9 @@ def estimate_delay(y1, y2):
     delay = (np.argmax(correlation) - len(y1) + 1).tolist()
     return delay
 
+def estimate_delay_interpolated(y1, y2):
+    correlation, delay = corr_spline_interpolation(y1, y2, 11)
+    return delay.tolist()
 
 def localize(receivers, ref_receiver, bbox):
 
@@ -38,7 +42,10 @@ def localize(receivers, ref_receiver, bbox):
     d = []
     for receiver in receivers:
         if receiver != ref_receiver:
-            d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+            if receivers[receiver].correlation_interpolation:
+                d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+            else:
+                d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
     d12 = d[0]
     d13 = d[1]
     #print "d21:"+str(d12)+"d31:"+str(d13)
