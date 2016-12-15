@@ -1155,7 +1155,6 @@ class gui(QtGui.QMainWindow):
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -20*self.sample_interpolation,20*self.sample_interpolation)
                 else:
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
-                #self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str(["{:.3f}".format(delay) for delay in self.results["delay"]]) + " samples")
                 self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str([round(delay,4) for delay in self.results["delay"]]) + " samples")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()

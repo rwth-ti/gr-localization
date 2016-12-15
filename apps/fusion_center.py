@@ -10,9 +10,9 @@ import sys
 import os
 import pprint
 from gnuradio import zeromq
-import signal 
+import signal
 import numpy as np
-from scipy import interpolate 
+from scipy import interpolate
 from scipy import signal as sig
 import time
 import threading
@@ -27,7 +27,6 @@ import chan94_algorithm, chan94_algorithm_filtered, kalman
 import grid_based_algorithm
 import dop
 from interpolation import corr_spline_interpolation
-#from gcc_phat import gcc_phat
 
 class fusion_center():
     def __init__(self, options):
@@ -228,8 +227,6 @@ class fusion_center():
                           lon_0=0,lat_0=0,
                           projection='tmerc')
 
-        #self.frequency_calibration = 602000000
-        #self.coordinates_calibration = self.basemap(50.745597, 6.043278)
         self.coordinates_calibration = (40.7, 2.5)
 
     def calibrate(self, coordinates, delays=None):
@@ -597,7 +594,6 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_correlation_interpolation",[correlation_interpolation])
 
     def set_frequency_calibration(self, frequency):
-        #print("in fc f_cal", frequency)
         self.frequency_calibration = frequency
         for receiver in self.receivers.values():
             receiver.frequency_calibration = frequency
@@ -739,7 +735,6 @@ class fusion_center():
         x_cov=0
         y_cov=0
         last_time_target = receivers.values()[0].tags["rx_time"]
-        #print(receivers.values()[0].tags)
         if self.auto_calibrate:
             last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
 
@@ -793,7 +788,6 @@ class fusion_center():
             self.ref_receiver = receivers.keys()[np.argmax(signal_strength)]
         elif self.reference_selection == "Min-signal-power":
             self.ref_receiver = receivers.keys()[np.argmin(signal_strength)]
-        #print (self.ref_receiver)
         
         
         
@@ -806,8 +800,6 @@ class fusion_center():
             self.calibrate(self.coordinates_calibration, delay)
 
         if len(delay_auto_calibration) > 0 and self.auto_calibrate:
-            #for i in range(0,len(delay_auto_calibration)):
-            #    receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,delay_auto_calibration[i])
             index_delay_auto = 0
             for i in range(0,len(receivers)):
                 if not self.ref_receiver == receivers.keys()[i]:
@@ -815,8 +807,6 @@ class fusion_center():
                     index_delay_auto += 1
 
         if len(self.delay_calibration) > 0:
-            #for i in range(0,len(self.delay_calibration)):
-            #    receivers.values()[i+1].samples = np.roll(receivers.values()[i+1].samples,self.delay_calibration[i])
             index_delay = 0
             for i in range(0,len(receivers)):
                 if not self.ref_receiver == receivers.keys()[i]:
@@ -865,7 +855,6 @@ class fusion_center():
                     self.xk_1_chan = np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
                     self.Pk_1_chan = self.kalman_filter.get_init_cov()
                     estimated_positions["chan"]["kalman_coordinates"] = np.array(list(estimated_positions["chan"]["coordinates"]))
-                    #print (estimated_positions["chan"]["kalman_coordinates"])
                     kalman_states["chan"] = self.xk_1_chan
                     x_cov = self.Pk_1_chan[0,0]
                     y_cov = self.Pk_1_chan[1,1]
@@ -1001,7 +990,6 @@ class fusion_center():
                         threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()'''
                     if not self.processing:
                         self.processing = True
-                        #self.process_results(self.receivers,self.delay_auto_calibration)
                         threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()
                 elif any(self.receivers[key].error_detected for key in self.receivers):
                     for receiver in self.receivers.values():
@@ -1022,6 +1010,7 @@ class fusion_center():
         for receiver in receivers:
             if not self.ref_receiver == receiver:
                 if not calibration:
+                    # For the spline interpolation of the cross correlation, a sufficient support is necessary
                     window_size = 13
                     if receivers[receiver].correlation_interpolation:
                         correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers[receiver].samples, receivers[self.ref_receiver].samples,window_size)
@@ -1029,7 +1018,6 @@ class fusion_center():
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full")).tolist())
-                        #correlation.append(np.absolute(gcc_phat(receivers[receiver].samples, receivers[self.ref_receiver].samples)).tolist())
                         delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive * self.sample_interpolation)+ 1).tolist()
                 else:
                     if receivers[receiver].correlation_interpolation:
@@ -1038,7 +1026,6 @@ class fusion_center():
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full")).tolist())
-                        #correlation.append(gcc_phat(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration)).tolist())
                         delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.sample_interpolation) + 1).tolist()
                 correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))
             i += 1
