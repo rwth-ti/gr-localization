@@ -9,9 +9,6 @@ from matplotlib import patches
 import numpy as np
 from numpy import array
 import sys, warnings
-import pdb
-sys.path.append("../python")
-#import gui_helpers
 from pyproj import Proj, transform
 from PIL import Image
 import math
@@ -97,16 +94,9 @@ class parser():
                       projection='tmerc', ax=self.ax, lon_0=lon_0, lat_0=lat_0,suppress_ticks=False)
         
         self.basemap.imshow(img, interpolation='lanczos', origin='upper')
-        #TODO: axis ticks -> bad documentation
-
-        #self.zp = gui_helpers.ZoomPan()
-        #figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
-        #figPan = self.zp.pan_factory(self.ax)
-
         self.figure_map.tight_layout(pad=0)
-        #self.figure_map.patch.set_visible(False)
+
         self.ax.axis('off')
-        #plt.show(block=False)
         
 
     def make_tikz_plot_delays(self, delay, correction, filename):
@@ -409,7 +399,6 @@ if __name__ == "__main__":
         
         cfg.read(options.config)
         init_kalman = ConfigSectionMap(cfg,"sectionOne")
-        #init_kalman={"delta_t":1.5,"noise_factor":0.08,"filter_receivers":False,"noise_var_x":20,"noise_var_y":20,"model":"maneuvering","measurement_noise_chan":160*0.08,"measurement_noise_grid":160*0.08}
         if chan_x :
             init_kalman['algorithm']='chan'
             kalman = kalman_filter(init_kalman)
@@ -529,14 +518,12 @@ if __name__ == "__main__":
             ydiff_chan = Z_chan[:,1] -gt_y_list
             err_chan = np.square(xdiff_chan) + np.square(ydiff_chan)
             rmse_chan = np.sqrt(np.mean(err_chan))
-            #print "chan mean error: ",mean_err_chan
+
             xdiff_chan_kalman = Z_chan_kalman[:,0] -gt_x_list
             ydiff_chan_kalman = Z_chan_kalman[:,1] -gt_y_list
             err_chan_kalman = np.square(xdiff_chan_kalman) + np.square(ydiff_chan_kalman)
             rmse_chan_kalman = np.sqrt(np.mean(err_chan_kalman) )
-            #print "chan mean error with kalman filter: ",mean_err_chan_kalman  
-        #except:
-        #    warnings.warn("ground-truth-log not found")
+
         if options.histogram_errors:
             err_handles = []
             err_labels = []
@@ -581,11 +568,6 @@ if __name__ == "__main__":
             
         p.figure_map.canvas.draw()
 
-        #for i in range(0,len(chan_x)):
-        #    p.ax.scatter(chan_x[i],chan_y[i],color="blue",marker="x")
-        #    p.ax.scatter(grid_x[i],grid_y[i],color="red",marker="x")
-        #    time.sleep(0.1)
-        #    p.figure_map.canvas.draw()
         plt.ion()
         for it in range(len(chan_x)):
             if options.mapplot_mode in ["raw","compare"]:
@@ -637,11 +619,6 @@ if __name__ == "__main__":
 
         p.figure_map.canvas.draw()
 
-        #for i in range(0,len(chan_x)):
-        #    p.ax.scatter(chan_x[i],chan_y[i],color="blue",marker="x")
-        #    p.ax.scatter(grid_x[i],grid_y[i],color="red",marker="x")
-        #    time.sleep(0.1)
-        #    p.figure_map.canvas.draw()
         if options.mapplot_mode in ["raw","compare"]:
             p.ax.plot(chan_x[0],chan_y[0],color="blue",marker="x",markersize=10)
             # , for assigning the plots as line objects and not as tuples
@@ -651,9 +628,7 @@ if __name__ == "__main__":
         if len (chan_x_kalman)>0 and options.mapplot_mode in ["final","compare"]:
             # , for assigning the plots as line objects and not as tuples
             chan_kalman_plot=p.ax.plot(chan_x_kalman,chan_y_kalman,color="red",marker="x",linestyle="--",linewidth=0.5,label = 'Kalman filtered')[0]
-        #for i in range(len(measurements)):
-        #    p.ax.annotate(i,(chan_x[i],chan_y[i]),fontsize=6)
-        #    p.ax.annotate(i,(estimated_positions_kalman_chan[i,0],estimated_positions_kalman_chan[i,1]),fontsize=6)
+
             handles.append(chan_kalman_plot)
             labels.append(chan_kalman_plot.get_label())
         if len(grid_x)>0:
@@ -677,7 +652,6 @@ if __name__ == "__main__":
                     print "rtk not fixed!"
                     #float_scatter = p.ax.scatter(gt_x_list[i],gt_y_list[i],color="m",marker="x")
         p.ax.legend(handles,labels,fontsize = 30)
-        #plt.subplots_adjust(left=0.15, right=0.85)
         if options.save:
             #p.figure_map.tight_layout()
             plt.savefig(args[0].split("/")[-1].split(".")[0]+options.mapplot_mode + "_map.pdf", dpi=150)
@@ -725,23 +699,26 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_location.pdf")
 
     if options.histogram_delays:
-        d21mean = np.mean(delays_calibrated[:,0])
-        d21variance = np.var(delays_calibrated[:,0])
-        d31mean = np.mean(delays_calibrated[:,1])
-        d31variance = np.var(delays_calibrated[:,1])
-        labeld21 = r'$\Delta\tau_{21}$, $\mu=' + "{0:.2f}".format(d21mean) + '$, $\sigma^2=' + "{0:.2f}".format(d21variance) + '$'
-        labeld31 = r'$\Delta\tau_{31}$, $\mu=' + "{0:.2f}".format(d31mean) + '$, $\sigma^2=' + "{0:.2f}".format(d31variance) + '$'
+        #delays in ns for comparison purposes:
+        print interpolation
+        delays_calibrated_ns = np.true_divide(delays_calibrated,sampling_rate*interpolation*10**-9)
+        d21mean = np.mean(delays_calibrated_ns[:,0])
+        d21variance = np.var(delays_calibrated_ns[:,0])
+        d31mean = np.mean(delays_calibrated_ns[:,1])
+        d31variance = np.var(delays_calibrated_ns[:,1])
+        labeld21 = r'$\Delta\tau_{21}$, $\mu=' + "{0:.5f}".format(d21mean) + '$, $\sigma^2=' + "{0:.5f}".format(d21variance) + '$'
+        labeld31 = r'$\Delta\tau_{31}$, $\mu=' + "{0:.5f}".format(d31mean) + '$, $\sigma^2=' + "{0:.5f}".format(d31variance) + '$'
 
         figure_hist = plt.figure()
         figure_hist.canvas.set_window_title(filename + "_histogram_delays")
         ax_hist = figure_hist.add_subplot(111)
-        ax_hist.set_xlabel(r'$\Delta\tau$[samples]')
+        ax_hist.set_xlabel(r'$\Delta\tau$[ns]')
         # the histogram of the data
         offset=0.5
-        bins = np.arange(np.min(delays_calibrated[:,0])-1,np.max(delays_calibrated[:,0])+1)
-        ax_hist.hist(delays_calibrated[:,0], bins=bins+offset, histtype='stepfilled', facecolor='green', alpha=0.75, label=labeld21)
-        bins = np.arange(np.min(delays_calibrated[:,1])-1,np.max(delays_calibrated[:,1])+1)
-        ax_hist.hist(delays_calibrated[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
+        bins = np.arange(np.min(delays_calibrated_ns[:,0])-1,np.max(delays_calibrated_ns[:,0])+1,1/(sampling_rate*10**-9*interpolation))
+        ax_hist.hist(delays_calibrated_ns[:,0], bins=bins+offset, histtype='stepfilled', facecolor='green', alpha=0.75, label=labeld21)
+        bins = np.arange(np.min(delays_calibrated_ns[:,1])-1,np.max(delays_calibrated[:,1])+1,1/(sampling_rate*10**-9*interpolation))
+        ax_hist.hist(delays_calibrated_ns[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
         plt.legend()
         plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:

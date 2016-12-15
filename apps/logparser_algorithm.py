@@ -18,6 +18,7 @@ import receiver_interface,chan94_algorithm_filtered,chan94_algorithm,grid_based_
 from  kalman import kalman_filter
 from ConfigSectionMap import ConfigSectionMap
 import dop 
+from chan94_algorithm import estimate_delay_interpolated
 
 c = 299700000
 
@@ -30,8 +31,6 @@ def parse_options():
                       help="Geographical Map")
     parser.add_option("", "--enable-kalman", action="store_true", default=False,
                       help="Do Kalman filtering. Will ignore real time filtered values.")
-    parser.add_option("", "--enable-ukf", action="store_true", default=False,
-                      help="Do unscented Kalman filtering. Will ignore real time filtered values.")
     parser.add_option("", "--reference-selection", type = "str", default="Min-DOP",
                       help="reference selection algorithm. Implemented options are: Manual, Max-signal-power, Min-signal-power, Min-DOP ")
     parser.add_option("-c", "--config", type="str", default="",
@@ -67,7 +66,7 @@ if __name__ == "__main__":
     frequency = acquisition[5]
     frequency_calibration = acquisition[6]
     calibration_position = acquisition[7]
-    interpolation = acquisition[8]
+    interpolation = #acquisition[8]
     bandwidth = acquisition[9]
     samples_to_receive = acquisition[10]
     lo_offset = acquisition[11]
@@ -149,15 +148,16 @@ if __name__ == "__main__":
             receivers[receiver_idx].interpolation = interpolation
             receivers[receiver_idx].samp_rate = sampling_rate
             receivers[receiver_idx].samples_to_receive = samples_to_receive
-            receivers[receiver_idx].samples =receivers_samples[receiver_idx] 
+            receivers[receiver_idx].samples = receivers_samples[receiver_idx] 
+            receivers[receiver_idx].correlation_interpolation = True
         for receiver in receivers.values():
             x = np.linspace(0,len(receiver.samples),len(receiver.samples))
             f = interpolate.interp1d(x, receiver.samples)
             x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * interpolation)
-            receiver.samples = f(x_interpolated)
+            #receiver.samples = f(x_interpolated)
         for receiver in receivers.values():
             if receiver != ref_receiver:
-                correlation = np.absolute(np.correlate(receiver.samples, receivers[ref_receiver].samples, "full", False))
+                correlation = np.absolute(np.correlate(receiver.samples, receivers[ref_receiver].samples, "full"))
             
         receivers_steps.append(receivers)
 
@@ -182,7 +182,6 @@ if __name__ == "__main__":
             invalid=False
             cfg.read(options.config)
             init_settings_kalman=ConfigSectionMap(cfg,"sectionOne")
-            print init_settings_kalman
             #init_settings_kalman["noise_var_x"]=init_settings_kalman["noise_var_x"]/(sampling_rate*interpolation)
         elif not any(init_settings_kalman) and options.config == "":
             sys.exit("no valid configuration found")
@@ -233,6 +232,14 @@ if __name__ == "__main__":
                 estimated_positions["chan"]["kalman_coordinates"]=xk_1[:2].tolist()
                 elapsed_time=time.time()-start_time
                 print elapsed_time
+                delays = []
+                '''
+                for receiver in receivers_steps[i]:
+                    if receiver != ref_receiver:
+                        delays.append(float(estimate_delay_interpolated(receivers_steps[i][receiver].samples, receivers_steps[i][ref_receiver].samples)))
+
+                delays = (np.array(delays)+np.true_divide(np.array(delays_calibration),10)).tolist()
+                '''
                 line = "[" + str(timestamps[i]) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps ) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver) + "," + str(auto_calibrate) + "," + str(acquisition_time) + ","+ str(xk_1.tolist()).replace('\n', '') + ","+ str(init_settings_kalman) +","+  "'" + str(reference_selection) +"'"+","+str(x_cov) + ","+str(y_cov) +"]"
                 pprint.pprint(line,f,width=9000)
 
