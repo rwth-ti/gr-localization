@@ -715,18 +715,18 @@ class gui(QtGui.QMainWindow):
         # Redefine receivers position and signals so that the signal arrives first
         # to the nearest receiver.
         pos_rx = np.array(pos_rx)
-        if pos_tx is not None:
-            pos_tx = np.array(pos_tx)
-            d1 = np.linalg.norm(pos_rx[0]-pos_tx)
-            d2 = np.linalg.norm(pos_rx[1]-pos_tx)
-
-        if delay is not None:
-            if delay<0:
-                pos_rx = np.flipud(pos_rx)
-        else:
-            if d1>d2:
-                pos_rx = np.flipud(pos_rx)
-
+        if delay is None:
+            if pos_tx is not None:
+                pos_tx = np.array(pos_tx)
+                d1 = np.linalg.norm(pos_rx[0]-pos_tx)
+                d2 = np.linalg.norm(pos_rx[1]-pos_tx)
+                # calculate expected delay for this position to use the same methods then for given delay
+                delay = (d2 - d1)*(self.samp_rate * self.sample_interpolation)/ 299700000
+            else:
+                sys.exit("Neither transmitter position nor delay estimate are given!")
+        if delay<0:
+            pos_rx = np.flipud(pos_rx)
+        
         # Baseline distance between sensors
         B = np.linalg.norm(pos_rx[1]-pos_rx[0])
 
@@ -742,10 +742,7 @@ class gui(QtGui.QMainWindow):
         # Calculate parametric points of the hyperbola
         Hx = []
         Hy = []
-        if delay is not None:
-            delta_rx1_rx2 = delay / (self.samp_rate * self.sample_interpolation) * 299700000
-        else:
-            delta_rx1_rx2 = np.linalg.norm(pos_tx-pos_rx[0])-np.linalg.norm(pos_tx-pos_rx[1])
+        delta_rx1_rx2 = delay / (self.samp_rate * self.sample_interpolation) * 299700000
         [max_x,max_y]=np.round(self.basemap(self.bbox[2],self.bbox[3]))
         for alpha in np.arange(0,2*np.pi,0.005):
             h = np.array(pos_rx[0])-(B*B-delta_rx1_rx2*delta_rx1_rx2)/(2*(-delta_rx1_rx2-B*np.cos(alpha)))*np.array([np.cos(alpha-alpha0),np.sin(alpha-alpha0)])
@@ -1162,7 +1159,6 @@ class gui(QtGui.QMainWindow):
                 if len(self.results["correlation"]) > 1:
                     self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][1], self.results["delay"][1],Qt.Qt.red, self.results["correlation_labels"][1])
                 self.gui.qwtPlotCorrelation.replot()
-
                 # clear the previous points from the plot
                 self.gui.qwtPlotDelayHistory.clear()
                 if len(self.results["delay_history"]) > 0:
