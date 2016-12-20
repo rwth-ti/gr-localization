@@ -1,0 +1,9 @@
+- adjust manuels code; clean up own
+- general code cleanup:
+  ->remove dangerous scalar operators if np is used!
+
+4 rx:
+- fix gui hardcoding
+- hardware test!
+- kalman/ reference selection support
+- translate Johannes' self localization algorithm to python
