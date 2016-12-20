@@ -847,6 +847,7 @@ class fusion_center():
             else:
                 if self.init_kalman:
                     print (self.init_settings_kalman)
+                    self.init_settings_kalman["num_rx"] = len(self.receivers.values())
                     self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
                     if self.grid_based_active:
@@ -879,7 +880,7 @@ class fusion_center():
                         except:
                             print ("reference selection not possible, localizing already stopped")
                     else:
-                        dop_location,H = dop.calc_dop(estimated_positions["chan"],receivers, self.ref_receiver)
+                        dop_location,H = dop.calc_dop(estimated_positions["chan"]["coordinates"],receivers, self.ref_receiver)
                     self.kalman_filter.adapt_R(H)
                     self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(measurement)),self.Pk_1_chan,self.xk_1_chan,"chan")    
                     estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]

@@ -96,7 +96,6 @@ def chan_tdoa(pos, d, Q):
     t = time.time()
     M,D = pos.shape # number of receiver stations M and dimensions D
     K = np.zeros((M,1))
-    print pos
 
     for i in range(M):
         K[i] = pos[i,0]**2 + pos[i,1]**2
@@ -140,8 +139,8 @@ def chan14b(h, G, Q):
     '''
     h = np.asmatrix(h)
     G = np.asmatrix(G)
-    Q_inv = np.asmatrix(np.linalg.inv(Q))
-    return np.linalg.inv(np.transpose(G)*Q_inv*G)*np.transpose(G)*Q_inv*h # (14b)
+    Q_inv = np.asmatrix(np.linalg.pinv(Q))
+    return np.linalg.pinv(np.transpose(G)*Q_inv*G)*np.transpose(G)*Q_inv*h # (14b)
 
 
 def chan14a(h, G, Q, pos, est):
@@ -159,8 +158,8 @@ def chan14a(h, G, Q, pos, est):
     for i in range(M-1):
         r_i0[i] = np.sqrt( (pos[i+1,0]-est[0])**2 + (pos[i+1,1]-est[1])**2 )
     B = np.asmatrix( np.diag( np.transpose(r_i0)[0] ) ) # (12)
-    Psi_inv = np.linalg.inv( pow(c,2)*B*Q*B )
-    cov_z = np.linalg.inv(np.transpose(G)*Psi_inv*G) # (17)
+    Psi_inv = np.linalg.pinv( pow(c,2)*B*Q*B )
+    cov_z = np.linalg.pinv(np.transpose(G)*Psi_inv*G) # (17)
     new_est = cov_z*np.transpose(G)*Psi_inv*h # (14a)
     # gives same position result as (14b) always for TDoA-only case
     return cov_z, new_est
@@ -178,8 +177,8 @@ def chan22a(cov_z, pos, est):
     h_hat = np.asmatrix( np.square(zd) ) # (19)
     G_hat = np.asmatrix( np.vstack( (np.eye(2), np.ones(2)) ) ) # (19)
     B_hat = np.asmatrix(np.diag( np.transpose(np.asarray(zd))[0] )) # (21)
-    Psi_hat_inv = np.linalg.inv( 4*B_hat*cov_z*B_hat ) # (21)
-    z_hat = np.linalg.inv(np.transpose(G_hat)*Psi_hat_inv*G_hat)*np.transpose(G_hat)*Psi_hat_inv*h_hat # (22a)
+    Psi_hat_inv = np.linalg.pinv( 4*B_hat*cov_z*B_hat ) # (21)
+    z_hat = np.linalg.pinv(np.transpose(G_hat)*Psi_hat_inv*G_hat)*np.transpose(G_hat)*Psi_hat_inv*h_hat # (22a)
     # for the following sign correction the first estimate has to be good enough!
     new_est = np.multiply( np.sqrt( np.abs(z_hat)), np.sign(zd[:2])) + np.reshape(pos[0], (D,1)) # (24)
     return new_est
@@ -237,7 +236,6 @@ def localize(receivers, ref_receiver, bbox):
         # scale with noise power
         P_noise = receivers.values()[0].measurement_noise
         Q = P_noise*Q_shape
-        print Q
         return chan_tdoa(pos_rx, d, Q)
 
     

@@ -4,6 +4,7 @@
 
 4 rx:
 - fix gui hardcoding
+  ->dropdowns in receiver boxes
 - hardware test!
 - kalman/ reference selection support
 - translate Johannes' self localization algorithm to python
