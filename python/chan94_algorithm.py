@@ -2,50 +2,10 @@ import numpy as np
 import time
 from interpolation import *
 
+c = 299700000.0
 
-
-def estimate_delay(y1, y2):
-    correlation = np.absolute(np.correlate(y1, y2, "full")).tolist()
-    delay = (np.argmax(correlation) - len(y1) + 1).tolist()
-    return delay
-
-def estimate_delay_interpolated(y1, y2):
-    correlation, delay = corr_spline_interpolation(y1, y2, 11)
-    return delay.tolist()
-
-def localize(receivers, ref_receiver, bbox):
-
+def chan_3rx(pos_rx, d):
     t = time.time()
-    sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
-    y = []
-    pos_rx = []
-    for key in receivers:
-        receiver = receivers[key]
-        if key == ref_receiver:
-            y.insert(0, receiver.samples)
-        else:
-            y.append(receiver.samples)
-        if receiver.selected_position == "manual":
-            if key == ref_receiver:
-                pos_rx.insert(0, receiver.coordinates)
-            else:
-                pos_rx.append(receiver.coordinates)
-        else:
-            if key == ref_receiver:
-                pos_rx.insert(0, receiver.coordinates_gps)
-            else:
-                pos_rx.append(receiver.coordinates_gps)
-
-    c = 299700000
-
-    #cross correlations
-    d = []
-    for receiver in receivers:
-        if receiver != ref_receiver:
-            if receivers[receiver].correlation_interpolation:
-                d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
-            else:
-                d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
     d12 = d[0]
     d13 = d[1]
     #print "d21:"+str(d12)+"d31:"+str(d13)
@@ -128,3 +88,156 @@ def localize(receivers, ref_receiver, bbox):
     t_used = time.time()-t
     print "Chan results: ",xy," time: ", t_used
     return {"coordinates": xy,"t_used":t_used}
+
+# Solution for 4 or more receivers with source in near field
+def chan_tdoa(pos, d, Q):
+    pos = np.array(pos)
+    d= np.array(d)
+    t = time.time()
+    M,D = pos.shape # number of receiver stations M and dimensions D
+    K = np.zeros((M,1))
+    print pos
+
+    for i in range(M):
+        K[i] = pos[i,0]**2 + pos[i,1]**2
+    r_i1 = np.zeros((M-1,1)) # range difference in reference to receiver 1
+    x_i1 = np.zeros((M-1,1))
+    y_i1 = np.zeros((M-1,1))
+    for i in range(M-1):
+        r_i1[i] = c * d[i]
+        x_i1[i] = pos[i+1,0] - pos[0,0]
+        y_i1[i] = pos[i+1,1] - pos[0,1]
+    
+    
+    #try:
+    # ############################ First step (14b) ############################
+    # For near-field source use (14b) first to give an approximation of B
+    h = 0.5*(r_i1**2 - K[1:] + K[0]) # (11)
+    G = -np.concatenate((x_i1, y_i1, r_i1),1) # (11)
+    z1 = chan14b(h, G, Q) # first position estimate
+    #print 'z1:', z1t = time.time()
+    # ########################## Second step (14a) ############################
+    cov_z, z2 = chan14a(h, G, Q, pos, z1)
+    #print 'z2:', z2
+    # ########################### Third step (22a) ############################
+    z3 = chan22a(cov_z, pos, z2)
+    #print 'z3:', z3try:
+#    except:
+#        print 'Chan TDoA Error'
+#        z1 = np.reshape([0]*3, (D+1,1))
+#        z3 = np.reshape([0]*2, (D,1))
+    xy = (z3[0].item(0,0),z3[1].item(0,0))
+    t_used = time.time()-t
+    print "Chan results: ",xy," time: ", t_used
+    return {"coordinates": xy,"t_used":t_used}
+
+
+def chan14b(h, G, Q):
+    '''
+    Be adviced!: For use of chan14b() the number of TDoA-receivers should be at
+                 least D+2, with D the number of t = time.time()dimensions to be estimated for
+                 the TX position (else risk error due to singular matrix).
+    '''
+    h = np.asmatrix(h)
+    G = np.asmatrix(G)
+    Q_inv = np.asmatrix(np.linalg.inv(Q))
+    return np.linalg.inv(np.transpose(G)*Q_inv*G)*np.transpose(G)*Q_inv*h # (14b)
+
+
+def chan14a(h, G, Q, pos, est):
+    '''
+    pos: RX positions
+    est:  an estimate of the TX position
+    Q:   covariance matrix of TDoA or DoA measurements
+    Returns also cov_z from (17) which is needed in (21)
+    '''
+    M,D = pos.shape
+    h = np.asmatrix(h)
+    G = np.asmatrix(G)
+    Q = np.asmatrix(Q)
+    r_i0 = np.zeros((M-1,1)) # 'true' distances
+    for i in range(M-1):
+        r_i0[i] = np.sqrt( (pos[i+1,0]-est[0])**2 + (pos[i+1,1]-est[1])**2 )
+    B = np.asmatrix( np.diag( np.transpose(r_i0)[0] ) ) # (12)
+    Psi_inv = np.linalg.inv( pow(c,2)*B*Q*B )
+    cov_z = np.linalg.inv(np.transpose(G)*Psi_inv*G) # (17)
+    new_est = cov_z*np.transpose(G)*Psi_inv*h # (14a)
+    # gives same position result as (14b) always for TDoA-only case
+    return cov_z, new_est
+    
+
+def chan22a(cov_z, pos, est):
+    '''
+    s. chan14a()
+    cov_z needed for (21)
+    '''
+
+    M,D = pos.shape
+    xy_1 = np.reshape( np.concatenate((pos[0], np.asarray([0]))), (D+1,1) )
+    zd = est - np.asmatrix( xy_1 ) # (19)
+    h_hat = np.asmatrix( np.square(zd) ) # (19)
+    G_hat = np.asmatrix( np.vstack( (np.eye(2), np.ones(2)) ) ) # (19)
+    B_hat = np.asmatrix(np.diag( np.transpose(np.asarray(zd))[0] )) # (21)
+    Psi_hat_inv = np.linalg.inv( 4*B_hat*cov_z*B_hat ) # (21)
+    z_hat = np.linalg.inv(np.transpose(G_hat)*Psi_hat_inv*G_hat)*np.transpose(G_hat)*Psi_hat_inv*h_hat # (22a)
+    # for the following sign correction the first estimate has to be good enough!
+    new_est = np.multiply( np.sqrt( np.abs(z_hat)), np.sign(zd[:2])) + np.reshape(pos[0], (D,1)) # (24)
+    return new_est
+
+
+def estimate_delay(y1, y2):
+    correlation = np.absolute(np.correlate(y1, y2, "full")).tolist()
+    delay = (np.argmax(correlation) - len(y1) + 1).tolist()
+    return delay
+
+def estimate_delay_interpolated(y1, y2):
+    correlation, delay = corr_spline_interpolation(y1, y2, 11)
+    return delay.tolist()
+
+def localize(receivers, ref_receiver, bbox):
+    sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
+    y = []
+    pos_rx = []
+    for key in receivers:
+        receiver = receivers[key]
+        if key == ref_receiver:
+            y.insert(0, receiver.samples)
+        else:
+            y.append(receiver.samples)
+        if receiver.selected_position == "manual":
+            if key == ref_receiver:
+                pos_rx.insert(0, receiver.coordinates)
+            else:
+                pos_rx.append(receiver.coordinates)
+        else:
+            if key == ref_receiver:
+                pos_rx.insert(0, receiver.coordinates_gps)
+            else:
+                pos_rx.append(receiver.coordinates_gps)
+    #cross correlations
+    d = []
+    for receiver in receivers:
+        if receiver != ref_receiver:
+            if receivers[receiver].correlation_interpolation:
+                d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+            else:
+                d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+                '''
+    ds = []
+    for delay in d:
+        ds.append(delay*sample_rate)
+    print "delay in chan_tdoa", ds
+    '''
+    if len(pos_rx) == 3:
+        return chan_3rx(pos_rx, d)
+    else:
+        # see chan, ho: A simple and efficient estimator for hyperbolic location
+        # first construct covariance matrix
+        Q_shape = 0.5 *np.ones(shape=(len(pos_rx)-1,len(pos_rx)-1)) + 0.5 * np.eye(len(pos_rx)-1)
+        # scale with noise power
+        P_noise = receivers.values()[0].measurement_noise
+        Q = P_noise*Q_shape
+        print Q
+        return chan_tdoa(pos_rx, d, Q)
+
+    
