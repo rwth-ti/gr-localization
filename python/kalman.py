@@ -8,9 +8,6 @@ import pdb
 class kalman_filter():
 
     def __init__(self,init_settings):
-        self.window_size = 7
-        self.correction_sequences = deque([])
-        self.xk_1=[]
         self.model=init_settings["model"]
         self.delta_t=init_settings["delta_t"]
         self.noise_factor=init_settings["noise_factor"] 
@@ -20,14 +17,11 @@ class kalman_filter():
         self.cnt_valid_locations=0
         self.cnt_invalid_locations=0
         self.max_acceleration=init_settings["max_acceleration"]
-        self.R_chan =   array( [[  1,  0.5],
-                     [0.5,  1]])*init_settings["noise_var_x"]
-        self.R_cs =    array( [[  1,  -0.14],
-                     [-0.14,  1]])*init_settings["noise_var_x"]
-        
+        R_shape = 0.5 *np.ones(shape=(init_settings["num_rx"]-1,init_settings["num_rx"]-1)) + 0.5 * np.eye(init_settings["num_rx"]-1)
+        # scale with noise power
+        P_noise = self.noise_var_x
+        self.R = P_noise*R_shape
         self.R_dop=np.array([])
-             
-        self.B =0 
         self.state_noise=(self.delta_t**2)*self.noise_factor  #if performance decreases -> back to delta_t
         if self.model == "simple":
             self.state_size=4
@@ -76,9 +70,7 @@ class kalman_filter():
                        [0, 0, 0, 0, 1, 0] ,
                        [0, 0, 0, 0, 0, 1 ]])*self.state_noise 
 
-            self.full_state_size=self.state_size 
-#    def set_delta_t(self,delta_t):
-#        self.delta_t=delta_t
+            self.full_state_size = self.state_size 
     def update_matrices_post(self,delta_t):
         self.delta_t=delta_t
         self.Q=self.Q/self.state_noise
@@ -125,13 +117,13 @@ class kalman_filter():
         
     def scale_measurement_noise(self,dop):
         # scale kalman filter measurement matrix depending on dilution of precision
-        self.R_dop = self.R_chan*dop
+        self.R_dop = self.R*dop
 
     def adapt_R(self,H):
         # scale kalman filter measurement matrix depending on dilution of precision
         
         P_inv = inv(dot(H.T,H))
-        self.R_dop = dot(dot(dot(dot(P_inv,H.T),self.R_chan),H),P_inv)
+        self.R_dop = dot(dot(dot(dot(P_inv,H.T),self.R),H),P_inv)
         
         idxs=np.where(self.R_dop>20)
         #print idxs
@@ -143,27 +135,11 @@ class kalman_filter():
             self.R_dop[idxs]=-20
         #print self.R_dop
         
-    '''
-    def adapt_Q(self,Pk,Pk_1):
-        if len(self.correction_sequences) == self.window_size:
-            
-            self.Q = np.divide(np.sum(np.array(self.correction_sequences),0),self.window_size)#-dot(dot(self.phi,Pk_1),self.phi.transpose())+Pk
-            
-        print self.Q
-    
-    '''
+
     def kalman_fltr(self, measurement, Pk_1, xk_1, algorithm):
         # measurement:vector,Pk_1:mxm matrix,xk_1: size m-vector, self:containing state propagation matrices, delta_t:time distance between measurements
-        self
-        if not self.R_dop.any():
-            if algorithm == "chan":
-                R=self.R_chan
-            elif algorithm == "grid_based":
-                R=self.R_cs
-            else:
-                sys.exit('algorithm does not exist')
-        else:
-            R = self.R_dop
+
+        R = self.R_dop
 
         #a priori estimations
         #Time Update
@@ -175,13 +151,6 @@ class kalman_filter():
         #Measurement Update
         Pk=dot((identity(self.full_state_size)-dot(Kk,self.M)),Pk_prio)
         xk= (xk_prio+dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))).transpose()
-        '''
-        if any(self.xk_1):
-            self.correction_sequences.append(dot(np.array([dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))]).T,np.array([dot(Kk,(measurement.transpose()-dot(self.M,xk_prio)))]))
-)       
-        if len(self.correction_sequences) > self.window_size:
-            self.correction_sequences.popleft()
-            '''
         self.xk_1 = xk
         #self.adapt_Q(Pk,Pk_1)
         return xk ,Pk
