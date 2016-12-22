@@ -15,6 +15,8 @@ In order to execute the gr-localization you will need to install the following p
 - python-matplotlib
 - python-mpltoolkits.basemap
 
+command: sudo apt-get install python-qwt5-qt4 python-scipy python-pyproj python-matplotlib python-mpltoolkits.basemap
+
 
 Recommended:
 --------------
