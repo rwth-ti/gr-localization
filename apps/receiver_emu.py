@@ -24,7 +24,6 @@ from grc_gnuradio import blks2 as grc_blks2
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 import pmt
-import movements
 
 
 ###############################################################################
