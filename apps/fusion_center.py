@@ -23,7 +23,7 @@ sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 import probe_manager as probe_manager_local
 import receiver_interface
-import chan94_algorithm, chan94_algorithm_filtered, kalman
+import chan94_algorithm, kalman
 import grid_based_algorithm
 import dop
 from interpolation import corr_spline_interpolation
@@ -75,8 +75,8 @@ class fusion_center():
         self.reference_selections = ["Manual","Max-signal-power","Min-signal-power","Min-DOP"]
         self.filtering_types = ["No filtering","Moving average","Kalman filter"]
         self.motion_models = ["maneuvering","simple"]
-        self.reference_selection = "Min-DOP"
-        self.filtering_type = "Kalman filter"
+        self.reference_selection = "Manual"
+        self.filtering_type = "No filtering"
         self.motion_model = "maneuvering"
         self.init_settings_kalman=dict()
         
@@ -305,6 +305,8 @@ class fusion_center():
             
     def set_measurement_noise(self, measurement_noise):
         self.measurement_noise = measurement_noise
+        for receiver in self.receivers.values():
+            receiver.measurement_noise = measurement_noise
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_measurement_noise",[measurement_noise])
 
@@ -452,6 +454,7 @@ class fusion_center():
             receiver.samples_to_receive_calibration = self.samples_to_receive_calibration
             receiver.gps = gps
             receiver.auto_calibrate = self.auto_calibrate
+            receiver.measurement_noise = self.measurement_noise
             self.probe_manager_lock.acquire()
             self.probe_manager.add_socket(serial, receiver.probe_address, 'complex64', receiver.receive_samples)
             self.probe_manager_lock.release()
@@ -844,6 +847,7 @@ class fusion_center():
             else:
                 if self.init_kalman:
                     print (self.init_settings_kalman)
+                    self.init_settings_kalman["num_rx"] = len(self.receivers.values())
                     self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
                     estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
                     if self.grid_based_active:
@@ -867,7 +871,7 @@ class fusion_center():
                         dop_location = 10
                     '''
                     
-                    estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
+                    estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
                     #print (estimated_positions["chan"]["coordinates"])
                     measurement = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
                     if self.reference_selection == "Min-DOP" :
@@ -876,7 +880,7 @@ class fusion_center():
                         except:
                             print ("reference selection not possible, localizing already stopped")
                     else:
-                        dop_location,H = dop.calc_dop(estimated_positions["chan"],receivers, self.ref_receiver)
+                        dop_location,H = dop.calc_dop(estimated_positions["chan"]["coordinates"],receivers, self.ref_receiver)
                     self.kalman_filter.adapt_R(H)
                     self.xk_1_chan,self.Pk_1_chan = self.kalman_filter.kalman_fltr(np.array(list(measurement)),self.Pk_1_chan,self.xk_1_chan,"chan")    
                     estimated_positions["chan"]["kalman_coordinates"] = self.xk_1_chan[:2]
@@ -956,7 +960,7 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states["chan"])+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+","+str(x_cov) + ","+str(y_cov) +"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+","+str(x_cov) + ","+str(y_cov) +"]"
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
@@ -1001,7 +1005,6 @@ class fusion_center():
                         reception_complete[key] = self.receivers[key].reception_complete                      
                     self.probe_manager.watcher(reception_complete)
                     self.probe_manager_lock.release()
-
     def correlate(self, receivers, calibration=False):
         correlation = []
         correlation_labels = []

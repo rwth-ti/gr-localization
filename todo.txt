@@ -1,0 +1,7 @@
+A-prio: fix OSM!!! (no idea why it does not work --> Johannes)
+- adjust manuels code; clean up own
+- general code cleanup:
+  ->remove dangerous scalar operators if np is used!
+
+self localization:
+- translate Johannes' self localization algorithm to python
