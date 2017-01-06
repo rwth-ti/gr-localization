@@ -66,7 +66,7 @@ if __name__ == "__main__":
     frequency = acquisition[5]
     frequency_calibration = acquisition[6]
     calibration_position = acquisition[7]
-    interpolation = #acquisition[8]
+    interpolation = 1#acquisition[8]
     bandwidth = acquisition[9]
     samples_to_receive = acquisition[10]
     lo_offset = acquisition[11]

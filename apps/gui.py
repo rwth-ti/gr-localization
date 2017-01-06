@@ -1158,6 +1158,8 @@ class gui(QtGui.QMainWindow):
                 self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][0], self.results["delay"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
                 if len(self.results["correlation"]) > 1:
                     self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][1], self.results["delay"][1],Qt.Qt.red, self.results["correlation_labels"][1])
+                if len(self.results["correlation"]) > 2:
+                    self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][2], self.results["delay"][2],Qt.Qt.green, self.results["correlation_labels"][2])
                 self.gui.qwtPlotCorrelation.replot()
                 # clear the previous points from the plot
                 self.gui.qwtPlotDelayHistory.clear()
@@ -1174,11 +1176,11 @@ class gui(QtGui.QMainWindow):
                     self.gui.qwtPlotDelayHistory.replot()
 
             if len(self.results["receivers"]) > 0:
-                self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
+                self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][self.gui.comboBoxReceiver1.currentIndex()])
             if len(self.results["receivers"]) > 1:
-                self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][1])
+                self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][self.gui.comboBoxReceiver2.currentIndex()])
             if len(self.results["receivers"]) > 2:
-                self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][2])
+                self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][self.gui.comboBoxReceiver3.currentIndex()])
             if self.results["estimated_positions"] != None:
                 self.set_tx_position(self.results["estimated_positions"])
         self.new_results = False
@@ -1194,6 +1196,19 @@ class gui(QtGui.QMainWindow):
             for serial in self.receivers.keys():
                 self.gui.comboBoxRefReceiver.addItem(serial)
             self.gui.comboBoxRefReceiver.setCurrentIndex(0)
+            # populate Combo Boxes for sample plots
+            self.gui.comboBoxReceiver1.clear()
+            self.gui.comboBoxReceiver2.clear()
+            self.gui.comboBoxReceiver3.clear()
+            for serial in self.receivers.keys():
+                self.gui.comboBoxReceiver1.addItem(serial)
+                self.gui.comboBoxReceiver2.addItem(serial)
+                self.gui.comboBoxReceiver3.addItem(serial)
+            self.gui.comboBoxReceiver1.setCurrentIndex(0)
+            if len(self.receivers.keys())>1:
+                self.gui.comboBoxReceiver2.setCurrentIndex(1)
+            if len(self.receivers.keys())>2:
+                self.gui.comboBoxReceiver3.setCurrentIndex(2)
 
     def register_another_gui(self, serial):
         self.tmg.registerGui(serial)
@@ -1296,12 +1311,12 @@ class gui(QtGui.QMainWindow):
         self.gui.qwtPlotCorrelation.replot()
 
     def refresh_plot(self, receiver):
-        if receiver == 1 and self.results.has_key("receivers") and len(self.results["receivers"]) > 0:
-            self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][0])
-        if receiver == 2 and self.results.has_key("receivers") and len(self.results["receivers"]) > 1:
-            self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][1])
-        if receiver == 3 and self.results.has_key("receivers") and len(self.results["receivers"]) > 2:
-            self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][2])
+        if receiver == self.gui.comboBoxReceiver1.currentIndex()+1 and self.results.has_key("receivers") and len(self.results["receivers"]) > 0:
+            self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][self.gui.comboBoxReceiver1.currentIndex()])
+        if receiver == self.gui.comboBoxReceiver2.currentIndex()+1 and self.results.has_key("receivers") and len(self.results["receivers"]) > 1:
+            self.plot_receiver(self.gui.qwtPlotReceiver2, self.gui.checkBoxFFT2, self.results["receivers"][self.gui.comboBoxReceiver2.currentIndex()])
+        if receiver == self.gui.comboBoxReceiver3.currentIndex()+1 and self.results.has_key("receivers") and len(self.results["receivers"]) > 2:
+            self.plot_receiver(self.gui.qwtPlotReceiver3, self.gui.checkBoxFFT3, self.results["receivers"][self.gui.comboBoxReceiver3.currentIndex()])
 
 class transmitter_position():
     def __init__(self, coordinates):

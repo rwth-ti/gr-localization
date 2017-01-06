@@ -221,12 +221,7 @@ def localize(receivers, ref_receiver, bbox):
                 d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
             else:
                 d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
-                '''
-    ds = []
-    for delay in d:
-        ds.append(delay*sample_rate)
-    print "delay in chan_tdoa", ds
-    '''
+
     if len(pos_rx) == 3:
         return chan_3rx(pos_rx, d)
     else:
