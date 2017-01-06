@@ -14,7 +14,7 @@ import pprint
 import ConfigParser
 from mpl_toolkits.basemap import Basemap
 sys.path.append("../python")
-import receiver_interface,chan94_algorithm_filtered,chan94_algorithm,grid_based_algorithm
+import receiver_interface,chan94_algorithm,grid_based_algorithm
 from  kalman import kalman_filter
 from ConfigSectionMap import ConfigSectionMap
 import dop 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         if options.algorithm == "chan" or options.algorithm == "both":
             init_settings_kalman['algorithm']='chan'
             kalman=kalman_filter(init_settings_kalman)
-            estimated_positions["chan"]=chan94_algorithm_filtered.localize(receivers_steps[0],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
+            estimated_positions["chan"]=chan94_algorithm.localize(receivers_steps[0],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
             measurement=estimated_positions["chan"]["coordinates"]#+np.array([-20,-20])
             xk_1 = np.hstack((np.array(list(estimated_positions["chan"]["coordinates"])),np.zeros(kalman.get_state_size()-2))) #init state
             kalman_states = xk_1
@@ -210,7 +210,7 @@ if __name__ == "__main__":
                         ref_receiver = np.argmax(signal_strength)
                 
                 if not i==0:
-                    estimated_positions["chan"]=chan94_algorithm_filtered.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])),kalman.get_a_priori_est(xk_1)[:2])
+                    estimated_positions["chan"]=chan94_algorithm.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])),kalman.get_a_priori_est(xk_1)[:2])
                     measurement=kalman.pre_filter(estimated_positions["chan"]["coordinates"],xk_1)
                 '''
                 if dop_location < 1:

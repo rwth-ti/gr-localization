@@ -4,7 +4,7 @@ from interpolation import *
 
 c = 299700000.0
 
-def chan_3rx(pos_rx, d):
+def chan_3rx(pos_rx, d, xk_prio):
     t = time.time()
     d12 = d[0]
     d13 = d[1]
@@ -72,12 +72,20 @@ def chan_3rx(pos_rx, d):
         xy = np.real((valid_roots*A+B,valid_roots*C+D)).T
         # Calculate position with the solution in the roi
         if len(xy) > 1:
-            if np.linalg.norm(xy[0]-center_triangle) < np.linalg.norm(xy[1]-center_triangle):
-                print "1"
-                xy = xy[0]#changed:different solution gets chosen(closer to the center!)
+            if  xk_prio.any():
+                if np.linalg.norm(xy[0]-xk_prio) < np.linalg.norm(xy[1]-xk_prio):
+                    print "1" 
+                    xy = xy[0]#changed:different solution gets chosen(closer to prediction!)
+                else:
+                    print "2"
+                    xy = xy[1]
             else:
-                print "2"
-                xy = xy[1]
+                if np.linalg.norm(xy[0]-center_triangle) < np.linalg.norm(xy[1]-center_triangle):
+                    print "1"
+                    xy = xy[0]#changed:different solution gets chosen(closer to prediction!)
+                else:
+                    print "2"
+                    xy = xy[1]
         else:
             print "3"
             xy = xy[0]
@@ -193,7 +201,7 @@ def estimate_delay_interpolated(y1, y2):
     correlation, delay = corr_spline_interpolation(y1, y2, 11)
     return delay.tolist()
 
-def localize(receivers, ref_receiver, bbox):
+def localize(receivers, ref_receiver, bbox, xk_prio=np.array([])):
     sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
     y = []
     pos_rx = []
@@ -223,7 +231,7 @@ def localize(receivers, ref_receiver, bbox):
                 d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
 
     if len(pos_rx) == 3:
-        return chan_3rx(pos_rx, d)
+        return chan_3rx(pos_rx, d, xk_prio)
     else:
         # see chan, ho: A simple and efficient estimator for hyperbolic location
         # first construct covariance matrix

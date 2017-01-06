@@ -23,7 +23,7 @@ sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 import probe_manager as probe_manager_local
 import receiver_interface
-import chan94_algorithm, chan94_algorithm_filtered, kalman
+import chan94_algorithm, kalman
 import grid_based_algorithm
 import dop
 from interpolation import corr_spline_interpolation
@@ -871,7 +871,7 @@ class fusion_center():
                         dop_location = 10
                     '''
                     
-                    estimated_positions["chan"] = chan94_algorithm_filtered.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
+                    estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
                     #print (estimated_positions["chan"]["coordinates"])
                     measurement = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
                     if self.reference_selection == "Min-DOP" :
