@@ -417,18 +417,23 @@ class gui(QtGui.QMainWindow):
         # check if OSM is available at first 
 
         if self.map_type == "Online" and check_OSM():
-            #if loding image from open street map fails, retry until succeed
 
             print "Setting online map"
-            r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-
-            if r.status_code == 200:
-                img = Image.open(StringIO(r.content))
-                if not os.path.exists("../maps"):
-                        os.makedirs("../maps")
-                img.save("../maps/map.png")
+            # search for existing map for this bounding box
+            if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
+                # request only if no map can be found
+                r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+                if r.status_code == 200:
+                    img = Image.open(StringIO(r.content))
+                    if not os.path.exists("../maps"):
+                            os.makedirs("../maps")
+                    img.save("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
+                else:
+                    self.signal_error_set_map.emit()
             else:
-                sys.exit("Could not set up online map")
+                # if available, open offline map instead
+                img = Image.open("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
+            
 
 
         else:
