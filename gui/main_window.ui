@@ -701,16 +701,16 @@ average</string>
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButtonStopReceiversLoop">
+                 <widget class="QPushButton" name="pushButtonRunReceiversLoop">
                   <property name="text">
-                   <string>Stop</string>
+                   <string>Start continuous</string>
                   </property>
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButtonRunReceiversLoop">
+                 <widget class="QPushButton" name="pushButtonStopReceiversLoop">
                   <property name="text">
-                   <string>Start continuous</string>
+                   <string>Stop</string>
                   </property>
                  </widget>
                 </item>

@@ -72,19 +72,9 @@ class receiver_interface():
         self.rpc_mgr.request("sync_time")
 
     def request_samples(self, time_to_receive, acquisitions, acquisition_time):
-        
-        #self.samples = []
-        #self.samples_calibration = []
         self.reception_complete = False
-        self.coordinates_gps = [0,0]
-        #check if coordinates have been set
-        if (self.selected_position == "manual" and all(coordinate > 0 for coordinate in self.coordinates ))or(self.selected_position == "GPS" and all(coordinate > 0 for coordinate in self.coordinates_gps) ):
-            #self.first_packet = True
+        self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions, acquisition_time])
 
-            self.rpc_mgr.request("start_fg",[self.samples_to_receive, self.frequency, self.lo_offset, self.bw, self.gain, self.samples_to_receive_calibration, self.frequency_calibration, self.lo_offset_calibration, self.bw_calibration, self.gain_calibration, time_to_receive, self.auto_calibrate, acquisitions, acquisition_time])
-        else:
-            #self.first_packet = True
-            print "Set receiver positions at first!"
 
     def reset_receiver(self):
         print "Reset receiver: ", self.serial

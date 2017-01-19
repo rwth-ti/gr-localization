@@ -517,25 +517,34 @@ class fusion_center():
 
     def localize(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
-            self.localizing = True
-            self.start_receivers()
+            # check if receiver coordinates have been set:
+            if all((receiver.selected_position == "manual" and all(coordinate > 0 for coordinate in receiver.coordinates ))
+                    or(receiver.selected_position == "GPS" and all(coordinate > 0 for coordinate in receiver.coordinates_gps)) for receiver in self.receivers.values() ):
+                self.localizing = True
+                self.start_receivers()
+            else:
+                print ("Set receiver positions at first!")
 
     def localize_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
         self.delay_history = []
         self.estimated_positions_history = []
         if len(self.receivers) > 2:
-            self.localizing = True
-            self.recording_results = self.record_results
-            self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-            self.recording_samples = self.record_samples
-            self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-            if self.recording_results:
-                print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-                print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
-                print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            self.run_loop = True
-            self.start_receivers(acquisitions)
-
+            if all((receiver.selected_position == "manual" and all(coordinate > 0 for coordinate in receiver.coordinates ))
+                    or(receiver.selected_position == "GPS" and all(coordinate > 0 for coordinate in receiver.coordinates_gps)) for receiver in self.receivers.values() ):
+                self.localizing = True
+                self.recording_results = self.record_results
+                self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+                self.recording_samples = self.record_samples
+                self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+                if self.recording_results:
+                    print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+                    print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
+                    print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
+                self.run_loop = True
+                self.start_receivers(acquisitions)
+            else:
+                print ("Set receiver positions at first!")
+                
     def stop_loop(self):
         self.run_loop = False
         self.recording_results = False

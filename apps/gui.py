@@ -321,6 +321,12 @@ class gui(QtGui.QMainWindow):
         self.timer_register.daemon = True
         self.timer_register.start()
 
+    def remove_trackplots(self):
+        if self.track_plot:
+            self.track_plot.pop(0).remove()
+        self.queue_tx_coordinates_kalman = deque()
+        self.queue_tx_coordinates = deque()
+
     def calibration_loop(self, status):
         if status:
             self.calibration_setButton.setEnabled(False)
@@ -1223,11 +1229,8 @@ class gui(QtGui.QMainWindow):
 
     def localize_loop(self):
         if hasattr(self, "track_plot"):
-            # revove plot item; procedure differs from scatter item!
-            if self.track_plot:
-                self.track_plot.pop(0).remove()
-            self.queue_tx_coordinates_kalman = deque()
-            self.queue_tx_coordinates = deque()
+            # remove plot item; procedure differs from scatter item!
+            self.remove_trackplots()
         self.rpc_manager.request("localize_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def start_correlation(self):
@@ -1237,10 +1240,7 @@ class gui(QtGui.QMainWindow):
     def start_correlation_loop(self):
         if hasattr(self, "track_plot"):
         # revove plot item; procedure differs from scatter item!
-            if self.track_plot:
-                self.track_plot.pop(0).remove()
-            self.queue_tx_coordinates_kalman = deque()
-            self.queue_tx_coordinates = deque()
+            self.remove_trackplots()
         self.rpc_manager.request("start_correlation_loop", [self.frequency, self.lo_offset, self.samples_to_receive])
 
     def stop_loop(self):
