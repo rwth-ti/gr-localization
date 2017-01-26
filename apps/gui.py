@@ -257,6 +257,35 @@ class gui(QtGui.QMainWindow):
         self.calibration_dialog.setLayout(layout)
         
 
+        # Dialog box for receiver positions
+        self.position_dialog = QtGui.QDialog(self)
+        self.position_mBox_pos = QtGui.QDialogButtonBox(self)
+        self.position_setButton = self.position_mBox_pos.addButton("Map estimate", QtGui.QDialogButtonBox.AcceptRole)
+        self.position_gpsInputButton = self.position_mBox_pos.addButton("Set coordinates", QtGui.QDialogButtonBox.AcceptRole)
+        self.position_cancelButton = self.position_mBox_pos.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
+        self.position_mBox_pos.clicked.connect(self.manage_position)
+        self.position_dialog.setWindowTitle("Set receiver position")
+        self.waitText1 = QtGui.QLabel("Ground truth coordinates can be typed here.")
+        self.waitText2 = QtGui.QLabel("Clicking 'set coordinates' will program them into a connected u-blox lea-m8f, if available.")
+        self.waitText3 = QtGui.QLabel("By clicking on 'Map estimate' you can set the position to a ballpark estimate on the Map,")
+        self.waitText4 = QtGui.QLabel("which will not be programed.")
+        # reuse long and lat label from calibration Dialog
+        # add altitude
+        self.altLabel = QtGui.QLabel("altitude (m)")
+        self.lineEditAltitude = QtGui.QLineEdit() 
+        layout.addRow(self.altLabel,self.lineEditAltitude)
+        layout = QtGui.QFormLayout()
+        layout.addRow(self.waitText1)
+        layout.addRow(self.waitText2)
+        layout.addRow(self.waitText3)
+        layout.addRow(self.waitText4)
+        layout.addRow(self.latLabel, self.lineEditLatitude)
+        layout.addRow(self.longLabel,self.lineEditLongitude)
+        layout.addRow(self.altLabel,self.lineEditAltitude)
+        layout.addRow(self.position_mBox_pos)
+        #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
+        self.position_dialog.setLayout(layout)
+
         
         #Signals
         self.signal_error_set_map.connect(self.error_set_map)
@@ -781,12 +810,35 @@ class gui(QtGui.QMainWindow):
             self.zp.enabled = True
 
     def set_position(self, mouse_event):
-        if self.setting_pos_receiver is not "":
+        if self.setting_pos_receiver is not "" and self.zp.enabled == False:
             receiver = self.receivers[self.setting_pos_receiver]
             self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
             #self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""
+            print "in set position"
             self.zp.enabled = True
+
+    def manage_position(self,button):
+        if button.text() == "Cancel":
+            self.position_dialog.reject()
+        elif button.text() == "Map estimate" :
+            if hasattr(self, "zp"):
+                self.zp.enabled = False
+                self.position_dialog.accept()
+
+        elif button.text() == "Set coordinates" :
+            # calibrate with gps coordinates from line inputs
+            latitude = float(self.lineEditLatitude.text())
+            longitude = float(self.lineEditLongitude.text())
+            altitude = float(self.lineEditAltitude.text())
+            # program gps coordinates for receiver that corresponds to the clicked button
+            # see gui_helpers PushButtonPositionDelegate
+            print "receiver:",self.setting_pos_receiver
+            if self.setting_pos_receiver is not "": 
+                self.rpc_manager.request("program_gps_receiver",[self.setting_pos_receiver,latitude, longitude, altitude])
+                self.position_dialog.accept()
+
+            
 
     def new_chat(self, chat):
         self.chat_pending = True

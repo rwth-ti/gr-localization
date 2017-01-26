@@ -22,6 +22,7 @@ import calendar
 #import octoclock
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
+from gpsconfig import *
 
 ###############################################################################
 # GNU Radio top_block
@@ -129,6 +130,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
         self.rpc_manager.add_interface("sync_time",self.sync_time)
+        self.rpc_manager.add_interface("program_gps_position",self.program_gps_position)
         self.rpc_manager.start_watcher()
 
 
@@ -379,6 +381,20 @@ class top_block(gr.top_block):
                 longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
         # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
+
+    def program_gps_position(self, latitude, longitude, altitude):
+        # needed in ublox settings; by now we assume at least dm accuracy
+        ground_truth_accuracy = 0.1
+        set_ublox_coordinates_fixed(latitude, longitude, altitude, ground_truth_accuracy)
+        usrp_coordinates = self.get_gps_position()
+        # compare values with the accuracy possible in u-blox devices
+        if int(usrp_coordinates[0]*1e7) == int(longitude*1e7) and int(usrp_coordinates[1]*1e7) == int(latitude*1e7):
+            print "match"
+        else:
+            print "GPS coordinates set incorrect."
+            print "difference: ",usrp_coordinates[0] - longitude, usrp_coordinates[1] - latitude
+        #add checker if it worked
+
 
 ###############################################################################
 # Options Parser

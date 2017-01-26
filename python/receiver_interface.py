@@ -150,11 +150,12 @@ class receiver_interface():
 
         if self.samples_to_receive == len(self.samples):
             if self.samples_to_receive_calibration == len(self.samples_calibration) and self.auto_calibrate:
-
                 self.reception_complete = True
             elif not self.auto_calibrate:
-
                 self.reception_complete = True
 
     def get_gps_position(self):
         return self.rpc_mgr.request("get_gps_position")
+
+    def program_receiver_position(self, latitude, longitude, altitude):
+        self.rpc_mgr.request("program_gps_position", [latitude, longitude, altitude])

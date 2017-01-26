@@ -24,6 +24,8 @@ from grc_gnuradio import blks2 as grc_blks2
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 import pmt
+from gpsconfig import *
+
 
 
 ###############################################################################
@@ -85,6 +87,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
         self.rpc_manager.add_interface("set_run_loop",self.set_run_loop)
         self.rpc_manager.add_interface("sync_time",self.sync_time)
+        self.rpc_manager.add_interface("program_gps_position",self.program_gps_position)
         self.rpc_manager.start_watcher()
 
 
@@ -199,6 +202,12 @@ class top_block(gr.top_block):
 
         delay=int((np.linalg.norm(np.array(list(self.coordinates))-transmitter_coordinates)/self.c)*self.samp_rate)
         return delay
+
+    def program_gps_position(self, latitude, longitude, altitude):
+        # needed in ublox settings; by now we assume at least dm accuracy
+        ground_truth_accuracy = 0.1
+        set_ublox_coordinates_fixed(latitude, longitude, altitude, ground_truth_accuracy)
+        #add checker if it worked
     
 class ModulatorBlock(gr.hier_block2):
     def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive, freq):
@@ -279,6 +288,7 @@ class ModulatorBlock(gr.hier_block2):
         self.connect(noise, (add,1))
         self.connect(add, throttle, head, self)
         self.connect(add, tag_debug)
+
 
 ###############################################################################
 # Options Parser

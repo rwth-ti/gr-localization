@@ -262,9 +262,10 @@ class PushButtonPositionDelegate(QtGui.QItemDelegate):
 
     @QtCore.pyqtSlot()
     def clicked(self):
-        if hasattr(self.parent, "zp"):
-            self.parent.setting_pos_receiver = self.parent.receivers.keys()[self.sender().index.row()]
-            self.parent.zp.enabled = False
+        # select receiver for which the operation in gui is performed
+        self.parent.setting_pos_receiver = self.parent.receivers.keys()[self.sender().index.row()]
+        self.parent.position_dialog.show()
+        #print self.parent.setting_pos_receiver
 
 class NavigationToolbar(NavigationToolbar):
     # only display the buttons we need

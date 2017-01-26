@@ -185,6 +185,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_bbox",self.set_bbox)
         self.rpc_manager.add_interface("set_acquisition_time",self.set_acquisition_time)
         self.rpc_manager.add_interface("set_grid_based_active",self.set_grid_based_active)
+        self.rpc_manager.add_interface("program_gps_receiver",self.program_gps_receiver)
         self.rpc_manager.start_watcher()
 
         self.probe_manager_lock = threading.Lock()
@@ -738,6 +739,10 @@ class fusion_center():
         self.grid_based_active = grid_based_active
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_grid_based_active",[grid_based_active])
+
+    def program_gps_receiver(self, serial, latitude, longitude, altitude):
+        print("request worked")
+        self.receivers[serial].program_receiver_position(latitude, longitude, altitude)
 
     def process_results(self, receivers, delay_auto_calibration):
         # check if timestamps are equal for all the receivers
