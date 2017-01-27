@@ -741,7 +741,6 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_grid_based_active",[grid_based_active])
 
     def program_gps_receiver(self, serial, latitude, longitude, altitude):
-        print("request worked")
         self.receivers[serial].program_receiver_position(latitude, longitude, altitude)
 
     def process_results(self, receivers, delay_auto_calibration):
@@ -927,7 +926,6 @@ class fusion_center():
         for receiver in receivers.values():
             receivers_samples.append(receiver.samples)
         self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels,"ref_receiver": self.ref_receiver}
-        
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[self.results])
 

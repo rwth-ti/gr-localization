@@ -64,15 +64,16 @@ def int_to_byte_stream(integer,signed):
 def set_ublox_coordinates_fixed(lat, lon, alt, accuracy):
     # check if m8f is connected! (in receiver) 
     bytestream = set_tmode2_fixed(lat,lon,alt,accuracy)
-    print 'configure position for gps timing...'
     bytestream.replace('\\x',' 0x')
     try:
+        print "Send serial command through USB"
         ser = serial.Serial('/dev/ttyACM0',9600)
         ser.write(bytestream.decode('string_escape'))
+        print "Wait.."
         time.sleep(10)
-        print 'done'
+        print 'Done'
         # close connection and destroy serial instance
         ser.close()
         ser.__exit__
     except:
-        print "Configuring u-blox lea-m8f not possible. Check your USB connection."
+        print "Configuring u-blox LEA-M8F not possible. Check connection."

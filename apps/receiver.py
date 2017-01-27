@@ -367,33 +367,39 @@ class top_block(gr.top_block):
             latitude = nmea.split(",")[3:5]
             # the NMEA sentence may vary for each receiver. This code works for 
             # the next structure in latitude DDMM.XXXXXX
-            if latitude[1] == "N":
-                latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
-            else:
-                latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
+            if latitude[0] != "":
+                if latitude[1] == "N":
+                    latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+                else:
+                    latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
-            longitude = nmea.split(",")[5:7]
-            # the NMEA sentence may vary for each receiver. This code works for 
-            # the next structure in longitude DDDMM.XXXXXX
-            if longitude[1] == "E":
-                longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+                longitude = nmea.split(",")[5:7]
+                # the NMEA sentence may vary for each receiver. This code works for 
+                # the next structure in longitude DDDMM.XXXXXX
+                if longitude[1] == "E":
+                    longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+                else:
+                    longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
             else:
-                longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
+                # set to ict rooftop if coordinates are missing
+                latitude = 50.7793333333
+                longitude = 6.06295555555
         # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
 
     def program_gps_position(self, latitude, longitude, altitude):
         # needed in ublox settings; by now we assume at least dm accuracy
         ground_truth_accuracy = 0.1
+        print 'Configure u-blox TMODE2 through USB'        
         set_ublox_coordinates_fixed(latitude, longitude, altitude, ground_truth_accuracy)
+        print "Check position through UHD NMEA"
         usrp_coordinates = self.get_gps_position()
         # compare values with the accuracy possible in u-blox devices
         if int(usrp_coordinates[0]*1e7) == int(longitude*1e7) and int(usrp_coordinates[1]*1e7) == int(latitude*1e7):
-            print "match"
+            print "Correct"
         else:
-            print "GPS coordinates set incorrect."
-            print "difference: ",usrp_coordinates[0] - longitude, usrp_coordinates[1] - latitude
-        #add checker if it worked
+            print "Error: difference between USB and UHD"
+            print "Difference: ",usrp_coordinates[0] - longitude, usrp_coordinates[1] - latitude
 
 
 ###############################################################################
