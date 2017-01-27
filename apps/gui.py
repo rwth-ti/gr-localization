@@ -260,25 +260,20 @@ class gui(QtGui.QMainWindow):
         # Dialog box for receiver positions
         self.position_dialog = QtGui.QDialog(self)
         self.position_mBox_pos = QtGui.QDialogButtonBox(self)
-        self.position_setButton = self.position_mBox_pos.addButton("Map estimate", QtGui.QDialogButtonBox.AcceptRole)
-        self.position_gpsInputButton = self.position_mBox_pos.addButton("Set coordinates", QtGui.QDialogButtonBox.AcceptRole)
         self.position_cancelButton = self.position_mBox_pos.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
+        self.position_gpsInputButton = self.position_mBox_pos.addButton("Set", QtGui.QDialogButtonBox.AcceptRole)
+        self.position_setButton = self.position_mBox_pos.addButton("From map", QtGui.QDialogButtonBox.AcceptRole)
         self.position_mBox_pos.clicked.connect(self.manage_position)
         self.position_dialog.setWindowTitle("Set receiver position")
-        self.waitText1 = QtGui.QLabel("Ground truth coordinates can be typed here.")
-        self.waitText2 = QtGui.QLabel("Clicking 'set coordinates' will program them into a connected u-blox lea-m8f, if available.")
-        self.waitText3 = QtGui.QLabel("By clicking on 'Map estimate' you can set the position to a ballpark estimate on the Map,")
-        self.waitText4 = QtGui.QLabel("which will not be programed.")
+        self.waitText_pos = QtGui.QLabel("Provide receiver coordinates or select by clicking on the map.")
+
         # reuse long and lat label from calibration Dialog
         # add altitude
         self.altLabel = QtGui.QLabel("altitude (m)")
         self.lineEditAltitude = QtGui.QLineEdit() 
         layout.addRow(self.altLabel,self.lineEditAltitude)
         layout = QtGui.QFormLayout()
-        layout.addRow(self.waitText1)
-        layout.addRow(self.waitText2)
-        layout.addRow(self.waitText3)
-        layout.addRow(self.waitText4)
+        layout.addRow(self.waitText_pos)
         layout.addRow(self.latLabel, self.lineEditLatitude)
         layout.addRow(self.longLabel,self.lineEditLongitude)
         layout.addRow(self.altLabel,self.lineEditAltitude)
@@ -815,18 +810,17 @@ class gui(QtGui.QMainWindow):
             self.rpc_manager.request("sync_position",[self.setting_pos_receiver, (mouse_event.xdata,mouse_event.ydata)])
             #self.rpc_manager.request("get_gui_gps_position",[self.setting_pos_receiver])
             self.setting_pos_receiver = ""
-            print "in set position"
             self.zp.enabled = True
 
     def manage_position(self,button):
         if button.text() == "Cancel":
             self.position_dialog.reject()
-        elif button.text() == "Map estimate" :
+        elif button.text() == "From map" :
             if hasattr(self, "zp"):
                 self.zp.enabled = False
                 self.position_dialog.accept()
 
-        elif button.text() == "Set coordinates" :
+        elif button.text() == "Set" :
             # calibrate with gps coordinates from line inputs
             latitude = float(self.lineEditLatitude.text())
             longitude = float(self.lineEditLongitude.text())
@@ -1235,6 +1229,10 @@ class gui(QtGui.QMainWindow):
                         self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
                         delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][1][-1]) )
                         delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][1][-1]) )
+                        if len(self.results["delay_history"]) > 2:
+                            self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][2],Qt.Qt.green)
+                            delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][2][-1]) )
+                            delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][2][-1]) )
                     self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
                     self.gui.qwtPlotDelayHistory.replot()
 
