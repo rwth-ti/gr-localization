@@ -23,6 +23,7 @@ import calendar
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 from gpsconfig import *
+from tx_bpsk import tx_bpsk
 
 ###############################################################################
 # GNU Radio top_block
@@ -35,6 +36,7 @@ class top_block(gr.top_block):
 
         # create scheduler for retuning
         self.scheduler = sched.scheduler(time.time, time.sleep)
+        self.transmit_flag = False
 
         self.run_loop = False
 
@@ -131,6 +133,9 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
         self.rpc_manager.add_interface("sync_time",self.sync_time)
         self.rpc_manager.add_interface("program_gps_position",self.program_gps_position)
+        self.rpc_manager.add_interface("start_transmitter", self.start_transmitter)
+        self.rpc_manager.add_interface("stop_transmitter", self.stop_transmitter)
+        self.rpc_manager.add_interface("restart_transmitter", self.restart_transmitter)
         self.rpc_manager.start_watcher()
 
 
@@ -141,6 +146,42 @@ class top_block(gr.top_block):
         else:
             s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
+
+
+    def start_transmitter(self, center_freq, bandwidth, gain, sample_rate):
+        print "Transmitter started"
+        self.lock()
+        self.transmit_flag = True
+        self.tx_bpsk_0 = tx_bpsk(
+            bandwidth = bandwidth,
+            center_freq = center_freq,
+            gain = gain,
+            num_pulses = 20000,
+            pulse_length = 1,
+            samp_rate = sample_rate,
+            )
+        self.connect(self.tx_bpsk_0)
+        time.sleep(0.0001)
+        self.unlock()
+
+
+    def stop_transmitter(self):
+        print "Transmitter stoped"
+        self.lock()
+        if self.transmit_flag:
+            self.disconnect(self.tx_bpsk_0)
+            self.transmit_flag = False
+        time.sleep(0.0001)
+        self.unlock()
+    
+    def restart_transmitter(self):
+        print "Transmitter restart"
+        self.lock()
+        if not self.transmit_flag:
+            self.connect(self.tx_bpsk_0)
+            self.transmit_flag = True
+        time.sleep(0.0001)
+        self.unlock()
 
     def set_run_loop(self, run_loop):
         self.run_loop = run_loop

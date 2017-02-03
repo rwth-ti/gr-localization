@@ -159,3 +159,12 @@ class receiver_interface():
 
     def program_receiver_position(self, latitude, longitude, altitude):
         self.rpc_mgr.request("program_gps_position", [latitude, longitude, altitude])
+
+    def start_transmitter(self):
+        self.rpc_mgr.request("start_transmitter",[self.frequency, self.bw, self.gain, self.samp_rate])
+
+    def stop_transmitter(self):
+        self.rpc_mgr.request("stop_transmitter")
+
+    def restart_transmitter(self):
+        self.rpc_mgr.request("restart_transmitter")
