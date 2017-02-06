@@ -286,7 +286,9 @@ class gui(QtGui.QMainWindow):
         self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
-        self.connect(self.gui.lineEdit, QtCore.SIGNAL("returnPressed()"), self.send_chat)
+        self.connect(self.gui.pushButtonStartTransmitter, QtCore.SIGNAL("clicked()"), self.start_transmitter)
+        self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
+        self.connect(self.gui.pushButtonStopTransmitter, QtCore.SIGNAL("clicked()"), self.stop_transmitter)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_loop)
@@ -831,7 +833,11 @@ class gui(QtGui.QMainWindow):
             if self.setting_pos_receiver is not "": 
                 self.rpc_manager.request("program_gps_receiver",[self.setting_pos_receiver,latitude, longitude, altitude])
                 self.position_dialog.accept()
+    def start_transmitter(self):
+        self.rpc_manager.request("start_transmitter")
 
+    def stop_transmitter(self):
+        self.rpc_manager.request("stop_transmitter")
             
 
     def new_chat(self, chat):

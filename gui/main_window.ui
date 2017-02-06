@@ -83,6 +83,31 @@
              </item>
             </layout>
            </widget>
+           <widget class="QWidget" name="verticalLayoutWidget">
+            <layout class="QVBoxLayout" name="verticalLayout_2">
+             <item>
+              <widget class="QPushButton" name="pushButtonStartTransmitter">
+               <property name="text">
+                <string>Start Transmitter</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButtonStopTransmitter">
+               <property name="text">
+                <string>Stop Transmitter</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButtonSelfLocalization">
+               <property name="text">
+                <string>Self Localization</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
           </widget>
           <widget class="QWidget" name="layoutWidget">
            <layout class="QVBoxLayout" name="verticalLayout_9">

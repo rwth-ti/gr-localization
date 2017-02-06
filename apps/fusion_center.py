@@ -36,6 +36,7 @@ class fusion_center():
         # socket addresses
         rpc_adr = "tcp://*:6665"
 
+        self.tx_exists = False #debug
         self.samples_to_receive = int(options.num_samples)
         self.frequency = float(options.frequency)
         self.samp_rate = float(options.samp_rate)
@@ -139,6 +140,8 @@ class fusion_center():
         self.rpc_manager.add_interface("sync_position",self.sync_position)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("forward_chat",self.forward_chat)
+        self.rpc_manager.add_interface("start_transmitter",self.start_transmitter)
+        self.rpc_manager.add_interface("stop_transmitter",self.stop_transmitter)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
         self.rpc_manager.add_interface("localize",self.localize)
@@ -493,6 +496,7 @@ class fusion_center():
 
     def start_correlation(self, freq, lo_offset, samples_to_receive):
         self.start_receivers()
+        
 
     def start_correlation_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
         self.delay_history = []
@@ -742,6 +746,16 @@ class fusion_center():
 
     def program_gps_receiver(self, serial, latitude, longitude, altitude):
         self.receivers[serial].program_receiver_position(latitude, longitude, altitude)
+        
+    def start_transmitter(self):
+        if not self.tx_exists:
+            self.receivers.values()[-1].start_transmitter()
+            self.tx_exists = True
+        else:
+            self.receivers.values()[-1].restart_transmitter()
+
+    def stop_transmitter(self):
+            self.receivers.values()[-1].stop_transmitter()
 
     def process_results(self, receivers, delay_auto_calibration):
         # check if timestamps are equal for all the receivers
@@ -1073,7 +1087,7 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="50e6",
+    parser.add_option("", "--samp-rate", type="string", default="40e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")

@@ -166,18 +166,18 @@ class top_block(gr.top_block):
 
 
     def stop_transmitter(self):
-        print "Transmitter stoped"
         self.lock()
         if self.transmit_flag:
+            print "Transmitter stoped"
             self.disconnect(self.tx_bpsk_0)
             self.transmit_flag = False
         time.sleep(0.0001)
         self.unlock()
     
     def restart_transmitter(self):
-        print "Transmitter restart"
         self.lock()
         if not self.transmit_flag:
+            print "Transmitter restart"
             self.connect(self.tx_bpsk_0)
             self.transmit_flag = True
         time.sleep(0.0001)
