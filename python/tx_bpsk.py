@@ -16,7 +16,7 @@ import time
 
 class tx_bpsk(gr.hier_block2):
 
-    def __init__(self, bandwidth=50000000, center_freq=2510000000, gain=50, num_pulses=20000, pulse_length=1, samp_rate=10000000):
+    def __init__(self, serial, gps, mcr, bandwidth=50000000, center_freq=2510000000, gain=50, num_pulses=20000, pulse_length=1, samp_rate=10000000):
         gr.hier_block2.__init__(
             self, "Tx Bpsk",
             gr.io_signature(0, 0, 0),
@@ -26,6 +26,9 @@ class tx_bpsk(gr.hier_block2):
         ##################################################
         # Parameters
         ##################################################
+        self.serial = serial
+        self.mcr = mcr
+        self.gps = gps
         self.bandwidth = bandwidth
         self.center_freq = center_freq
         self.gain = gain
@@ -36,13 +39,59 @@ class tx_bpsk(gr.hier_block2):
         ##################################################
         # Blocks
         ##################################################
-        self.uhd_usrp_sink_0 = uhd.usrp_sink(
-        	",".join(("", "")),
-        	uhd.stream_args(
-        		cpu_format="fc32",
-        		channels=range(1),
-        	),
-        )
+
+        if  serial != "":
+            if  mcr != 0:
+                 self.uhd_usrp_sink_0 = uhd.usrp_sink(
+                    "serial == " +  serial
+                    + ",master_clock_rate == " + str( mcr),
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                     ),
+                )
+            else:
+                 self.uhd_usrp_sink_0 = uhd.usrp_sink(
+                    "serial == " +  serial,
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                     ),
+                )
+
+        else:
+            if  mcr != 0:
+                 self.uhd_usrp_sink_0 = uhd.usrp_sink(
+                    "master_clock_rate == " + str( mcr),
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                    ),
+                )
+            else:
+                 self.uhd_usrp_sink_0 = uhd.usrp_sink(
+                    "",
+                    uhd.stream_args(
+                        cpu_format="fc32",
+                        channels=range(1),
+                    ),
+                )
+
+        if self.gps != "internal":
+             print "Using " + self.gps
+             self.uhd_usrp_sink_0.set_clock_source("external", 0)
+             self.uhd_usrp_sink_0.set_time_source("external", 0)
+        if self.gps == "ltelite":
+            self.ser = serial.Serial("/dev/ttyUSB0", 38400, timeout = 1)
+            self.nmea_external = ""
+            self.nmea_external_lock = threading.Lock()
+            threading.Thread(target = self.poll_lte_lite).start()
+        elif self.gps == "leam8f":
+            self.ser = serial.Serial("/dev/ttyACM0", 38400, timeout = 1)
+            self.nmea_external = ""
+            self.nmea_external_lock = threading.Lock()
+            threading.Thread(target = self.poll_lea_m8f).start()
+
         self.uhd_usrp_sink_0.set_clock_rate(30.72e6, uhd.ALL_MBOARDS)
         self.uhd_usrp_sink_0.set_samp_rate(samp_rate)
         self.uhd_usrp_sink_0.set_center_freq(center_freq, 0)

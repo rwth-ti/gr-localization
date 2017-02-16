@@ -36,7 +36,6 @@ class fusion_center():
         # socket addresses
         rpc_adr = "tcp://*:6665"
 
-        self.tx_exists = False #debug
         self.samples_to_receive = int(options.num_samples)
         self.frequency = float(options.frequency)
         self.samp_rate = float(options.samp_rate)
@@ -748,11 +747,7 @@ class fusion_center():
         self.receivers[serial].program_receiver_position(latitude, longitude, altitude)
         
     def start_transmitter(self):
-        if not self.tx_exists:
             self.receivers.values()[-1].start_transmitter()
-            self.tx_exists = True
-        else:
-            self.receivers.values()[-1].restart_transmitter()
 
     def stop_transmitter(self):
             self.receivers.values()[-1].stop_transmitter()

@@ -36,7 +36,7 @@ class top_block(gr.top_block):
 
         # create scheduler for retuning
         self.scheduler = sched.scheduler(time.time, time.sleep)
-        self.transmit_flag = False
+        self.transmit_flag = True # will be set to false after end of constructor
 
         self.run_loop = False
 
@@ -113,6 +113,19 @@ class top_block(gr.top_block):
             self.file_sink = blocks.file_sink(gr.sizeof_gr_complex*1, file_name, True)
             self.file_sink.set_unbuffered(False)
 
+        # call constructor at fist for not harming synchronization 
+        self.tx_bpsk_0 = tx_bpsk(
+            serial = self.options.serial,
+            mcr= self.options.mcr,
+            gps = self.gps,
+            bandwidth=5000000,
+            center_freq=2510000000,
+            gain=50,
+            num_pulses=20000,
+            pulse_length=1,
+            samp_rate=1000000,
+        )
+        self.connect(self.tx_bpsk_0)
         # connects
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
         self.connect(self.usrp_source, self.zmq_probe)
@@ -133,9 +146,8 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("get_gps_position",self.get_gps_position)
         self.rpc_manager.add_interface("sync_time",self.sync_time)
         self.rpc_manager.add_interface("program_gps_position",self.program_gps_position)
-        self.rpc_manager.add_interface("start_transmitter", self.start_transmitter)
         self.rpc_manager.add_interface("stop_transmitter", self.stop_transmitter)
-        self.rpc_manager.add_interface("restart_transmitter", self.restart_transmitter)
+        self.rpc_manager.add_interface("start_transmitter", self.start_transmitter)
         self.rpc_manager.start_watcher()
 
 
@@ -146,8 +158,10 @@ class top_block(gr.top_block):
         else:
             s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
+        self.stop_transmitter() # transmit flag toggled inside
 
 
+    '''
     def start_transmitter(self, center_freq, bandwidth, gain, sample_rate):
         print "Transmitter started"
         self.lock()
@@ -163,7 +177,7 @@ class top_block(gr.top_block):
         self.connect(self.tx_bpsk_0)
         time.sleep(0.0001)
         self.unlock()
-
+    '''
 
     def stop_transmitter(self):
         self.lock()
@@ -174,10 +188,10 @@ class top_block(gr.top_block):
         time.sleep(0.0001)
         self.unlock()
     
-    def restart_transmitter(self):
+    def start_transmitter(self):
         self.lock()
         if not self.transmit_flag:
-            print "Transmitter restart"
+            print "!!!!!!!!!!!!!!!!!!!!!!           Transmitter start             !!!!!!!!!!!!!!!!!!!"
             self.connect(self.tx_bpsk_0)
             self.transmit_flag = True
         time.sleep(0.0001)
@@ -188,10 +202,13 @@ class top_block(gr.top_block):
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
+        self.tx_bpsk_0.set_samp_rate(samp_rate)
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
+        self.tx_bpsk_0.set_bandwidth(bw)
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)
+        self.tx_bpsk_0.set_gain(gain)
     def set_antenna(self,antenna):
         self.usrp_source.set_antenna(antenna, 0)
 
@@ -311,8 +328,11 @@ class top_block(gr.top_block):
         time_retune_2 = self.usrp_source.get_time_now().get_real_secs()
         print "Time retune 2:", time_retune_2
         self.usrp_source.set_center_freq(uhd.tune_request(freq, lo_offset), 0)
+        self.tx_bpsk_0.set_center_freq(uhd.tune_request(freq, lo_offset))
         self.usrp_source.set_gain(gain,0)
+        self.tx_bpsk_0.set_gain(gain)
         self.usrp_source.set_bandwidth(bw,0)
+        self.tx_bpsk_0.set_bandwidth(bw)
 
     def sync_time_nmea(self):
         print "Begin time sync"
