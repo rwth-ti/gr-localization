@@ -120,7 +120,7 @@ class top_block(gr.top_block):
             gps = self.gps,
             bandwidth=5000000,
             center_freq=2510000000,
-            gain=50,
+            gain=70,
             num_pulses=20000,
             pulse_length=1,
             samp_rate=1000000,
@@ -203,12 +203,15 @@ class top_block(gr.top_block):
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
         self.tx_bpsk_0.set_samp_rate(samp_rate)
+
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
         self.tx_bpsk_0.set_bandwidth(bw)
+
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)
-        self.tx_bpsk_0.set_gain(gain)
+        #self.tx_bpsk_0.set_gain(gain)
+
     def set_antenna(self,antenna):
         self.usrp_source.set_antenna(antenna, 0)
 
