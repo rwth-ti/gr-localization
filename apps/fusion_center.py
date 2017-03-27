@@ -584,14 +584,14 @@ class fusion_center():
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
         for receiver in self.receivers.values():
-            receiver.samp_rate = samp_rate
+            receiver.set_samp_rate(samp_rate)
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_samp_rate",[samp_rate])
 
     def set_bw(self, bw):
         self.bw = bw
         for receiver in self.receivers.values():
-            receiver.bw = bw
+            receiver.set_bw(bw)
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_bw",[bw])
 
@@ -638,7 +638,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_bw_calibration",[bw])
 
     def set_gain(self, gain, serial):
-        self.receivers[serial].gain = gain
+        self.receivers[serial].set_gain(gain)
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_gain",[gain, serial])
 
