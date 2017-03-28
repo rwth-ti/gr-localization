@@ -98,7 +98,6 @@ class fusion_center():
         
         
         
-        
         self.map_type = "Online"
         self.map_file = "../maps/map.png"
         self.coordinates_type = "Geographical"
@@ -114,6 +113,11 @@ class fusion_center():
         self.init_settings_kalman["noise_var_x"] = self.measurement_noise
         self.init_settings_kalman["noise_var_y"] = self.measurement_noise
         self.init_settings_kalman["max_acceleration"]= self.max_acc
+
+
+        # Parameters for self-localization:
+        self.transmitter = -1 # No sensor is transmitting
+
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
         self.bbox = 6.0606,50.77819,6.06481,50.77967
@@ -746,11 +750,20 @@ class fusion_center():
     def program_gps_receiver(self, serial, latitude, longitude, altitude):
         self.receivers[serial].program_receiver_position(latitude, longitude, altitude)
         
-    def start_transmitter(self):
-            self.receivers.values()[-1].start_transmitter()
+    def start_transmitter(self): 
+        #cmmnt: maybe some wait required here
+        if self.transmitter == -1:
+            self.receivers.values()[0].start_transmitter()
+            self.transmitter = 0
+        else:
+            self.receivers.values()[self.transmitter].stop_transmitter()
+            self.transmitter += 1
+            if self.transmitter == len(self.receivers):
+                self.transmitter = 0
+            self.receivers.values()[self.transmitter].start_transmitter()
 
     def stop_transmitter(self):
-            self.receivers.values()[-1].stop_transmitter()
+        self.receivers.values()[self.transmitter].stop_transmitter()
 
     def process_results(self, receivers, delay_auto_calibration):
         # check if timestamps are equal for all the receivers
