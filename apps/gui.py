@@ -286,7 +286,8 @@ class gui(QtGui.QMainWindow):
         self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
-        self.connect(self.gui.pushButtonStartTransmitter, QtCore.SIGNAL("clicked()"), self.start_transmitter)
+        self.connect(self.gui.pushButtonStartTransmitter, QtCore.SIGNAL("clicked()"), self.switch_transmitter)
+        self.connect(self.gui.pushButtonSelfLocalization, QtCore.SIGNAL("clicked()"), self.start_selfloc_loop)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
         self.connect(self.gui.pushButtonStopTransmitter, QtCore.SIGNAL("clicked()"), self.stop_transmitter)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
@@ -833,8 +834,12 @@ class gui(QtGui.QMainWindow):
             if self.setting_pos_receiver is not "": 
                 self.rpc_manager.request("program_gps_receiver",[self.setting_pos_receiver,latitude, longitude, altitude])
                 self.position_dialog.accept()
-    def start_transmitter(self):
-        self.rpc_manager.request("start_transmitter")
+    def switch_transmitter(self):
+        self.rpc_manager.request("switch_transmitter")
+    
+    def start_selfloc_loop(self):
+        print "selfloc_loop"
+        self.rpc_manager.request("start_selfloc_loop")
 
     def stop_transmitter(self):
         self.rpc_manager.request("stop_transmitter")

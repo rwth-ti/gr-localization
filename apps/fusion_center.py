@@ -116,7 +116,15 @@ class fusion_center():
 
 
         # Parameters for self-localization:
+        self.self_localization = False
         self.transmitter = -1 # No sensor is transmitting
+        self.transmitter_debug = 0
+        self.selfloc_average_length = 20
+        self.transmitter_history = []
+        #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
+        self.delay_tensor = [[[[]]]]
+        self.cnt_j = 0
+        self.cnt_average = 0
 
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
@@ -143,7 +151,7 @@ class fusion_center():
         self.rpc_manager.add_interface("sync_position",self.sync_position)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("forward_chat",self.forward_chat)
-        self.rpc_manager.add_interface("start_transmitter",self.start_transmitter)
+        self.rpc_manager.add_interface("switch_transmitter",self.switch_transmitter_debug)
         self.rpc_manager.add_interface("stop_transmitter",self.stop_transmitter)
         self.rpc_manager.add_interface("update_receivers",self.update_receivers)
         self.rpc_manager.add_interface("get_gui_gps_position",self.get_gui_gps_position)
@@ -158,6 +166,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_max_acc",self.set_max_acc)
         self.rpc_manager.add_interface("set_measurement_noise",self.set_measurement_noise)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
+        self.rpc_manager.add_interface("start_selfloc_loop",self.start_selfloc_loop)
         self.rpc_manager.add_interface("start_correlation_loop",self.start_correlation_loop)
         self.rpc_manager.add_interface("stop_loop",self.stop_loop)
         self.rpc_manager.add_interface("set_frequency",self.set_frequency)
@@ -552,6 +561,24 @@ class fusion_center():
                 self.start_receivers(acquisitions)
             else:
                 print ("Set receiver positions at first!")
+
+    def start_selfloc_loop(self):
+        # base structure for obtaining the delays required to perform the differential mds self localization algorithm
+        print("selfloc_loop")
+        self.delay_history = []
+        self.estimated_positions_history = []
+        self.stop_transmitter()
+        #if len(self.receivers) > 3:
+        # number of receptions required for the whole process
+        acquisitions = len(self.receivers)*self.selfloc_average_length
+        self.cnt_j = 0
+        self.cnt_average = 0
+        self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.selfloc_average_length))
+        self.switch_transmitter(self.cnt_j)
+        self.self_localization = True
+        self.run_loop = True
+        self.start_receivers(acquisitions)
+
                 
     def stop_loop(self):
         self.run_loop = False
@@ -749,21 +776,25 @@ class fusion_center():
 
     def program_gps_receiver(self, serial, latitude, longitude, altitude):
         self.receivers[serial].program_receiver_position(latitude, longitude, altitude)
+
+    def switch_transmitter_debug(self):
+        if self.transmitter_debug == len(self.receivers):
+            self.transmitter_debug = 0
+        self.switch_transmitter(self.transmitter_debug)
         
-    def start_transmitter(self): 
+    def switch_transmitter(self, idx_new): 
         #cmmnt: maybe some wait required here
-        if self.transmitter == -1:
-            self.receivers.values()[0].start_transmitter()
-            self.transmitter = 0
-        else:
+        if self.transmitter != -1:
             self.receivers.values()[self.transmitter].stop_transmitter()
-            self.transmitter += 1
-            if self.transmitter == len(self.receivers):
-                self.transmitter = 0
-            self.receivers.values()[self.transmitter].start_transmitter()
+        self.transmitter = idx_new
+        self.receivers.values()[idx_new].start_transmitter()
 
     def stop_transmitter(self):
-        self.receivers.values()[self.transmitter].stop_transmitter()
+        if self.transmitter != -1:
+            self.receivers.values()[self.transmitter].stop_transmitter()
+            #self.transmitter = -1
+
+
 
     def process_results(self, receivers, delay_auto_calibration):
         # check if timestamps are equal for all the receivers
@@ -1019,6 +1050,46 @@ class fusion_center():
             receiver.reception_complete = False
         self.processing=False
 
+    def process_selfloc(self, receivers, delay_auto_calibration):
+        # transmitter=rx_j
+        # add possibility to log!
+        # "nested loop in class"
+        # just take samples from sensors that are not transmitting. Should not be disturbing if other sensor receives if the samples are not processed.
+        # check transmiter switching!
+        print("in process_selfloc")
+        
+        for cnt_l, rx_l in enumerate(self.receivers):
+            for cnt_k, rx_k in enumerate(self.receivers):
+                if self.cnt_j == cnt_l or self.cnt_j == cnt_k or cnt_k == cnt_l:
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0
+                else:
+                    window_size = 13
+                    #by now ugly hack, rethink later
+                    print(corr_spline_interpolation(self.receivers.values()[cnt_k].samples, self.receivers.values()[cnt_l].samples,window_size)[1])
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(self.receivers.values()[cnt_k].samples, self.receivers.values()[cnt_l].samples,window_size)[1] 
+                    #print(self.correlate({self.receivers.keys()[cnt_l]:self.receivers.values()[cnt_k],self.receivers.keys()[cnt_l]:self.receivers.values()[cnt_k]})[1])
+        self.cnt_average += 1
+        if self.cnt_average == self.selfloc_average_length:
+            self.cnt_average = 0
+            self.cnt_j += 1
+            if self.cnt_j == len(self.receivers):
+                self.cnt_j = 0
+                self.stop_transmitter()
+                self.self_localization = False
+                self.stop_loop()
+                fi = open("./selfloc.txt",'w')
+                fi.write(str(self.delay_tensor))
+                return
+            self.switch_transmitter(self.cnt_j)
+        self.transmitter_history.append(self.cnt_j)
+        for receiver in receivers.values():
+            receiver.samples = np.array([])
+            receiver.samples_calibration = np.array([])
+            receiver.first_packet = True
+            receiver.reception_complete = False
+        self.processing = False
+        # by now, unclear where to set this again(point when tx needs to be turned off again) self.transmitter = -1
+
     def main_loop(self):
         while True:
             time.sleep(self.acquisition_time/4)
@@ -1028,7 +1099,11 @@ class fusion_center():
                         threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()'''
                     if not self.processing:
                         self.processing = True
-                        threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()
+                        if not self.self_localization:
+                            threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()
+                        else:
+                            threading.Thread(target = self.process_selfloc, args = (self.receivers,self.delay_auto_calibration,)).start()
+ 
                 elif any(self.receivers[key].error_detected for key in self.receivers):
                     for receiver in self.receivers.values():
                         receiver.reset_receiver()
@@ -1039,6 +1114,7 @@ class fusion_center():
                         reception_complete[key] = self.receivers[key].reception_complete                      
                     self.probe_manager.watcher(reception_complete)
                     self.probe_manager_lock.release()
+
     def correlate(self, receivers, calibration=False):
         correlation = []
         correlation_labels = []
@@ -1095,7 +1171,7 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="40e6",
+    parser.add_option("", "--samp-rate", type="string", default="2e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
@@ -1109,7 +1185,7 @@ def parse_options():
                       help="Sampling rate for calibration")
     parser.add_option("", "--lo-offset-calibration", type="string", default="0",
                       help="LO offset for calibration")
-    parser.add_option("", "--bandwidth-calibration", type="string", default="10e6",
+    parser.add_option("", "--bandwidth-calibration", type="string", default="2e6",
                       help="Bandwidth for calibration")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")
