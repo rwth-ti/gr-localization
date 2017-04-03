@@ -27,6 +27,7 @@ import chan94_algorithm, kalman
 import grid_based_algorithm
 import dop
 from interpolation import corr_spline_interpolation
+import mds_self_tdoa
 
 class fusion_center():
     def __init__(self, options):
@@ -1108,8 +1109,10 @@ class fusion_center():
                 for j in range(len(receivers)):
                     for l in range(len(receivers)):
                         for k in range(len(receivers)):
-                            D[j,l,k] = sum(self.delay_tensor[j,l,k])/self.selfloc_average_length
-
+                            # average distance differences
+                            D[j,l,k] = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
+                pos_selfloc = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]),1)
+                print(pos_selfloc)
                 if self.recording_results:
                     receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
                     header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
@@ -1126,6 +1129,7 @@ class fusion_center():
                     fi.write(str(self.transmitter_history) + "\n")
                     fi.write(str(self.timestamp_history) + "\n")
                     fi.write(str(self.delay_tensor.tolist()) + "\n")
+                    fi.write(str(D.tolist()) + "\n")
                     fi.close()
                 for receiver in receivers.values():
                     receiver.samples = np.array([])
