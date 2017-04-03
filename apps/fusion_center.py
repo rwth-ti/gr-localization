@@ -119,8 +119,9 @@ class fusion_center():
         self.self_localization = False
         self.transmitter = -1 # No sensor is transmitting
         self.transmitter_debug = 0
-        self.selfloc_average_length = 20
+        self.selfloc_average_length = int(options.selfloc_average_length)
         self.transmitter_history = []
+        self.timestamp_history = []
         #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
         self.delay_tensor = [[[[]]]]
         self.cnt_j = 0
@@ -568,9 +569,14 @@ class fusion_center():
         self.delay_history = []
         self.estimated_positions_history = []
         self.stop_transmitter()
+        self.recording_results = self.record_results
+        self.recording_samples = self.record_samples
+        self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
         acquisitions = len(self.receivers)*self.selfloc_average_length
+        self.transmitter_history = []
+        self.timestamp_history = []
         self.cnt_j = 0
         self.cnt_average = 0
         self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.selfloc_average_length))
@@ -584,6 +590,7 @@ class fusion_center():
         self.run_loop = False
         self.recording_results = False
         self.recording_samples = False
+        self.self_localization = False
         self.estimated_positions_history = []
         self.localizing = False
         
@@ -786,14 +793,48 @@ class fusion_center():
         #cmmnt: maybe some wait required here
         if self.transmitter != -1:
             self.receivers.values()[self.transmitter].stop_transmitter()
-        self.transmitter = idx_new
         self.receivers.values()[idx_new].start_transmitter()
+        self.transmitter = idx_new
 
     def stop_transmitter(self):
         if self.transmitter != -1:
             self.receivers.values()[self.transmitter].stop_transmitter()
-            #self.transmitter = -1
-
+        self.transmitter = -1
+    
+    def build_results_strings(self, receivers):      
+        # build receivers strings for log file
+        receivers_position = "["
+        selected_positions = "["
+        receivers_gps = "["
+        receivers_antenna = "["
+        receivers_gain = "["
+        i = 1
+        for receiver in receivers.values():
+            if i == 1:
+                if receiver.selected_position == "manual":
+                    receivers_position = receivers_position + str(receiver.coordinates)
+                else:
+                    receivers_position = receivers_position + str(receiver.coordinates_gps)
+                selected_positions = selected_positions + "'" + receiver.selected_position + "'"
+                receivers_gps = receivers_gps + "'" + receiver.gps + "'"
+                receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
+                receivers_gain = receivers_gain + str(receiver.gain)
+            else:
+                if receiver.selected_position == "manual":
+                    receivers_position = receivers_position + "," + str(receiver.coordinates)
+                else:
+                    receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
+                selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
+                receivers_gps = receivers_gps + "," + "'" + receiver.gps + "'"
+                receivers_antenna = receivers_antenna + "," + "'" + receiver.antenna + "'"
+                receivers_gain = receivers_gain + "," + str(receiver.gain)
+            i = i + 1
+        receivers_position = receivers_position + "]"
+        selected_positions = selected_positions + "]"
+        receivers_gps = receivers_gps + "]"
+        receivers_antenna = receivers_antenna + "]"
+        receivers_gain = receivers_gain + "]"
+        return receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain
 
 
     def process_results(self, receivers, delay_auto_calibration):
@@ -984,37 +1025,7 @@ class fusion_center():
 
         if self.recording_results:
             # build receivers strings for log file
-            receivers_position = "["
-            selected_positions = "["
-            receivers_gps = "["
-            receivers_antenna = "["
-            receivers_gain = "["
-            i = 1
-            for receiver in receivers.values():
-                if i == 1:
-                    if receiver.selected_position == "manual":
-                        receivers_position = receivers_position + str(receiver.coordinates)
-                    else:
-                        receivers_position = receivers_position + str(receiver.coordinates_gps)
-                    selected_positions = selected_positions + "'" + receiver.selected_position + "'"
-                    receivers_gps = receivers_gps + "'" + receiver.gps + "'"
-                    receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
-                    receivers_gain = receivers_gain + str(receiver.gain)
-                else:
-                    if receiver.selected_position == "manual":
-                        receivers_position = receivers_position + "," + str(receiver.coordinates)
-                    else:
-                        receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
-                    selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
-                    receivers_gps = receivers_gps + "," + "'" + receiver.gps + "'"
-                    receivers_antenna = receivers_antenna + "," + "'" + receiver.antenna + "'"
-                    receivers_gain = receivers_gain + "," + str(receiver.gain)
-                i = i + 1
-            receivers_position = receivers_position + "]"
-            selected_positions = selected_positions + "]"
-            receivers_gps = receivers_gps + "]"
-            receivers_antenna = receivers_antenna + "]"
-            receivers_gain = receivers_gain + "]"
+            receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
 
             # remove grid from results to log
             for key in estimated_positions.keys():
@@ -1025,7 +1036,18 @@ class fusion_center():
                 if receivers.keys()[i] == self.ref_receiver:
                     index_ref_receiver = i
 
-            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," + str(kalman_states)+","+str(self.init_settings_kalman)+","+"'"+str(self.reference_selection)+"'"+","+str(x_cov) + ","+str(y_cov) +"]"
+            line = "[" + str(self.results["rx_time"]) + "," + str(self.results["delay"]) + "," \
+            + str(self.delay_calibration) + "," + str(delay_auto_calibration) + "," \
+            + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+            + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
+            + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
+            + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," \
+            + str(estimated_positions) + "," + str(index_ref_receiver) + "," \
+            + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," \
+            + str(kalman_states) + "," + str(self.init_settings_kalman) + "," \
+            + "'" + str(self.reference_selection) + "'" + "," + str(x_cov) + ","+str(y_cov) +"]"
+
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
@@ -1056,32 +1078,66 @@ class fusion_center():
         # "nested loop in class"
         # just take samples from sensors that are not transmitting. Should not be disturbing if other sensor receives if the samples are not processed.
         # check transmiter switching!
-        print("in process_selfloc")
+        if self.recording_samples:
+            f_s = open(self.samples_file,"a")
+            receiver_samples = []
+            for receiver in receivers.values():
+                receiver_samples.append(receiver.samples.tolist())
+            pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
+            f_s.close()   
         
-        for cnt_l, rx_l in enumerate(self.receivers):
-            for cnt_k, rx_k in enumerate(self.receivers):
+        for cnt_l, rx_l in enumerate(receivers):
+            for cnt_k, rx_k in enumerate(receivers):
                 if self.cnt_j == cnt_l or self.cnt_j == cnt_k or cnt_k == cnt_l:
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0
                 else:
                     window_size = 13
                     #by now ugly hack, rethink later
-                    print(corr_spline_interpolation(self.receivers.values()[cnt_k].samples, self.receivers.values()[cnt_l].samples,window_size)[1])
-                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(self.receivers.values()[cnt_k].samples, self.receivers.values()[cnt_l].samples,window_size)[1] 
-                    #print(self.correlate({self.receivers.keys()[cnt_l]:self.receivers.values()[cnt_k],self.receivers.keys()[cnt_l]:self.receivers.values()[cnt_k]})[1])
+                    print(corr_spline_interpolation(receivers.values()[cnt_k].samples, receivers.values()[cnt_l].samples,window_size)[1])
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_k].samples, receivers.values()[cnt_l].samples,window_size)[1] 
+                    #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
         self.cnt_average += 1
         if self.cnt_average == self.selfloc_average_length:
             self.cnt_average = 0
             self.cnt_j += 1
-            if self.cnt_j == len(self.receivers):
-                self.cnt_j = 0
+            if self.cnt_j == len(receivers):
                 self.stop_transmitter()
-                self.self_localization = False
+                print("delay tensor recordings complete")
+                # Average all measurements:
+                D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
+                for j in range(len(receivers)):
+                    for l in range(len(receivers)):
+                        for k in range(len(receivers)):
+                            D[j,l,k] = sum(self.delay_tensor[j,l,k])/self.selfloc_average_length
+
+                if self.recording_results:
+                    receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
+                    header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+                    + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
+                    + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
+                    + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
+                    + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "]\n" 
+                    self.cnt_j = 0
+                    self.stop_transmitter()
+                    self.self_localization = False
+                    self.stop_loop()
+                    fi = open("./selfloc.txt",'w')
+                    fi.write(header)
+                    fi.write(str(self.transmitter_history) + "\n")
+                    fi.write(str(self.timestamp_history) + "\n")
+                    fi.write(str(self.delay_tensor.tolist()) + "\n")
+                    fi.close()
+                for receiver in receivers.values():
+                    receiver.samples = np.array([])
+                    receiver.samples_calibration = np.array([])
+                    receiver.first_packet = True
+                    receiver.reception_complete = False
+                self.processing = False
                 self.stop_loop()
-                fi = open("./selfloc.txt",'w')
-                fi.write(str(self.delay_tensor))
                 return
             self.switch_transmitter(self.cnt_j)
         self.transmitter_history.append(self.cnt_j)
+        self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
         for receiver in receivers.values():
             receiver.samples = np.array([])
             receiver.samples_calibration = np.array([])
@@ -1197,6 +1253,8 @@ def parse_options():
                       help="Activate reference calibration station")
     parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
+    parser.add_option("", "--selfloc-average-length", type="string", default="20",
+                      help="Average length for self localization")
                       
     (options, args) = parser.parse_args()
     return options
