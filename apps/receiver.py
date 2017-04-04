@@ -239,7 +239,7 @@ class top_block(gr.top_block):
         
         
         if time_to_recv is None:
-            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 1.5
+            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 2.5
 
         time_now = self.usrp_source.get_time_now().get_real_secs()
         if time_to_recv < time_now:

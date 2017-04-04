@@ -8,7 +8,7 @@ import chan94_algorithm
 
 # interface:
 # delta_jkl: tensor of delays; tau: dict(1,2,3) of tdoas collected for beacon localization ; coords_gt: 3x2 matrix
-def selfloc(D, roi, alpha):
+def selfloc(D, roi, sum_square_tdoa, alpha):
     
     # pos_conf_init(1,:) = pos_sensors(1,:)
     # pos_conf_init(2,:) = pos_sensors(2,:)
@@ -17,12 +17,15 @@ def selfloc(D, roi, alpha):
     # find the configuration
     num_sensors = len(D[0,0,:].tolist())
     pos_conf = max(roi) * np.random.uniform(low=0.0,high=1.0,size=(num_sensors,2))
+    print pos_conf
     stress = 1
     sigma = 0
-    while stress > (2*sigma + 0.001):
+    fail_count = 0
+    while True:
+        fail_count += 1
         stress_ratio = 1.5
         # check if converged
-        while abs(1-stress_ratio) > 0.01 and stress > 2*sigma + 0.001:
+        while abs(1-stress_ratio) > 0.001 and stress > 2*sigma + 0.001:
             stress_last = stress
             # calculate configuration TDOAs and derive new locations
             pos_it_conf = pos_conf
@@ -43,11 +46,20 @@ def selfloc(D, roi, alpha):
                             mov_vec = np.true_divide(mov_vec, np.linalg.norm(mov_vec))
                             pos_conf[idx_node_i] = pos_conf[idx_node_i] + np.dot(alpha*1/((num_sensors-1)*(num_sensors-2))*tdoa_diff,mov_vec) 
             # calculate STRESS criterion
-            stress = np.sqrt(sum_tdoa_diff)/((num_sensors-1)*(num_sensors-2))
+            stress = np.sqrt(sum_tdoa_diff/sum_square_tdoa)
             stress_ratio = stress_last/stress
             # center points
             center_conf = np.mean(pos_conf)
             pos_conf = pos_conf - center_conf
+            
+            print "stress", stress
+            print "stress ratio", stress_ratio
+            print pos_conf
+           
+        if stress < (2*sigma + 1):
+            break
+        else:
+            pos_conf = max(roi) * np.random.uniform(low=0.0,high=1.0,size=(num_sensors,2))
             # fix anchors
     #             pos_conf = bsxfun(@minus,pos_conf,pos_conf(1,:)-pos_sensors(1,:))
         #     pos_conf(1,:) = pos_sensors(1,:)

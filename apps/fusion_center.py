@@ -575,7 +575,8 @@ class fusion_center():
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
-        acquisitions = len(self.receivers)*self.selfloc_average_length
+        #acquisitions = len(self.receivers)*self.selfloc_average_length
+        acquisitions = 0
         self.transmitter_history = []
         self.timestamp_history = []
         self.cnt_j = 0
@@ -1103,15 +1104,20 @@ class fusion_center():
             self.cnt_j += 1
             if self.cnt_j == len(receivers):
                 self.stop_transmitter()
+                self.stop_loop()
                 print("delay tensor recordings complete")
                 # Average all measurements:
                 D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
+                sum_square_tdoa = 0
                 for j in range(len(receivers)):
                     for l in range(len(receivers)):
                         for k in range(len(receivers)):
                             # average distance differences
-                            D[j,l,k] = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
-                pos_selfloc = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]),1)
+                            tdoa = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
+                            sum_square_tdoa += tdoa**2
+                            D[j,l,k] = tdoa
+
+                pos_selfloc = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]),sum_square_tdoa,1)
                 print(pos_selfloc)
                 if self.recording_results:
                     receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
@@ -1131,13 +1137,6 @@ class fusion_center():
                     fi.write(str(self.delay_tensor.tolist()) + "\n")
                     fi.write(str(D.tolist()) + "\n")
                     fi.close()
-                for receiver in receivers.values():
-                    receiver.samples = np.array([])
-                    receiver.samples_calibration = np.array([])
-                    receiver.first_packet = True
-                    receiver.reception_complete = False
-                self.processing = False
-                self.stop_loop()
                 return
             self.switch_transmitter(self.cnt_j)
         self.transmitter_history.append(self.cnt_j)
@@ -1245,7 +1244,7 @@ def parse_options():
                       help="Sampling rate for calibration")
     parser.add_option("", "--lo-offset-calibration", type="string", default="0",
                       help="LO offset for calibration")
-    parser.add_option("", "--bandwidth-calibration", type="string", default="2e6",
+    parser.add_option("", "--bandwidth-calibration", type="string", default="2.048e6",
                       help="Bandwidth for calibration")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")
