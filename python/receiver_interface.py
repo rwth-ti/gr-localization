@@ -88,7 +88,7 @@ class receiver_interface():
     def receive_samples(self, samples, tags):
 
         if tags is not None:
-            print self.serial, tags, "num_samples", len(samples)
+            print self.serial, tags, "\nnum_samples", len(samples)
         else:
             self.error_detected = True
             print self.serial, "tags == None", len(samples)

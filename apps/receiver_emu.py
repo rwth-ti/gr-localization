@@ -36,7 +36,7 @@ class top_block(gr.top_block):
         gr.top_block.__init__(self)
         self.c = 299700000
         self.options = options
-        self.cnt=0
+        self.cnt = 0
         self.run_loop = False
         self.samp_rate = 50000000
         self.hostname = os.uname()[1]
@@ -46,7 +46,7 @@ class top_block(gr.top_block):
         self.modulation = options.modulation
         self.seed = 10
         self.delay = options.delay
-        self.samples_to_receive = 1000
+        self.samples_to_receive = 300
         self.samples_to_receive_calibration = 1000
         self.freq = 550000000
         coordinates_string = options.coordinates_m.split(",")
@@ -69,7 +69,7 @@ class top_block(gr.top_block):
             self.track_coordinates = np.array([])
         # blocks
         self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 300, True)
-        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive, self.freq)
+        self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive, self.freq, self.id_rx)
         self.seed += 1
 
         # connects
@@ -149,13 +149,13 @@ class top_block(gr.top_block):
                 self.stop()
                 self.wait()
                 
-                self.disconnect(self.mod_block, self.zmq_probe)
+                #self.disconnect(self.mod_block, self.zmq_probe)
 
                 # blocks
                 if i == 1:
                     print "Sending " + str(samples_to_receive_calibration) + " samples for autocalibtration"
                     delay = auto_delay
-                    self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive_calibration, self.freq_calibration)
+                    self.mod_block.next_vector(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq, self.id_rx)
                 else:
                     print "Sending " + str(samples_to_receive) + " samples"
                     if self.delay == 0:
@@ -170,16 +170,15 @@ class top_block(gr.top_block):
                     else:
                         delay = self.delay
                     print delay
-                    self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq)
+                    self.mod_block.next_vector(self.seed, self.samp_rate, self.noise_amp, self.modulation, delay, self.samples_to_receive, self.freq, self.id_rx)
                     
                 self.seed += 1
 
                 # connects
-                self.connect(self.mod_block, self.zmq_probe)
+                #self.connect(self.mod_block, self.zmq_probe)
 
                 self.start()
-                time.sleep(0.2)
-
+                time.sleep(acquisition_time-0.05)
             acquisitions -= 1
             
             
@@ -210,7 +209,7 @@ class top_block(gr.top_block):
         #add checker if it worked
     
 class ModulatorBlock(gr.hier_block2):
-    def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive, freq):
+    def __init__(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive, freq, rx_id):
         gr.hier_block2.__init__(self, "ModulatorBlock",
                        gr.io_signature(0, 0, 0),
                        gr.io_signature(1, 1, gr.sizeof_gr_complex))
@@ -273,21 +272,54 @@ class ModulatorBlock(gr.hier_block2):
         tx_vector = np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist()
         # delay signal vector -> insert zeros at beginnig; nothing happens if signal has not reached the receiver:
         tx_vector_delayed = np.hstack((np.zeros(delay),tx_vector))
-        tx_vector_delayed = tx_vector_delayed[:600]
-        vector_source = blocks.vector_source_c(tx_vector_delayed, False, tags=(timing_tag, rx_freq_tag, rx_rate_tag)) 
+        #tx_vector_delayed = tx_vector_delayed[:600]
+        self.vector_source = blocks.vector_source_c(tx_vector_delayed, False, 1, (timing_tag, rx_freq_tag, rx_rate_tag)) 
         #clip first 600 samples
-        head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 300)
+        self.head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 300)
         print "Delay is " + str(delay)
         # skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
         throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
         noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
-
         # connects
         #self.connect(vector_source, mod, (add,0))
-        self.connect(vector_source, (add,0))
+        self.connect(self.vector_source, (add,0))
         self.connect(noise, (add,1))
-        self.connect(add, throttle, head, self)
+        self.connect(add, throttle, self.head, self)
         self.connect(add, tag_debug)
+        '''
+        f_sink = blocks.file_sink(gr.sizeof_gr_complex,"log_rx_"+str(rx_id)+".txt")
+        self.connect(add, f_sink)
+        '''
+
+    def next_vector(self, seed, samp_rate, noise_amp, modulation, delay, samples_to_receive, freq, rx_id):
+        timing_tag = gr.tag_t()
+        timing_tag.offset = 0
+        timing_tag.key = pmt.string_to_symbol('rx_time')
+        timing_tag.value = pmt.to_pmt((float(seed), 0.6))
+        timing_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
+        # Rx freq tags:
+        #print "In source emulation (before tag)" 
+        #print freq
+        rx_freq_tag = gr.tag_t()
+        rx_freq_tag.offset = 0
+        rx_freq_tag.key = pmt.string_to_symbol('rx_freq')
+        rx_freq_tag.value = pmt.from_double(freq)
+        rx_freq_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
+        # Samp_rate tags:
+        rx_rate_tag = gr.tag_t()
+        rx_rate_tag.offset = 0
+        rx_rate_tag.key = pmt.string_to_symbol('rx_rate')
+        rx_rate_tag.value = pmt.from_double(samp_rate)
+        rx_rate_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
+        pulse_width = 4
+        tx_vector = np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist()
+        # delay signal vector -> insert zeros at beginnig; nothing happens if signal has not reached the receiver:
+        tx_vector_delayed = np.hstack((np.zeros(delay),tx_vector))
+        #tx_vector_delayed = tx_vector_delayed[:600]
+        print len(tx_vector_delayed)
+        self.vector_source.set_data(tx_vector_delayed,(timing_tag, rx_freq_tag, rx_rate_tag)) 
+        self.head.reset()
+        self.vector_source.rewind()
 
 
 ###############################################################################

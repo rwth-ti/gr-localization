@@ -116,9 +116,10 @@ class probe_manager():
                     else:
                         samples = numpy.fromstring(msg_packed[19:], numpy.dtype(i[3]))
                         tags = None
+                        print "\n!!!!!!fatal error in rx ",i[0],"!!!!!!"
                         print "rcv_ntags",rcv_ntags
-                        print samples
-                        
+                        print len(samples)
+                        print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
 
                     # invoke callback function
                     i[4](samples,tags)
