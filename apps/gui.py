@@ -117,6 +117,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.set_request_socket(fusion_center_adr)
         self.rpc_manager.add_interface("new_chat",self.new_chat)
         self.rpc_manager.add_interface("sync_position",self.sync_position)
+        self.rpc_manager.add_interface("sync_position_selfloc",self.sync_position_selfloc)
         self.rpc_manager.add_interface("register_receiver",self.register_receiver)
         self.rpc_manager.add_interface("register_another_gui",self.register_another_gui)
         self.rpc_manager.add_interface("get_results",self.get_results)
@@ -451,7 +452,8 @@ class gui(QtGui.QMainWindow):
 
         if self.map_type == "Online" and check_OSM():
 
-            print "Setting online map"
+            print "Setting online map", bbox
+            print "+".join(str(j).replace(".",",") for j in bbox)
             # search for existing map for this bounding box
             if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
                 # request only if no map can be found
@@ -592,6 +594,33 @@ class gui(QtGui.QMainWindow):
         else:
             # ax not rendered yet, so update position when available
             self.pending_receivers_to_plot = True
+
+    def sync_position_selfloc(self, coordinates_procrustes_x,coordinates_procrustes_y):
+        coordinates_procrustes = np.vstack((coordinates_procrustes_x,coordinates_procrustes_y)).T
+        print coordinates_procrustes
+        for idx, serial in enumerate(self.receivers.keys()):
+            coordinates = coordinates_procrustes[idx].tolist()
+            receiver = self.receivers[serial]
+            receiver.coordinates_selfloc = coordinates[0],coordinates[1]
+            # remove point from map if was set
+            if hasattr(receiver, "scatter_selfloc"):
+                receiver.scatter_selfloc.remove()
+                receiver.annotation_selfloc.remove()
+            if hasattr(self, "ax"):
+                # save scattered point into receiver properties
+                receiver.scatter_selfloc = self.ax.scatter(coordinates[0], coordinates[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
+                # set annotation Rxi
+                text = ("Rx" + str(self.receivers.keys().index(serial) + 1)
+                            + " "
+                            + str(np.round(receiver.coordinates_selfloc,2)))
+                            
+
+                receiver.annotation_selfloc = self.ax.annotate(text, receiver.coordinates_selfloc,fontweight='bold',bbox=dict(facecolor='b', alpha=0.9, zorder=20))
+
+                self.canvas.draw()
+            else:
+                # ax not rendered yet, so update position when available
+                self.pending_receivers_to_plot = True
 
     def set_gps_position(self, serial, coordinates):
         if not hasattr(self, "basemap"):

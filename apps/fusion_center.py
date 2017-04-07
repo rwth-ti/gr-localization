@@ -28,6 +28,7 @@ import grid_based_algorithm
 import dop
 from interpolation import corr_spline_interpolation
 import mds_self_tdoa
+from procrustes import procrustes
 
 class fusion_center():
     def __init__(self, options):
@@ -131,6 +132,10 @@ class fusion_center():
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
         self.bbox = 6.0606,50.77819,6.06481,50.77967
+
+        # campus hoern:
+        #self.bbox = 6.05938, 50.77728, 6.06646, 50.78075
+
         # closeup of meadow in front of ict cubes
         #self.bbox = (6.06210,50.77865,6.06306,50.77923)
         # Football court
@@ -1090,14 +1095,13 @@ class fusion_center():
         
         for cnt_l, rx_l in enumerate(receivers):
             for cnt_k, rx_k in enumerate(receivers):
-                if self.cnt_j == cnt_l or self.cnt_j == cnt_k or cnt_k == cnt_l:
-                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0
-                else:
+                if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
                     window_size = 13
                     #by now ugly hack, rethink later
-                    print(corr_spline_interpolation(receivers.values()[cnt_k].samples, receivers.values()[cnt_l].samples,window_size)[1])
-                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_k].samples, receivers.values()[cnt_l].samples,window_size)[1] 
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] 
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
+                else:
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0.0
         self.cnt_average += 1
         if self.cnt_average == self.selfloc_average_length:
             self.cnt_average = 0
@@ -1116,9 +1120,18 @@ class fusion_center():
                             tdoa = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
                             sum_square_tdoa += tdoa**2
                             D[j,l,k] = tdoa
+                receivers_positions = np.array([list(receiver.coordinates) for receiver in self.receivers.values()])
+                pos_selfloc = None
+                stress = 10
+                for i in range(500):
+                    pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 1, 1.0, stress)
+                    d, coordinates_procrustes, tform = procrustes(receivers_positions, pos_selfloc)
+                    print(coordinates_procrustes)
+                    for gui in self.guis.values():
+                        gui.rpc_manager.request("sync_position_selfloc",[coordinates_procrustes[:,0],coordinates_procrustes[:,1]])
+                    time.sleep(0.05)
 
-                pos_selfloc = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]),sum_square_tdoa,1)
-                print(pos_selfloc)
+
                 if self.recording_results:
                     receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
                     header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
@@ -1230,11 +1243,11 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="2e6",
+    parser.add_option("", "--samp-rate", type="string", default="50e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
-    parser.add_option("", "--bandwidth", type="string", default="10e6",
+    parser.add_option("", "--bandwidth", type="string", default="50e6",
                       help="Bandwidth")
     parser.add_option("", "--num-samples-calibration", type="string", default="300",
                       help="Number of samples in burst for calibration")
@@ -1244,7 +1257,7 @@ def parse_options():
                       help="Sampling rate for calibration")
     parser.add_option("", "--lo-offset-calibration", type="string", default="0",
                       help="LO offset for calibration")
-    parser.add_option("", "--bandwidth-calibration", type="string", default="2.048e6",
+    parser.add_option("", "--bandwidth-calibration", type="string", default="50e6",
                       help="Bandwidth for calibration")
     parser.add_option("", "--antenna", type="string", default="RX2",
                       help="Antenna to use")
@@ -1256,7 +1269,7 @@ def parse_options():
                       help="Activate reference calibration station")
     parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
-    parser.add_option("", "--selfloc-average-length", type="string", default="20",
+    parser.add_option("", "--selfloc-average-length", type="string", default="1",
                       help="Average length for self localization")
                       
     (options, args) = parser.parse_args()

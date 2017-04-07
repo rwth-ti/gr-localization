@@ -160,6 +160,7 @@ class top_block(gr.top_block):
                     print "Sending " + str(samples_to_receive) + " samples"
                     if self.delay == 0:
                         # calculate delay from transmitter position
+                        print self.tx_coordinates
                         delay = self.get_delay_from_location(self.tx_coordinates)
                         if len(self.track_coordinates):
                             # update target location for next acquisition
@@ -167,6 +168,7 @@ class top_block(gr.top_block):
                             self.track_coordinates = np.delete(self.track_coordinates,0,0)
                             #print self.tx_coordinates
                             #print self.track_coordinates
+                        print "Delay is " + str(delay)
                     else:
                         delay = self.delay
                     print delay
@@ -198,7 +200,7 @@ class top_block(gr.top_block):
         # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
     def get_delay_from_location(self,transmitter_coordinates):
-
+        print self.samp_rate
         delay=int((np.linalg.norm(np.array(list(self.coordinates))-transmitter_coordinates)/self.c)*self.samp_rate)
         return delay
 
@@ -276,7 +278,6 @@ class ModulatorBlock(gr.hier_block2):
         self.vector_source = blocks.vector_source_c(tx_vector_delayed, False, 1, (timing_tag, rx_freq_tag, rx_rate_tag)) 
         #clip first 600 samples
         self.head = blocks.head(gr.sizeof_gr_complex*1, samples_to_receive + 300)
-        print "Delay is " + str(delay)
         # skiphead= blocks.skiphead(gr.sizeof_gr_complex*1,delay)
         throttle = blocks.throttle(gr.sizeof_gr_complex*1, samp_rate,True)
         noise = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, -seed)
