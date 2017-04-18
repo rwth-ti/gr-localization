@@ -529,9 +529,9 @@ class fusion_center():
             self.init_settings_kalman["noise_var_x"] = self.measurement_noise
             self.init_settings_kalman["noise_var_y"] = self.measurement_noise
             self.init_settings_kalman["max_acceleration"]= self.max_acc
-        self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         self.recording_samples = self.record_samples
-        self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         if self.recording_results:
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
             print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
@@ -557,9 +557,9 @@ class fusion_center():
                     or(receiver.selected_position == "GPS" and all(coordinate > 0 for coordinate in receiver.coordinates_gps)) for receiver in self.receivers.values() ):
                 self.localizing = True
                 self.recording_results = self.record_results
-                self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+                self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
                 self.recording_samples = self.record_samples
-                self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+                self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
                 if self.recording_results:
                     print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
                     print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
@@ -577,7 +577,7 @@ class fusion_center():
         self.stop_transmitter()
         self.recording_results = self.record_results
         self.recording_samples = self.record_samples
-        self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+        self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
         #acquisitions = len(self.receivers)*self.selfloc_average_length
