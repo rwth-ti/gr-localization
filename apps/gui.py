@@ -111,6 +111,9 @@ class gui(QtGui.QMainWindow):
         # for delay history plots
         self.ymax_dh = 30
         
+        self.num_anchor_position = 0
+        self.num_anchors = 3
+
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
@@ -164,6 +167,9 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("init_map",self.init_map)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
+        self.rpc_manager.add_interface("start_anchoring", self.start_anchoring)
+        self.rpc_manager.add_interface("set_num_anchors", self.set_num_anchors)
+        self.rpc_manager.add_interface("set_anchor_position", self.set_anchor_position)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -283,6 +289,30 @@ class gui(QtGui.QMainWindow):
         self.position_dialog.setLayout(layout)
 
         
+
+        # Dialog box for anchoring
+        self.anchor_dialog = QtGui.QDialog(self)
+        self.anchor_mBox = QtGui.QDialogButtonBox(self)
+        self.anchor_setButton = self.anchor_mBox.addButton("Get coordinates from map", QtGui.QDialogButtonBox.AcceptRole)
+        self.anchor_gpsInputButton = self.anchor_mBox.addButton("Set anchor position", QtGui.QDialogButtonBox.AcceptRole)
+        self.anchor_cancelButton = self.anchor_mBox.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
+        self.anchor_mBox.clicked.connect(self.set_anchor_gt_position)
+        self.anchor_dialog.setWindowTitle("Receiving samples for anchor.")
+        self.waitText3 = QtGui.QLabel("Please wait until a sufficient number of samples is received.")
+        self.waitText2 = QtGui.QLabel("Press 'OK' if the transmitter is at the desired position.")
+        self.pushButtonOK = QtGui.QPushButton("OK")
+        self.connect(self.pushButtonOK, QtCore.SIGNAL("clicked()"), self.start_anchoring_loop)
+        layout = QtGui.QFormLayout()
+        layout.addWidget(self.waitText2)
+        layout.addWidget(self.pushButtonOK)
+        layout.addRow(self.waitText3)
+        layout.addRow(self.latLabel,self.lineEditLatitude)
+        layout.addRow(self.longLabel,self.lineEditLongitude)
+        layout.addRow(self.anchor_mBox)
+        self.anchor_dialog.setLayout(layout)
+        
+        
+
         #Signals
         self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
@@ -363,6 +393,15 @@ class gui(QtGui.QMainWindow):
             self.calibration_setButton.setEnabled(True)
             self.calibration_gpsInputButton.setEnabled(True)
 
+    def set_num_anchors(self,num_anchors):
+        self.num_anchors = num_anchors
+
+    def set_anchor_position(self, position):
+        self.anchor_setButton.setEnabled(True)
+        self.anchor_gpsInputButton.setEnabled(True)
+        self.anchor_positions.append(position)
+
+
     def calibration_status(self, status):
         if status:
             self.gui.pushButtonSetCalibration.setStyleSheet("background-color: green")
@@ -383,6 +422,40 @@ class gui(QtGui.QMainWindow):
             longitude = float(self.lineEditLongitude.text())
             self.rpc_manager.request("calibrate",[self.basemap(longitude,latitude)])
             self.calibration_dialog.accept()
+
+    def start_anchoring(self):
+        print "in gui start_anchoring"
+        self.num_anchor_position = 0
+        self.anchor_positions = []
+        self.pushButtonOK.setEnabled(True)
+
+    def start_anchoring_loop(self):
+        self.pushButtonOK.setEnabled(False)
+        self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position,self.calibration_average])
+        if self.num_anchor_position < self.num_anchors:
+            self.anchor_setButton.setEnabled(False)
+            self.anchor_gpsInputButton.setEnabled(False)
+        else:
+            self.anchor_dialog.accept()
+
+    def set_anchor_gt_position(self, button):
+        print "in set_anchor_gt_position"
+        if button.text() == "Cancel":
+            self.rpc_manager.request("stop_selfloc")
+            self.anchor_dialog.reject()
+        elif button.text() == "Get coordinates from map" :
+            if hasattr(self, "zp"):
+                self.setting_calibration = True
+                self.zp.enabled = False
+        elif button.text() == "Set anchor position" :
+            # calibrate with gps coordinates from line inputs
+            latitude = float(self.lineEditLatitude.text())
+            longitude = float(self.lineEditLongitude.text())
+            self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
+            self.pushButtonOK.setEnabled(True)
+            self.anchor_setButton.setEnabled(False)
+            self.anchor_gpsInputButton.setEnabled(False)
+            self.num_anchor_position += 1
             
     def set_trackplot_length(self):
         self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
@@ -444,8 +517,8 @@ class gui(QtGui.QMainWindow):
         outProj = Proj(init='epsg:3857')
         x0, y0 = transform(inProj,outProj,bbox[0],bbox[1])
         x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
-        x = x1-x0
-        y = y1-y0
+        x = x1 - x0
+        y = y1 - y0
         scale = math.ceil(math.sqrt(abs(x*y/0.3136))) * 2
         
         # check if OSM is available at first 
@@ -657,12 +730,9 @@ class gui(QtGui.QMainWindow):
         self.hyperbolas["tdoa"] = self.plot_hyperbolas()
         # check results for both algorithms from dict {<algorithm>:<all results>}
         for algorithm in transmitter_positions.items():
-
             # exception for first value
             if not self.transmitter_positions.has_key(algorithm[0]):
-
                 # save value in queue
-
                 self.queue_tx_coordinates.append(transmitter_position(algorithm[1]).coordinates["coordinates"])
                 if self.filtering_type == "Moving average":
                     self.transmitter_positions[algorithm[0]] = transmitter_position(algorithm[1]["average_coordinates"])
@@ -867,10 +937,12 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("switch_transmitter")
     
     def start_selfloc_loop(self):
-        print "selfloc_loop"
+        self.anchor_dialog.show()        
+        self.pushButtonOK.setEnabled(False)
         self.rpc_manager.request("start_selfloc_loop")
 
     def stop_transmitter(self):
+        self.start_anchoring()
         self.rpc_manager.request("stop_transmitter")
             
 

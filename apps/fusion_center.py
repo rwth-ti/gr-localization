@@ -67,7 +67,7 @@ class fusion_center():
         self.delay_calibration = []
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
-        self.calibration_average = 60
+        self.calibration_average = 10
         
         # postprocessing
         self.location_average_length = 3
@@ -80,7 +80,7 @@ class fusion_center():
         self.reference_selection = "Manual"
         self.filtering_type = "No filtering"
         self.motion_model = "maneuvering"
-        self.init_settings_kalman=dict()
+        self.init_settings_kalman = dict()
         
         self.processing = False
         
@@ -97,24 +97,30 @@ class fusion_center():
         self.ntp_sync = False
         self.calibrating = False
         
-        
-        
+        # Anchoring:
+        self.num_anchor = 0
+        self.num_anchors = 3
+        self.anchoring = False
+        self.achor_average = 10
+        self.anchor_loop_delays = []
+        self.anchor_positions = []
+        self.anchor_gt_positions = []
         
         self.map_type = "Online"
         self.map_file = "../maps/map.png"
         self.coordinates_type = "Geographical"
         #kalman filtering
-        self.xk_1_chan=np.array([])
-        self.xk_1_grid=np.array([])
-        self.Pk_1_chan=np.array([])
-        self.Pk_1_grid=np.array([])
+        self.xk_1_chan = np.array([])
+        self.xk_1_grid = np.array([])
+        self.Pk_1_chan = np.array([])
+        self.Pk_1_grid = np.array([])
         self.init_settings_kalman["model"] = self.motion_model
         self.init_settings_kalman["delta_t"] = self.acquisition_time
         self.init_settings_kalman["noise_factor"] = self.target_dynamic 
         self.init_settings_kalman["filter_receivers"] = False
         self.init_settings_kalman["noise_var_x"] = self.measurement_noise
         self.init_settings_kalman["noise_var_y"] = self.measurement_noise
-        self.init_settings_kalman["max_acceleration"]= self.max_acc
+        self.init_settings_kalman["max_acceleration"] = self.max_acc
 
 
         # Parameters for self-localization:
@@ -135,7 +141,6 @@ class fusion_center():
 
         # campus hoern:
         #self.bbox = 6.05938, 50.77728, 6.06646, 50.78075
-
         # closeup of meadow in front of ict cubes
         #self.bbox = (6.06210,50.77865,6.06306,50.77923)
         # Football court
@@ -208,6 +213,8 @@ class fusion_center():
         self.rpc_manager.add_interface("set_acquisition_time",self.set_acquisition_time)
         self.rpc_manager.add_interface("set_grid_based_active",self.set_grid_based_active)
         self.rpc_manager.add_interface("program_gps_receiver",self.program_gps_receiver)
+        self.rpc_manager.add_interface("set_anchor_gt_position",self.set_anchor_gt_position)
+        self.rpc_manager.add_interface("start_anchoring_loop",self.start_anchoring_loop)
         self.rpc_manager.start_watcher()
 
         self.probe_manager_lock = threading.Lock()
@@ -273,9 +280,9 @@ class fusion_center():
                         d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
                         delay_true = (d_receiver-d_ref) * self.samp_rate * self.sample_interpolation / 299700000
                         print("True delay: ",delay_true)
-                        #TODO average calibration_loop_delays
                         print(index_delay,len(self.delay_calibration),len(self.calibration_loop_delays))
                         print(self.calibration_loop_delays)
+                        # int correct?!
                         if len(self.delay_calibration) < len(self.calibration_loop_delays[-1]):
                             self.delay_calibration.append(int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay]))
                         else:
@@ -432,6 +439,7 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_target_dynamic",[self.target_dynamic])
             gui.rpc_manager.request("set_gui_max_acc",[self.max_acc])
             gui.rpc_manager.request("set_gui_measurement_noise",[self.measurement_noise])
+            gui.rpc_manager.request("set_num_anchors",[self.num_anchors])
 
 
             for gui in self.guis.values():
@@ -492,6 +500,7 @@ class fusion_center():
     def start_receivers(self, acquisitions=0):
         # reception 1 second in the future at full second
         if not self.processing:
+            print("does it even start?")
             time_to_receive = np.ceil(time.time()) + 1
             self.init_kalman = True
             for receiver in self.receivers.values():
@@ -590,6 +599,8 @@ class fusion_center():
         self.switch_transmitter(self.cnt_j)
         self.self_localization = True
         self.run_loop = True
+        self.anchor_positions = []
+        self.anchor_gt_positions = []
         self.start_receivers(acquisitions)
 
                 
@@ -600,6 +611,8 @@ class fusion_center():
         self.self_localization = False
         self.estimated_positions_history = []
         self.localizing = False
+        self.processing = False
+
         
         for receiver in self.receivers.values():
             threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
@@ -807,7 +820,97 @@ class fusion_center():
         if self.transmitter != -1:
             self.receivers.values()[self.transmitter].stop_transmitter()
         self.transmitter = -1
-    
+
+    def start_anchoring(self):
+        print("ground truth positions: ", len(self.anchor_gt_positions))
+        if not self.anchoring:
+            if len(self.anchor_gt_positions) == 0:
+                for gui in self.guis.values():
+                    gui.rpc_manager.request("start_anchoring")
+                self.anchoring = True
+                return False
+        else:
+            if len(self.anchor_gt_positions) == self.num_anchors:
+                self.anchoring = False
+                return True
+            else:
+                return False
+            
+    def start_anchoring_loop(self, num_anchor, average_length):
+        self.num_anchor = num_anchor
+        self.anchor_average = average_length
+        print("num_anchor: ", num_anchor)
+        #tbd build up similar to calibration loop?
+        #acquire delay/position similar to calibration_loop_delays/calibration_loop
+        self.anchoring = True
+        self.run_loop = True
+        self.start_receivers(average_length)
+
+    # rename/even necessary?!
+    def set_anchor_position(self,position):
+        self.anchor_position = np.array([0.0,0.0])
+        self.anchor_positions.append(self.anchor_position)
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_anchor_position", [self.anchor_position])
+
+    def set_anchor_gt_position(self,pos):
+        self.anchor_gt_positions.append(np.array(pos))
+
+    def stop_selfloc_loop(self):
+        self.self_localization = False
+        self.stop_transmitter()
+        self.stop_loop()
+        print("delay tensor recordings complete")
+
+    def evaluate_selfloc(self,receivers):
+        D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
+        sum_square_tdoa = 0
+        for j in range(len(receivers)):
+            for l in range(len(receivers)):
+                for k in range(len(receivers)):
+                    # average distance differences
+                    tdoa = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
+                    sum_square_tdoa += tdoa**2
+                    D[j,l,k] = tdoa
+        receivers_positions = np.array([list(receiver.coordinates) for receiver in self.receivers.values()])
+        pos_selfloc = None
+        stress = 10
+        for i in range(500):
+            pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 1, 1.0, stress)
+            # this must be thrown out!
+            '''
+            d, coordinates_procrustes, tform = procrustes(receivers_positions, pos_selfloc)
+            print(coordinates_procrustes)
+            for gui in self.guis.values():
+                gui.rpc_manager.request("sync_position_selfloc",[coordinates_procrustes[:,0],coordinates_procrustes[:,1]])
+            time.sleep(0.05)
+            '''
+        # Wait for gui here
+        anchoring_complete = False
+        while anchoring_complete == False:
+            anchoring_complete = self.start_anchoring()
+            time.sleep(0.5)
+
+
+        if self.recording_results:
+            receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
+            header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+            + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
+            + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
+            + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "]\n" 
+            self.cnt_j = 0
+            self.stop_transmitter()
+            self.self_localization = False
+            self.stop_loop()
+            fi = open("./selfloc.txt",'w')
+            fi.write(header)
+            fi.write(str(self.transmitter_history) + "\n")
+            fi.write(str(self.timestamp_history) + "\n")
+            fi.write(str(self.delay_tensor.tolist()) + "\n")
+            fi.write(str(D.tolist()) + "\n")
+            fi.close()
+
     def build_results_strings(self, receivers):      
         # build receivers strings for log file
         receivers_position = "["
@@ -1058,11 +1161,8 @@ class fusion_center():
             f = open(self.results_file,"a")
             pprint.pprint(line,f,width=9000)
             f.close()
-        # select new reference after acquisition if no prediction is available
-        
-        
-        
-        
+
+        # select new reference after acquisition if no prediction is available  
         if self.calibrating:
             self.calibration_loop_delays.append(delay)
             print(len(self.calibration_loop_delays))
@@ -1070,6 +1170,16 @@ class fusion_center():
                 self.run_loop = False
                 for gui in self.guis.values():
                     gui.rpc_manager.request("calibration_loop",[False])
+
+        # may cause trouble with logging ?
+        if self.anchoring:
+            self.anchor_loop_delays.append(delay)
+            print(len(self.anchor_loop_delays))
+            if len(self.anchor_loop_delays) == self.anchor_average:
+                self.run_loop = False
+                self.anchoring = False
+                self.set_anchor_position(np.array(self.anchor_loop_delays).mean(0))
+                self.anchor_loop_delays = []
         
         # set flags to enable new reception
         for receiver in receivers.values():
@@ -1107,49 +1217,10 @@ class fusion_center():
             self.cnt_average = 0
             self.cnt_j += 1
             if self.cnt_j == len(receivers):
-                self.stop_transmitter()
-                self.stop_loop()
-                print("delay tensor recordings complete")
+                # split into loop stop and final processing!
+                self.stop_selfloc_loop()
                 # Average all measurements:
-                D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
-                sum_square_tdoa = 0
-                for j in range(len(receivers)):
-                    for l in range(len(receivers)):
-                        for k in range(len(receivers)):
-                            # average distance differences
-                            tdoa = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
-                            sum_square_tdoa += tdoa**2
-                            D[j,l,k] = tdoa
-                receivers_positions = np.array([list(receiver.coordinates) for receiver in self.receivers.values()])
-                pos_selfloc = None
-                stress = 10
-                for i in range(500):
-                    pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 1, 1.0, stress)
-                    d, coordinates_procrustes, tform = procrustes(receivers_positions, pos_selfloc)
-                    print(coordinates_procrustes)
-                    for gui in self.guis.values():
-                        gui.rpc_manager.request("sync_position_selfloc",[coordinates_procrustes[:,0],coordinates_procrustes[:,1]])
-                    time.sleep(0.05)
-
-
-                if self.recording_results:
-                    receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
-                    header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
-                    + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
-                    + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
-                    + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
-                    + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "]\n" 
-                    self.cnt_j = 0
-                    self.stop_transmitter()
-                    self.self_localization = False
-                    self.stop_loop()
-                    fi = open("./selfloc.txt",'w')
-                    fi.write(header)
-                    fi.write(str(self.transmitter_history) + "\n")
-                    fi.write(str(self.timestamp_history) + "\n")
-                    fi.write(str(self.delay_tensor.tolist()) + "\n")
-                    fi.write(str(D.tolist()) + "\n")
-                    fi.close()
+                self.evaluate_selfloc(receivers)
                 return
             self.switch_transmitter(self.cnt_j)
         self.transmitter_history.append(self.cnt_j)
