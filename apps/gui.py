@@ -431,15 +431,14 @@ class gui(QtGui.QMainWindow):
 
     def start_anchoring_loop(self):
         self.pushButtonOK.setEnabled(False)
-        self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position,self.calibration_average])
         if self.num_anchor_position < self.num_anchors:
+            self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position,self.calibration_average])
             self.anchor_setButton.setEnabled(False)
             self.anchor_gpsInputButton.setEnabled(False)
         else:
             self.anchor_dialog.accept()
 
     def set_anchor_gt_position(self, button):
-        print "in set_anchor_gt_position"
         if button.text() == "Cancel":
             self.rpc_manager.request("stop_selfloc")
             self.anchor_dialog.reject()
@@ -939,13 +938,14 @@ class gui(QtGui.QMainWindow):
     def start_selfloc_loop(self):
         self.anchor_dialog.show()        
         self.pushButtonOK.setEnabled(False)
+        self.anchor_setButton.setEnabled(False)
+        self.anchor_gpsInputButton.setEnabled(False)
         self.rpc_manager.request("start_selfloc_loop")
 
     def stop_transmitter(self):
         self.start_anchoring()
         self.rpc_manager.request("stop_transmitter")
             
-
     def new_chat(self, chat):
         self.chat_pending = True
         self.chats = self.chats + chat

@@ -67,7 +67,7 @@ class fusion_center():
         self.delay_calibration = []
         self.delay_auto_calibration = []
         self.calibration_loop_delays = []
-        self.calibration_average = 10
+        self.calibration_average = 1
         
         # postprocessing
         self.location_average_length = 3
@@ -97,10 +97,14 @@ class fusion_center():
         self.ntp_sync = False
         self.calibrating = False
         
+        # selfloc
+        self.pos_selfloc = []
+
         # Anchoring:
         self.num_anchor = 0
         self.num_anchors = 3
         self.anchoring = False
+        self.anchor_loop = False
         self.achor_average = 10
         self.anchor_loop_delays = []
         self.anchor_positions = []
@@ -551,8 +555,8 @@ class fusion_center():
     def localize(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
             # check if receiver coordinates have been set:
-            if all((receiver.selected_position == "manual" and all(coordinate > 0 for coordinate in receiver.coordinates ))
-                    or(receiver.selected_position == "GPS" and all(coordinate > 0 for coordinate in receiver.coordinates_gps)) for receiver in self.receivers.values() ):
+            print(receivers.values()[0].selected_position,receivers.values()[0].coordinates_selfloc)
+            if self.check_receiver_positions(self.receivers):
                 self.localizing = True
                 self.start_receivers()
             else:
@@ -562,8 +566,7 @@ class fusion_center():
         self.delay_history = []
         self.estimated_positions_history = []
         if len(self.receivers) > 2:
-            if all((receiver.selected_position == "manual" and all(coordinate > 0 for coordinate in receiver.coordinates ))
-                    or(receiver.selected_position == "GPS" and all(coordinate > 0 for coordinate in receiver.coordinates_gps)) for receiver in self.receivers.values() ):
+            if self.check_receiver_positions(self.receivers):
                 self.localizing = True
                 self.recording_results = self.record_results
                 self.results_file = "../log/results_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
@@ -577,6 +580,11 @@ class fusion_center():
                 self.start_receivers(acquisitions)
             else:
                 print ("Set receiver positions at first!")
+
+    def check_receiver_positions(self,receivers):
+        return all((receiver.selected_position == "manual" and all(coordinate > 0 for coordinate in receiver.coordinates ))
+                    or(receiver.selected_position == "selfloc" and all(coordinate > 0 for coordinate in receiver.coordinates_selfloc ))
+                    or(receiver.selected_position == "GPS" and all(coordinate > 0 for coordinate in receiver.coordinates_gps)) for receiver in receivers.values() )
 
     def start_selfloc_loop(self):
         # base structure for obtaining the delays required to perform the differential mds self localization algorithm
@@ -606,6 +614,7 @@ class fusion_center():
                 
     def stop_loop(self):
         self.run_loop = False
+        self.anchor_loop = False
         self.recording_results = False
         self.recording_samples = False
         self.self_localization = False
@@ -822,17 +831,16 @@ class fusion_center():
         self.transmitter = -1
 
     def start_anchoring(self):
-        print("ground truth positions: ", len(self.anchor_gt_positions))
-        if not self.anchoring:
-            if len(self.anchor_gt_positions) == 0:
-                for gui in self.guis.values():
-                    gui.rpc_manager.request("start_anchoring")
-                self.anchoring = True
-                return False
+        # directly interrupt if all positions required are optained
+        if (len(self.anchor_gt_positions) == self.num_anchors) and (len(self.anchor_positions) == self.num_anchors):
+            self.anchoring = False
+            return True
         else:
-            if len(self.anchor_gt_positions) == self.num_anchors:
-                self.anchoring = False
-                return True
+            if not self.anchoring:
+                if len(self.anchor_gt_positions) == 0:
+                    for gui in self.guis.values():
+                        gui.rpc_manager.request("start_anchoring")
+                return False
             else:
                 return False
             
@@ -843,13 +851,13 @@ class fusion_center():
         #tbd build up similar to calibration loop?
         #acquire delay/position similar to calibration_loop_delays/calibration_loop
         self.anchoring = True
+        self.anchor_loop = True
         self.run_loop = True
         self.start_receivers(average_length)
 
     # rename/even necessary?!
     def set_anchor_position(self,position):
-        self.anchor_position = np.array([0.0,0.0])
-        self.anchor_positions.append(self.anchor_position)
+        self.anchor_position = position
         for gui in self.guis.values():
             gui.rpc_manager.request("set_anchor_position", [self.anchor_position])
 
@@ -875,22 +883,29 @@ class fusion_center():
         receivers_positions = np.array([list(receiver.coordinates) for receiver in self.receivers.values()])
         pos_selfloc = None
         stress = 10
-        for i in range(500):
-            pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 1, 1.0, stress)
-            # this must be thrown out!
-            '''
-            d, coordinates_procrustes, tform = procrustes(receivers_positions, pos_selfloc)
-            print(coordinates_procrustes)
-            for gui in self.guis.values():
-                gui.rpc_manager.request("sync_position_selfloc",[coordinates_procrustes[:,0],coordinates_procrustes[:,1]])
-            time.sleep(0.05)
-            '''
+        self.pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 500, 1.0, stress)
+        for j, receiver in enumerate(receivers.values()):
+                receiver.coordinates_selfloc = self.pos_selfloc[j]
+                receiver.selected_position = "selfloc"
         # Wait for gui here
         anchoring_complete = False
         while anchoring_complete == False:
             anchoring_complete = self.start_anchoring()
             time.sleep(0.5)
-
+        print("anchoring done")
+        self.anchor_gt_positions = np.array(self.anchor_gt_positions)
+        self.anchor_positions = np.array(self.anchor_positions)
+        d, coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
+        print(coordinates_procrustes)
+        reflection = np.linalg.det(tform["rotation"])
+        pos_selfloc_procrustes =  np.dot(self.pos_selfloc,tform["rotation"]) + tform["translation"]
+        print(pos_selfloc_procrustes)
+        for j, receiver in enumerate(receivers.values()):
+                receiver.coordinates_selfloc = pos_selfloc_procrustes[j]
+                receiver.selected_position = "selfloc"
+        for gui in self.guis.values():
+            gui.rpc_manager.request("sync_position_selfloc",[pos_selfloc_procrustes[:,0],pos_selfloc_procrustes[:,1]])
+        time.sleep(0.05)
 
         if self.recording_results:
             receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
@@ -1172,14 +1187,16 @@ class fusion_center():
                     gui.rpc_manager.request("calibration_loop",[False])
 
         # may cause trouble with logging ?
-        if self.anchoring:
+        if self.anchor_loop:
             self.anchor_loop_delays.append(delay)
-            print(len(self.anchor_loop_delays))
             if len(self.anchor_loop_delays) == self.anchor_average:
                 self.run_loop = False
-                self.anchoring = False
-                self.set_anchor_position(np.array(self.anchor_loop_delays).mean(0))
+                delay_mean = np.array(self.anchor_loop_delays).mean(0)
+                self.anchor_positions.append(chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay_mean)["coordinates"])
+                self.set_anchor_position(self.anchor_positions[-1])
+                self.anchor_loop = False
                 self.anchor_loop_delays = []
+                self.stop_loop()
         
         # set flags to enable new reception
         for receiver in receivers.values():

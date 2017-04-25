@@ -201,7 +201,7 @@ def estimate_delay_interpolated(y1, y2):
     correlation, delay = corr_spline_interpolation(y1, y2, 11)
     return delay.tolist()
 
-def localize(receivers, ref_receiver, bbox, xk_prio=np.array([])):
+def localize(receivers, ref_receiver, bbox, xk_prio=np.array([]), delay = []):
     sample_rate = receivers.values()[0].samp_rate * receivers.values()[0].interpolation
     y = []
     pos_rx = []
@@ -216,6 +216,11 @@ def localize(receivers, ref_receiver, bbox, xk_prio=np.array([])):
                 pos_rx.insert(0, receiver.coordinates)
             else:
                 pos_rx.append(receiver.coordinates)
+        elif receiver.selected_position == "selfloc":
+            if key == ref_receiver:
+                pos_rx.insert(0, receiver.coordinates_selfloc)
+            else:
+                pos_rx.append(receiver.coordinates_selfloc)
         else:
             if key == ref_receiver:
                 pos_rx.insert(0, receiver.coordinates_gps)
@@ -223,12 +228,18 @@ def localize(receivers, ref_receiver, bbox, xk_prio=np.array([])):
                 pos_rx.append(receiver.coordinates_gps)
     #cross correlations
     d = []
-    for receiver in receivers:
-        if receiver != ref_receiver:
-            if receivers[receiver].correlation_interpolation:
-                d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
-            else:
-                d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+    if len(delay) == 0:
+        for receiver in receivers:
+            if receiver != ref_receiver:
+                if receivers[receiver].correlation_interpolation:
+                    d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+                else:
+                    d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+    else:
+        for j, receiver in enumerate(receivers):
+            if receiver != ref_receiver:
+                    d.append(delay[j]/sample_rate)
+
 
     if len(pos_rx) == 3:
         return chan_3rx(pos_rx, d, xk_prio)

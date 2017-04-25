@@ -64,7 +64,6 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
         if stress < (2*sigma + 1.5) or (max_it == 1 and abs(stress_ratio) > 0.001) or stress > 20:
             break
         else:
-            pdb.set_trace()
             pos_conf = np.max(roi) * np.random.uniform(low=0.0,high=1.0,size=(num_sensors,2))
             # fix anchors
     #             pos_conf = bsxfun(@minus,pos_conf,pos_conf(1,:)-pos_sensors(1,:))
