@@ -253,12 +253,12 @@ class gui(QtGui.QMainWindow):
         self.waitText = QtGui.QLabel("Please wait until calibration process is complete.")
         layout = QtGui.QFormLayout()
         layout.addRow(self.waitText)
-        self.latLabel = QtGui.QLabel("latitude (+=N ; -=S)")
-        self.lineEditLatitude = QtGui.QLineEdit() 
-        layout.addRow(self.latLabel,self.lineEditLatitude)
-        self.longLabel = QtGui.QLabel("longitude (+=E ; -=W)")
-        self.lineEditLongitude = QtGui.QLineEdit() 
-        layout.addRow(self.longLabel,self.lineEditLongitude)
+        self.latLabel_cal = QtGui.QLabel("latitude (+=N ; -=S)")
+        self.lineEditLatitude_cal = QtGui.QLineEdit()
+        layout.addRow(self.latLabel_cal,self.lineEditLatitude_cal)
+        self.longLabel_cal = QtGui.QLabel("longitude (+=E ; -=W)")
+        self.lineEditLongitude_cal = QtGui.QLineEdit()
+        layout.addRow(self.longLabel_cal,self.lineEditLongitude_cal)
         layout.addRow(self.calibration_mBox)
         #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
         self.calibration_dialog.setLayout(layout)
@@ -278,11 +278,14 @@ class gui(QtGui.QMainWindow):
         # add altitude
         self.altLabel = QtGui.QLabel("altitude (m)")
         self.lineEditAltitude = QtGui.QLineEdit() 
-        layout.addRow(self.altLabel,self.lineEditAltitude)
         layout = QtGui.QFormLayout()
         layout.addRow(self.waitText_pos)
-        layout.addRow(self.latLabel, self.lineEditLatitude)
-        layout.addRow(self.longLabel,self.lineEditLongitude)
+        self.latLabel_pos = QtGui.QLabel("latitude (+=N ; -=S)")
+        self.lineEditLatitude_pos = QtGui.QLineEdit()
+        layout.addRow(self.latLabel_pos,self.lineEditLatitude_pos)
+        self.longLabel_pos = QtGui.QLabel("longitude (+=E ; -=W)")
+        self.lineEditLongitude_pos = QtGui.QLineEdit()
+        layout.addRow(self.longLabel_pos,self.lineEditLongitude_pos)
         layout.addRow(self.altLabel,self.lineEditAltitude)
         layout.addRow(self.position_mBox_pos)
         #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
@@ -306,8 +309,12 @@ class gui(QtGui.QMainWindow):
         layout.addWidget(self.waitText2)
         layout.addWidget(self.pushButtonOK)
         layout.addRow(self.waitText3)
-        layout.addRow(self.latLabel,self.lineEditLatitude)
-        layout.addRow(self.longLabel,self.lineEditLongitude)
+        self.latLabel_anc = QtGui.QLabel("latitude (+=N ; -=S)")
+        self.lineEditLatitude_anc = QtGui.QLineEdit()
+        layout.addRow(self.latLabel_anc,self.lineEditLatitude_anc)
+        self.longLabel_anc = QtGui.QLabel("longitude (+=E ; -=W)")
+        self.lineEditLongitude_anc = QtGui.QLineEdit()
+        layout.addRow(self.longLabel_anc,self.lineEditLongitude_anc)
         layout.addRow(self.anchor_mBox)
         self.anchor_dialog.setLayout(layout)
         
@@ -418,8 +425,8 @@ class gui(QtGui.QMainWindow):
                 self.zp.enabled = False
         elif button.text() == "Set calibration" :
             # calibrate with gps coordinates from line inputs
-            latitude = float(self.lineEditLatitude.text())
-            longitude = float(self.lineEditLongitude.text())
+            latitude = float(self.lineEditLatitude_cal.text())
+            longitude = float(self.lineEditLongitude_cal.text())
             self.rpc_manager.request("calibrate",[self.basemap(longitude,latitude)])
             self.calibration_dialog.accept()
 
@@ -448,8 +455,8 @@ class gui(QtGui.QMainWindow):
                 self.zp.enabled = False
         elif button.text() == "Set anchor position" :
             # calibrate with gps coordinates from line inputs
-            latitude = float(self.lineEditLatitude.text())
-            longitude = float(self.lineEditLongitude.text())
+            latitude = float(self.lineEditLatitude_anc.text())
+            longitude = float(self.lineEditLongitude_anc.text())
             self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
             self.pushButtonOK.setEnabled(True)
             self.anchor_setButton.setEnabled(False)
@@ -900,8 +907,10 @@ class gui(QtGui.QMainWindow):
     def get_gps_coordinates(self,mouse_event):
         if self.setting_calibration:
             map_long, map_lat = self.basemap(mouse_event.xdata,mouse_event.ydata,inverse=True)
-            self.lineEditLongitude.setText(str(map_long))
-            self.lineEditLatitude.setText(str(map_lat))
+            self.lineEditLongitude_cal.setText(str(map_long))
+            self.lineEditLatitude_cal.setText(str(map_lat))
+            self.lineEditLongitude_anc.setText(str(map_long))
+            self.lineEditLatitude_anc.setText(str(map_lat))
             self.setting_calibration = False
             self.zp.enabled = True
 
@@ -923,9 +932,9 @@ class gui(QtGui.QMainWindow):
 
         elif button.text() == "Set" :
             # calibrate with gps coordinates from line inputs
-            latitude = float(self.lineEditLatitude.text())
-            longitude = float(self.lineEditLongitude.text())
-            altitude = float(self.lineEditAltitude.text())
+            latitude = float(self.lineEditLatitude_pos.text())
+            longitude = float(self.lineEditLongitude_pos.text())
+            altitude = float(self.lineEditAltitude_pos.text())
             # program gps coordinates for receiver that corresponds to the clicked button
             # see gui_helpers PushButtonPositionDelegate
             print "receiver:",self.setting_pos_receiver
