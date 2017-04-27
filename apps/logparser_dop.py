@@ -47,16 +47,16 @@ def parse_options():
                       help="Geographical Map")
     #parser.add_option("", "--cov", action="store_true", default=False,
     #                  help="calculate positonal covariances")
-    parser.add_option("", "--plot-dop", action="store_true", default=True,
-                      help="calculate positonal covariances")
     parser.add_option("", "--plot-difference", action="store_true", default=False,
-                      help="calculate positonal covariances")
+                      help="calculate difference between fixed reference and reference selection")
     parser.add_option("", "--plot-reference", action="store_true", default=False,
                       help="plot which reference is selected for min-dop")
     parser.add_option("", "--reference-selection", type = "str", default="Min-DOP",
                       help="reference selection algorithm. Implemented options are: Manual, Min-DOP ")
+    parser.add_option("", "--ignore-sensors", type = "str", default="[]",
+                      help="list of indices sensors that should be ignored, e.g. [1,5]")
     parser.add_option("", "--input-type", type = "str", default="log",
-                      help="select input method: by default, a log of gr-localization is required.\n Option manual enables input of file containing receiver and bounding-box gps coordiantes.\n ((Rx1x,Rx1y),(Rx2x,...)...) (lonlowerBound, latLowerBound, lonUpperBound, latUpperBound)")
+                      help="select input method: by default, a log of gr-localization is required.\n Option manual enables input of file containing receiver and bounding-box gps coordiantes.\n File structure: [(Rx1x,Rx1y),(Rx2x,...)...]\n\t[lonlowerBound, latLowerBound, lonUpperBound, latUpperBound]")
     parser.add_option("-s", "--save", action="store_true", default=False,
                       help="Save plots to files")
     (options, args) = parser.parse_args()
@@ -127,20 +127,22 @@ if __name__ == "__main__":
 
         f_results.close()
     elif options.input_type == "manual":
-        f=open(args[0],"r")
+        f = open(args[0],"r")
         receivers_positions = eval(f.readline())
+        print receivers_positions
         gps_flag = True
         bbox = eval(f.readline())
-        ref_receiver = 1
-    filename = "dop_" + time.strftime("%d_%m_%y-%H:%M:%S")
+        print bbox
+        ref_receiver = 0
+    filename = "dop_" + time.strftime("%d_%m_%y-%H_%M_%S")
     
     inProj = Proj(init='epsg:4326')
     outProj = Proj(init='epsg:3857')
     x0, y0 = transform(inProj,outProj,bbox[0],bbox[1])
     x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
     receivers_positions = np.array(receivers_positions)
-    x = x1-x0
-    y = y1-y0
+    x = x1 - x0
+    y = y1 - y0
     '''
     x0 = np.amin(receivers_positions,axis=0)[0] -15
     y0 = np.amin(receivers_positions,axis=0)[1] -15
@@ -151,16 +153,33 @@ if __name__ == "__main__":
     
     figure_map = plt.figure(figsize=(20,10))
 
-    x_steps = np.linspace(0,x,x)
-    y_steps = np.linspace(0,y,y)
+    # evaluate exactly 200 positions on each axis
+
+    x_steps = np.linspace(0,x,200)
+    '''
+    lons = np.ndarray(shape=(len(x_steps)))
+    for i,x in enumerate(x_steps):
+        lons[i] = 
+    '''
+    y_steps = np.linspace(0,y,200)
+    scale_x = x/200
+    scale_y = y/200
 
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
-
-    r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-
-    if r.status_code == 200:
-        img = Image.open(StringIO(r.content))
-
+    print "+".join(str(j).replace(".",",") for j in bbox)
+    if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
+        # request only if no map can be found
+        r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+        if r.status_code == 200:
+            img = Image.open(StringIO(r.content))
+            if not os.path.exists("../maps"):
+                    os.makedirs("../maps")
+            img.save("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
+        else:
+            print "OSM error"
+    else:
+        # if available, open offline map instead
+        img = Image.open("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
     #img = Image.open("../maps/ict_cubes.png")
 
     ax = figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
@@ -199,128 +218,158 @@ if __name__ == "__main__":
     basemap = Basemap(llcrnrlon=bbox[0], llcrnrlat=bbox[1],
                   urcrnrlon=bbox[2], urcrnrlat=bbox[3],
                   projection='tmerc', ax=ax, lon_0=lon_0, lat_0=lat_0,suppress_ticks=False)
-    
+    #int(np.linalg.norm(basemap(bbox[0],bbox[1])-basemap(bbox[2],bbox[1])))
     basemap.imshow(img, interpolation='lanczos', origin='upper')
-    basemap.drawmapscale(lon=bbox[0]+0.00069, lat=bbox[1]+0.000252, lon0=bbox[0]+0.00069, lat0=bbox[1]+0.000252, length=40,  units='m',barstyle='fancy',fontsize = 22)
+    basemap.drawmapscale(lon=bbox[0]-0.17*(bbox[0]-bbox[2]), lat=bbox[1]-0.05*(bbox[1]-bbox[3]), lon0=bbox[0]-0.17*(bbox[0]-bbox[2]), lat0=bbox[1]-0.05*(bbox[1]-bbox[3]), length=4000,  units='m',barstyle='fancy',fontsize = 18)
+    '''
+    if options.input_type == "manual":
+        for i, receiver_pos in enumerate(receivers_positions):
+            receivers_positions[i] = basemap(receiver_pos[0],receiver_pos[1])
+    '''
+
+    #ax.axis([25,230,15,165])
+    reference_selection = options.reference_selection
+    receivers_ignored = eval(options.ignore_sensors)
+    for idx in range(len(receivers_ignored)):
+        receivers_ignored[idx] -= 1
+    #TODO: axis ticks -> bad documentation
+    #ax.set_xticks(np.linspace(x0,x1,int(x/10)))
+    #ax.set_yticks(np.linspace(y0,y1,int(y/10)))
+    #zp = gui_helpers.ZoomPan()
+    #figZoom = zp.zoom_factory(ax, base_scale = 1.5)
+    #figPan = zp.pan_factory(ax)
+
+    figure_map.tight_layout(pad=0)
+    #figure_map.patch.set_visible(False)
+    ax.axis('off')
+    #plt.show(block=False)
     
-    if options.plot_dop:
-        ax.axis([25,230,15,165])
-        reference_selection = options.reference_selection
-        # TODO: axis ticks -> bad documentation
-        #ax.set_xticks(np.linspace(x0,x1,int(x/10)))
-        #ax.set_yticks(np.linspace(y0,y1,int(y/10)))
-        #zp = gui_helpers.ZoomPan()
-        #figZoom = zp.zoom_factory(ax, base_scale = 1.5)
-        #figPan = zp.pan_factory(ax)
-
-        figure_map.tight_layout(pad=0)
-        #figure_map.patch.set_visible(False)
-        ax.axis('off')
-        #plt.show(block=False)
-        
-        
-        receivers=dict()
-        if gps_flag:
-            for i in range(len(receivers_positions)):
-                receivers_positions[i] = basemap(receivers_positions[i][1],receivers_positions[i][0])
-        for receiver_idx in range(len(receivers_positions)):
-            receivers[receiver_idx]=receiver_interface.receiver_interface(None,None,receiver_idx)
-            receivers[receiver_idx].coordinates=receivers_positions[receiver_idx]
-            receivers[receiver_idx].serial = receiver_idx
-            
-        i = 1 
-        
-        """
-        for rx in receivers_positions:
-            
-            ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
-            # set annotation RXx
-            text = "Rx" + str(i)
-            # index of logged reference receiver starts at 0 not at 1
-            rx = (rx[0]+2,rx[1])
-            if i != (ref_receiver+1) or options.reference_selection == "Min-DOP" or options.plot_difference:
-                ax.annotate(text, rx,fontweight='bold', fontsize = 18,bbox=dict(facecolor='w', alpha=0.9))
-            else:
-                ax.annotate(text, rx,fontweight='bold', fontsize = 18,bbox=dict(facecolor='r', alpha=0.9, color="red"))
-            i += 1
-        """
-        figure_map.canvas.draw()
-
-        x_steps,y_steps = np.meshgrid(x_steps,y_steps)
-        
-
-        if not options.plot_reference:
-            dops_min = np.ndarray(shape=np.shape(x_steps))
-            dops_manual = np.ndarray(shape=np.shape(x_steps))
-            for (x_it,y_it), value in np.ndenumerate(x_steps):
-                if options.reference_selection == "Min-DOP" or options.plot_difference:
-                    dops_min[x_it,y_it] = 10*np.log((1/0.3)*dop.get_min_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers))
-                    figure_map.canvas.set_window_title(filename + "_min-dop")
-                if options.reference_selection == "Manual" or options.plot_difference:
-                    dops_manual[x_it,y_it]= 10*np.log((1/0.3)*dop.calc_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers, ref_receiver)[0])
-                    figure_map.canvas.set_window_title(filename + "_manual")
-                #references[x_it,y_it] = dop.reference_selection_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers)
-            #dop_diff = dops_manual - dops_min
-            if options.reference_selection == "Min-DOP":
-                dops = dops_min
-            else:
-                dops = dops_manual
-            xmin,ymin = np.unravel_index(dops.argmin(), dops.shape)
-            xmax,ymax = np.unravel_index(dops.argmax(), dops.shape)
-            print x_steps[xmin,ymin], y_steps[xmin,ymin],np.amin(dops)
-            print x_steps[xmax,ymax], y_steps[xmax,ymax],np.amax(dops)
-            
-
-            #grid = ax.pcolor(x_steps,y_steps,dops, cmap='coolwarm', alpha=0.7)
-            dops[dops>30] = 30
-            dops[dops<-3] = -3
-            #, extent=[x_steps.min(), x_steps.max(), y_steps.min(), y_steps.max()]
-            plt.imshow(dops, interpolation='nearest', cmap='coolwarm', alpha=0.5)
-            # grid = ax.pcolor(x_steps,y_steps,references, cmap='prism', alpha=0.7)
-            #grid.set_clim(-3,30)
-            #divider = make_axes_locatable(ax)
-            #cax = divider.append_axes("right", size="2%", pad=0.02)
-            cbar = basemap.colorbar()
-            cbar.ax.tick_params(labelsize = 36) 
-            #cbar.make_axes(grid,location="right")
-            cbar.set_label("10log(DOP)",fontsize = 28,labelpad = 20)
+    
+    receivers=dict()
+    if gps_flag:
+        for i in range(len(receivers_positions)):
+            receivers_positions[i] = basemap(receivers_positions[i][1],receivers_positions[i][0])
+    skip_cnt = 0
+    for receiver_idx in range(len(receivers_positions)):
+        if (receiver_idx) not in receivers_ignored:
+            receivers[receiver_idx - skip_cnt] =receiver_interface.receiver_interface(None,None,receiver_idx)
+            receivers[receiver_idx - skip_cnt].coordinates=receivers_positions[receiver_idx]
+            receivers[receiver_idx - skip_cnt].serial = receiver_idx
+            print receivers[receiver_idx - skip_cnt].coordinates
         else:
-            cmap_cont=matplotlib.cm.brg
-            #cmap_cont(range(0,len(receivers_positions)))
-            '''
-            cl = cmap_cont([x *int(np.floor(256/(len(receivers_positions)-1))) for x in range(0, len(receivers_positions)-1)].append(255))
-            print [x *int(np.floor(256/(len(receivers_positions)-1))) for x in range(0, len(receivers_positions)-1)].append(255)
-            '''
-            cl = cmap_cont(range(0,256,int(255/(len(receivers_positions)-1))))
-            cmap = matplotlib.colors.ListedColormap(cl)
-            references = np.ndarray(shape=np.shape(x_steps))
-            figure_map.canvas.set_window_title(filename + "_references")
-            for (x_it,y_it), value in np.ndenumerate(x_steps):
-                references[x_it,y_it],dop_location,H = dop.reference_selection_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers)
-                
-            
-            plt.imshow(references, interpolation='nearest', cmap=cmap, alpha=0.5)
-            cbar = basemap.colorbar()
-            cbar.ax.get_yaxis().set_ticks([])
-            for j, lab in enumerate(['$1$','$2$','$3$']):
-                cbar.ax.text(.5, (3.5* j + 1.5 ) / 10.0, lab, ha='center', va='center',fontsize=28)
-            cbar.set_label("Selected reference sensor",fontsize = 28,labelpad = 20)
+            skip_cnt += 1
+    i = 1 
+    
+    """
+    for rx in receivers_positions:
         
-        for rx in receivers_positions:
+        ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
+        # set annotation RXx
+        text = "Rx" + str(i)
+        # index of logged reference receiver starts at 0 not at 1
+        rx = (rx[0]+2,rx[1])
+        if i != (ref_receiver+1) or options.reference_selection == "Min-DOP" or options.plot_difference:
+            ax.annotate(text, rx,fontweight='bold', fontsize = 18,bbox=dict(facecolor='w', alpha=0.9))
+        else:
+            ax.annotate(text, rx,fontweight='bold', fontsize = 18,bbox=dict(facecolor='r', alpha=0.9, color="red"))
+        i += 1
+    """
+    figure_map.canvas.draw()
+
+    x_steps,y_steps = np.meshgrid(x_steps,y_steps)
+    
+
+    if not options.plot_reference:
+        dops_min = np.ndarray(shape=np.shape(x_steps))
+        dops_manual = np.ndarray(shape=np.shape(x_steps))
+        for (x_it,y_it), value in np.ndenumerate(x_steps):
+            if options.reference_selection == "Min-DOP" or options.plot_difference:
+                dops_min[x_it,y_it] = (1/0.3)*dop.get_min_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers)
+                figure_map.canvas.set_window_title(filename + "_min-dop")
+            if options.reference_selection == "Manual" or options.plot_difference:
+                dops_manual[x_it,y_it]= (1/0.3)*dop.calc_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers, ref_receiver)[0]
+                figure_map.canvas.set_window_title(filename + "_manual")
+            #references[x_it,y_it] = dop.reference_selection_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers)
+        #dop_diff = dops_manual - dops_min
+        if options.reference_selection == "Min-DOP":
+            dops = dops_min
+        else:
+            dops = dops_manual
+        xmin,ymin = np.unravel_index(dops.argmin(), dops.shape)
+        xmax,ymax = np.unravel_index(dops.argmax(), dops.shape)
+        print x_steps[xmin,ymin], y_steps[xmin,ymin],np.amin(dops)
+        print x_steps[xmax,ymax], y_steps[xmax,ymax],np.amax(dops)
+
+        dops[dops>5] = 5
+        dops[dops<10**-1] = 10**-1
+        levels = np.arange(0, 5, 0.5)
+        #grid = plt.pcolor(x_steps,y_steps,dops, cmap='coolwarm', alpha=0.5, linewidth=0, edgecolor = 'face', rasterized = True)
+        ctr = plt.contour(x_steps, y_steps, dops,levels,colors = "k")
+        plt.clabel(ctr, levels, inline=1,fmt='%1.1f',fontsize=12)
+        #, extent=[x_steps.min(), x_steps.max(), y_steps.min(), y_steps.max()]
+        #plt.imshow(dops, interpolation='nearest', cmap='coolwarm',aspect = "auto", alpha=0.5)
+        #grid = ax.pcolor(x_steps,y_steps,references, cmap='prism', alpha=0.7)
+        #grid.set_clim(-3,30)
+        #divider = make_axes_locatable(ax)
+        #cax = divider.append_axes("right", size="2%", pad=0.02)
+        #cbar = basemap.colorbar()
+        #cbar.ax.tick_params(labelsize = 36) 
+        #cbar.make_axes(grid,location="right")
+        #cbar.set_label("DOP",fontsize = 28,labelpad = 20)
+        #plt.title("DOP")
+    else:
+        cmap_cont = matplotlib.cm.brg
+        #cmap_cont(range(0,len(receivers_positions)))
+        '''
+        cl = cmap_cont([x *int(np.floor(256/(len(receivers_positions)-1))) for x in range(0, len(receivers_positions)-1)].append(255))
+        print [x *int(np.floor(256/(len(receivers_positions)-1))) for x in range(0, len(receivers_positions)-1)].append(255)
+        '''
+        cl = cmap_cont(range(0,256,int(255/(len(receivers_positions)-1))))
+        cmap = matplotlib.colors.ListedColormap(cl)
+        references = np.ndarray(shape=np.shape(x_steps))
+        figure_map.canvas.set_window_title(filename + "_references")
+        for (x_it,y_it), value in np.ndenumerate(x_steps):
+            references[x_it,y_it],dop_location,H = dop.reference_selection_dop([x_steps[x_it,y_it],y_steps[x_it,y_it]],receivers)
+            if references[x_it,y_it] in receivers_ignored:
+                references[x_it,y_it] += 1 + np.where(receivers_ignored == references[x_it,y_it])[0][0]
             
-            ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
+        rfx = plt.pcolor(x_steps,y_steps,references, cmap=cmap, alpha=0.5, linewidth=0, edgecolor = 'face', rasterized = True)
+        #references = transform_scalar(references, lons, lats, nx, ny)
+        #rfx = basemap.imshow(references, cmap=cmap, alpha=0.5)
+        
+        cbar = basemap.colorbar(rfx)
+        cbar.ax.get_yaxis().set_ticks([])
+        for j in range(len(receivers_positions)):
+            cbar.ax.text(.5, (10.1/len(receivers_positions) * (j+0.5)) / 10.0, "$%i$"%(j+1), ha='center', va='center',fontsize=28)
+        cbar.set_label("Selected reference sensor",fontsize = 28,labelpad = 20)
+        
+    # For nice looking but hardcoded plots in paper
+    #colorlist = ['#7F7FFF','#FE7F7F','#80FD7F']
+        cmap_cont = matplotlib.cm.brg
+        cl = cmap_cont(range(0,256,int(255/(len(receivers_positions)-1))))
+        colorlist = cl
+    for idx in range(len(receivers_ignored)):
+        receivers_ignored[idx] += 1
+    for rx in receivers_positions:
+        if i not in receivers_ignored:
+            if options.plot_reference:
+                color = colorlist[i-1]
+            else:
+                color = "b"
+            ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c=color, s=400, alpha=1)
             # set annotation RXx
             text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
-            rx = (rx[0]+3.5,rx[1]-1)
+            rx = (rx[0]+100,rx[1]+120)
+            
             if i != (ref_receiver+1) or options.reference_selection == "Min-DOP" or options.plot_difference:
-                ax.annotate(text, rx,fontweight='bold', fontsize = 28,bbox=dict(facecolor='w', alpha=0.9))
+                ax.annotate(text, rx,fontweight='bold', fontsize = 16,bbox=dict(facecolor='w', alpha=0.9))
             else:
-                ax.annotate(text, rx,fontweight='bold', fontsize = 28,bbox=dict(facecolor='r', alpha=0.9, color="red"))
-            i += 1
-        if options.save:
-            plt.savefig(filename + ".pdf", dpi=150, edgecolor='none')
-    
+                ax.annotate(text, rx,fontweight='bold', fontsize = 16,bbox=dict(facecolor='r', alpha=0.9, color="red"))
+        i += 1
+    if options.save:
+        plt.savefig(filename + ".pdf", dpi=100, edgecolor='none')
+
         
 
 
