@@ -431,7 +431,6 @@ class gui(QtGui.QMainWindow):
             self.calibration_dialog.accept()
 
     def start_anchoring(self):
-        print "in gui start_anchoring"
         self.num_anchor_position = 0
         self.anchor_positions = []
         self.pushButtonOK.setEnabled(True)

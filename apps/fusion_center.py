@@ -38,6 +38,9 @@ class fusion_center():
         # socket addresses
         rpc_adr = "tcp://*:6665"
 
+        #debug
+        self.cnt_smpl_log = 0
+
         self.samples_to_receive = int(options.num_samples)
         self.frequency = float(options.frequency)
         self.samp_rate = float(options.samp_rate)
@@ -109,6 +112,7 @@ class fusion_center():
         self.anchor_loop_delays = []
         self.anchor_positions = []
         self.anchor_gt_positions = []
+        self.anchor_loop_delay_history = []
         
         self.map_type = "Online"
         self.map_file = "../maps/map.png"
@@ -504,7 +508,6 @@ class fusion_center():
     def start_receivers(self, acquisitions=0):
         # reception 1 second in the future at full second
         if not self.processing:
-            print("does it even start?")
             time_to_receive = np.ceil(time.time()) + 1
             self.init_kalman = True
             for receiver in self.receivers.values():
@@ -594,11 +597,11 @@ class fusion_center():
         self.stop_transmitter()
         self.recording_results = self.record_results
         self.recording_samples = self.record_samples
-        self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
+        self.samples_file = "../log/samples_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
         #acquisitions = len(self.receivers)*self.selfloc_average_length
-        acquisitions = 0
+        acquisitions = len(self.receivers)*self.selfloc_average_length
         self.transmitter_history = []
         self.timestamp_history = []
         self.cnt_j = 0
@@ -831,7 +834,7 @@ class fusion_center():
         self.transmitter = -1
 
     def start_anchoring(self):
-        # directly interrupt if all positions required are optained
+        # immediatly interrupt if all positions required are optained
         if (len(self.anchor_gt_positions) == self.num_anchors) and (len(self.anchor_positions) == self.num_anchors):
             self.anchoring = False
             return True
@@ -852,6 +855,7 @@ class fusion_center():
         #acquire delay/position similar to calibration_loop_delays/calibration_loop
         self.anchoring = True
         self.anchor_loop = True
+        self.recording_results = False
         self.run_loop = True
         self.start_receivers(average_length)
 
@@ -865,12 +869,16 @@ class fusion_center():
         self.anchor_gt_positions.append(np.array(pos))
 
     def stop_selfloc_loop(self):
+        self.cnt_j = 0
         self.self_localization = False
         self.stop_transmitter()
         self.stop_loop()
+        # continue logging samples! 
+        self.recording_samples = self.record_samples
         print("delay tensor recordings complete")
 
     def evaluate_selfloc(self,receivers):
+        print("cnt_smpl: ",self.cnt_smpl_log)
         D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
         sum_square_tdoa = 0
         for j in range(len(receivers)):
@@ -880,7 +888,6 @@ class fusion_center():
                     tdoa = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
                     sum_square_tdoa += tdoa**2
                     D[j,l,k] = tdoa
-        receivers_positions = np.array([list(receiver.coordinates) for receiver in self.receivers.values()])
         pos_selfloc = None
         stress = 10
         self.pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 500, 1.0, stress)
@@ -898,32 +905,38 @@ class fusion_center():
         d, coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
         print(coordinates_procrustes)
         reflection = np.linalg.det(tform["rotation"])
-        pos_selfloc_procrustes =  np.dot(self.pos_selfloc,tform["rotation"]) + tform["translation"]
-        print(pos_selfloc_procrustes)
+        self.pos_selfloc_procrustes =  np.dot(self.pos_selfloc,tform["rotation"]) + tform["translation"]
+        print(self.pos_selfloc_procrustes)
         for j, receiver in enumerate(receivers.values()):
-                receiver.coordinates_selfloc = pos_selfloc_procrustes[j]
+                receiver.coordinates_selfloc = self.pos_selfloc_procrustes[j]
                 receiver.selected_position = "selfloc"
         for gui in self.guis.values():
-            gui.rpc_manager.request("sync_position_selfloc",[pos_selfloc_procrustes[:,0],pos_selfloc_procrustes[:,1]])
+            gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
         time.sleep(0.05)
-
         if self.recording_results:
             receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
             header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
-            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "]\n" 
-            self.cnt_j = 0
-            self.stop_transmitter()
-            self.self_localization = False
-            self.stop_loop()
-            fi = open("./selfloc.txt",'w')
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.selfloc_average_length) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "]\n" 
+            results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
+            fi = open(results_file_selfloc,'w')
             fi.write(header)
             fi.write(str(self.transmitter_history) + "\n")
             fi.write(str(self.timestamp_history) + "\n")
             fi.write(str(self.delay_tensor.tolist()) + "\n")
             fi.write(str(D.tolist()) + "\n")
+            fi.write(str(self.anchor_loop_delay_history) + "\n")
+            fi.write(str(self.anchor_positions.tolist()) + "\n")
+            fi.write(str(coordinates_procrustes.tolist()) + "\n")
+            fi.write(str(self.anchor_gt_positions.tolist()) + "\n")
+            fi.write(str(self.pos_selfloc.tolist()) + "\n")
+            fi.write(str(self.pos_selfloc_procrustes.tolist()) + "\n")
+            fi.write(str(tform.keys()) + "\n")
+            tform["rotation"] = tform["rotation"].tolist()
+            tform["translation"] = tform["translation"].tolist()
+            fi.write(str(tform.values()) + "\n")
             fi.close()
 
     def build_results_strings(self, receivers):      
@@ -936,7 +949,8 @@ class fusion_center():
         i = 1
         for receiver in receivers.values():
             if i == 1:
-                if receiver.selected_position == "manual":
+                #TODO: general solution!!!
+                if receiver.selected_position in ["manual", "selfloc"]:
                     receivers_position = receivers_position + str(receiver.coordinates)
                 else:
                     receivers_position = receivers_position + str(receiver.coordinates_gps)
@@ -945,7 +959,7 @@ class fusion_center():
                 receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
                 receivers_gain = receivers_gain + str(receiver.gain)
             else:
-                if receiver.selected_position == "manual":
+                if receiver.selected_position in ["manual", "selfloc"]:
                     receivers_position = receivers_position + "," + str(receiver.coordinates)
                 else:
                     receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
@@ -993,6 +1007,8 @@ class fusion_center():
         
         # log samples before interpolation to get logs of capable size and faster logging. Interpolation can be redone in parser. 
         if self.recording_samples:
+            self.cnt_smpl_log +=1
+            print("cnt_smpl: ",self.cnt_smpl_log)
             f_s = open(self.samples_file,"a")
             receiver_samples = []
             for receiver in receivers.values():
@@ -1189,15 +1205,21 @@ class fusion_center():
         # may cause trouble with logging ?
         if self.anchor_loop:
             self.anchor_loop_delays.append(delay)
+            # no sensor is transmitting
+            self.transmitter_history.append(-1)
+            self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
             if len(self.anchor_loop_delays) == self.anchor_average:
                 self.run_loop = False
                 delay_mean = np.array(self.anchor_loop_delays).mean(0)
                 self.anchor_positions.append(chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay_mean)["coordinates"])
                 self.set_anchor_position(self.anchor_positions[-1])
                 self.anchor_loop = False
+                self.anchor_loop_delay_history.append(self.anchor_loop_delays)
                 self.anchor_loop_delays = []
                 self.stop_loop()
-        
+                self.recording_samples = self.record_samples
+                self.recording_results = self.record_results
+
         # set flags to enable new reception
         for receiver in receivers.values():
             receiver.samples = np.array([])
@@ -1211,8 +1233,9 @@ class fusion_center():
         # add possibility to log!
         # "nested loop in class"
         # just take samples from sensors that are not transmitting. Should not be disturbing if other sensor receives if the samples are not processed.
-        # check transmiter switching!
         if self.recording_samples:
+            self.cnt_smpl_log += 1
+            print("cnt_smpl: ",self.cnt_smpl_log)
             f_s = open(self.samples_file,"a")
             receiver_samples = []
             for receiver in receivers.values():
@@ -1230,18 +1253,25 @@ class fusion_center():
                 else:
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0.0
         self.cnt_average += 1
+        self.transmitter_history.append(self.cnt_j)
+        self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
         if self.cnt_average == self.selfloc_average_length:
             self.cnt_average = 0
             self.cnt_j += 1
             if self.cnt_j == len(receivers):
                 # split into loop stop and final processing!
+                for receiver in receivers.values():
+                    receiver.samples = np.array([])
+                    receiver.samples_calibration = np.array([])
+                    receiver.first_packet = True
+                    receiver.reception_complete = False
+                self.processing = False
                 self.stop_selfloc_loop()
                 # Average all measurements:
                 self.evaluate_selfloc(receivers)
                 return
             self.switch_transmitter(self.cnt_j)
-        self.transmitter_history.append(self.cnt_j)
-        self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
+        
         for receiver in receivers.values():
             receiver.samples = np.array([])
             receiver.samples_calibration = np.array([])
