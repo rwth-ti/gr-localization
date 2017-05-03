@@ -220,14 +220,18 @@ if __name__ == "__main__":
                   projection='tmerc', ax=ax, lon_0=lon_0, lat_0=lat_0,suppress_ticks=False)
     #int(np.linalg.norm(basemap(bbox[0],bbox[1])-basemap(bbox[2],bbox[1])))
     basemap.imshow(img, interpolation='lanczos', origin='upper')
-    basemap.drawmapscale(lon=bbox[0]-0.17*(bbox[0]-bbox[2]), lat=bbox[1]-0.05*(bbox[1]-bbox[3]), lon0=bbox[0]-0.17*(bbox[0]-bbox[2]), lat0=bbox[1]-0.05*(bbox[1]-bbox[3]), length=4000,  units='m',barstyle='fancy',fontsize = 18)
+    #FIXME:HARDCODED PARAMETERS
+    barlength = 40
+    x_offset_scale = 0.17
+    y_offset_scale = 0.15
+    basemap.drawmapscale(lon=bbox[0]-x_offset_scale*(bbox[0]-bbox[2]), lat=bbox[1]-y_offset_scale*(bbox[1]-bbox[3]), lon0=bbox[0]-x_offset_scale*(bbox[0]-bbox[2]), lat0=bbox[1]-y_offset_scale*(bbox[1]-bbox[3]), length = barlength,  units='m',barstyle='fancy',fontsize = 18)
     '''
     if options.input_type == "manual":
         for i, receiver_pos in enumerate(receivers_positions):
             receivers_positions[i] = basemap(receiver_pos[0],receiver_pos[1])
     '''
 
-    #ax.axis([25,230,15,165])
+    ax.axis([25,230,15,165])
     reference_selection = options.reference_selection
     receivers_ignored = eval(options.ignore_sensors)
     for idx in range(len(receivers_ignored)):
@@ -333,7 +337,8 @@ if __name__ == "__main__":
             if references[x_it,y_it] in receivers_ignored:
                 references[x_it,y_it] += 1 + np.where(receivers_ignored == references[x_it,y_it])[0][0]
             
-        rfx = plt.pcolor(x_steps,y_steps,references, cmap=cmap, alpha=0.5, linewidth=0, edgecolor = 'face', rasterized = True)
+        #rfx = plt.pcolor(x_steps,y_steps,references, cmap=cmap, alpha=0.5, linewidth=0, edgecolor = 'face', rasterized = True)
+        rfx = plt.imshow(references, interpolation='nearest', cmap=cmap, origin = 'lower',aspect = 'equal', alpha=0.5, extent=[0,x,0,y])
         #references = transform_scalar(references, lons, lats, nx, ny)
         #rfx = basemap.imshow(references, cmap=cmap, alpha=0.5)
         
@@ -360,7 +365,7 @@ if __name__ == "__main__":
             # set annotation RXx
             text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
-            rx = (rx[0]+100,rx[1]+120)
+            rx = (rx[0]+2,rx[1]+2.5)
             
             if i != (ref_receiver+1) or options.reference_selection == "Min-DOP" or options.plot_difference:
                 ax.annotate(text, rx,fontweight='bold', fontsize = 16,bbox=dict(facecolor='w', alpha=0.9))

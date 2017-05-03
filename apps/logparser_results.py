@@ -7,8 +7,7 @@ matplotlib.rcParams['text.latex.unicode'] = True
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import numpy as np
-from numpy import array
-import sys, warnings
+import sys, warnings, os
 from pyproj import Proj, transform
 from PIL import Image
 import math
@@ -18,10 +17,11 @@ import requests
 from StringIO import StringIO
 from mpl_toolkits.basemap import Basemap
 import time
+sys.path.append("../python")
 from kalman import kalman_filter
 import ConfigParser
 from ConfigSectionMap import ConfigSectionMap
-from procrustres import procrustes
+from procrustes import procrustes
 
 
 # print with approopriate resolution
@@ -49,10 +49,19 @@ class parser():
         y = y1-y0
         scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
 
-        r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-
-        if r.status_code == 200:
-            img = Image.open(StringIO(r.content))
+        if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
+            # request only if no map can be found
+            r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+            if r.status_code == 200:
+                img = Image.open(StringIO(r.content))
+                if not os.path.exists("../maps"):
+                        os.makedirs("../maps")
+                img.save("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
+            else:
+                self.signal_error_set_map.emit()
+        else:
+            # if available, open offline map instead
+            img = Image.open("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
 
         #img = Image.open("../maps/ict_cubes.png")
 
@@ -596,7 +605,7 @@ if __name__ == "__main__":
             p.ax.axis([88,172,57,114])
             p.basemap.drawmapscale(lon=6.06201, lat=50.77874, lon0=6.06201, lat0=50.77874, length=20,  units='m',barstyle='fancy',fontsize = 30, yoffset=1.2)
         else:
-            p.basemap.drawmapscale(lon=bbox[0]+0.0002, lat=bbox[1]+0.00015, lon0=bbox[0]+0.0002, lat0=bbox[1]+0.00015, length=20,  units='m',barstyle='fancy',fontsize = 30,yoffset=1.2)
+            p.basemap.drawmapscale(lon=bbox[0]-0.17*(bbox[0]-bbox[2]), lat=bbox[1]-0.05*(bbox[1]-bbox[3]), lon0=bbox[0]-0.17*(bbox[0]-bbox[2]), lat0=bbox[1]-0.05*(bbox[1]-bbox[3]), length=int(np.linalg.norm(basemap(bbox[0],bbox[1])-basemap(bbox[2],bbox[1]))),  units='m',barstyle='fancy',fontsize = 18)
             
         """
         p.ax.set_xticks(np.linspace(80,180,int(10)))
@@ -604,15 +613,15 @@ if __name__ == "__main__":
         """
         
         for rx in receivers_positions:
-            p.ax.scatter(rx[0], rx[1],linewidths=2, marker='x', c='b', s=200, alpha=0.9)
+            p.ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='#ff9900', s=400, alpha=0.9)
             # set annotation RXx
             text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
             rx = (rx[0]+2,rx[1]-0.5)
-            if i != (ref_receiver+1): #and options.reference_selection == "Manual":
-                p.ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='w', alpha=0.9))
-            else:
-                p.ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='r', alpha=0.7, color="red"))
+            #if i != (ref_receiver+1): #and options.reference_selection == "Manual":
+            p.ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='w', alpha=0.9))
+            #else:
+            #    p.ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='r', alpha=0.7, color="red"))
             i += 1
             
                 
@@ -699,7 +708,7 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_location.pdf")
 
     if options.histogram_delays:
-        #delays in ns for comparison purposes:
+        #delays in ns for comparison:
         print interpolation
         delays_calibrated_ns = np.true_divide(delays_calibrated,sampling_rate*interpolation*10**-9)
         d21mean = np.mean(delays_calibrated_ns[:,0])
