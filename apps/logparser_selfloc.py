@@ -25,6 +25,7 @@ from ConfigSectionMap import ConfigSectionMap
 from chan94_algorithm import estimate_delay_interpolated
 from procrustes import procrustes
 import mds_self_tdoa
+import helpers
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.unicode'] = True
 c = 299700000
@@ -338,15 +339,32 @@ if __name__ == "__main__":
         print(coordinates_procrustes)
         reflection = np.linalg.det(tform["rotation"])
         pos_selfloc_procrustes =  np.dot(pos_selfloc,tform["rotation"]) + tform["translation"]
-        pdb.set_trace()
+
         
-        results_file="../log/results_post_selfloc" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-        if any(receivers):
-            f=open(results_file,"w")
-            pprint.pprint("##########################################################################################################################################################################################", f)
-            pprint.pprint("time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time", f)
-            pprint.pprint("##########################################################################################################################################################################################", f)
-        else:
-            sys.exit("log import failed")   
+        header =  "["  + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," \
+        + str(calibration_position) + "," + str(interpolation) + "," \
+        + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," \
+        + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
+        + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," + str(receivers.keys().index(ref_receiver)) + "]\n" 
+        results_file_selfloc = "../log/results_post_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
+        fi = open(results_file_selfloc,'w')
+        fi.write(header)
+        fi.write(str(transmitter_history) + "\n")
+        fi.write(str(timestamp_history) + "\n")
+        fi.write(str(delay_tensor.tolist()) + "\n")
+        fi.write(str(D.tolist()) + "\n")
+        fi.write(str(anchor_loop_delay_history) + "\n")
+        fi.write(str(anchor_positions.tolist()) + "\n")
+        fi.write(str(coordinates_procrustes.tolist()) + "\n")
+        fi.write(str(anchor_gt_positions.tolist()) + "\n")
+        fi.write(str(pos_selfloc.tolist()) + "\n")
+        fi.write(str(pos_selfloc_procrustes.tolist()) + "\n")
+        fi.write(str(tform.keys()) + "\n")
+        tform["rotation"] = tform["rotation"].tolist()
+        tform["translation"] = tform["translation"].tolist()
+        fi.write(str(tform.values()) + "\n")
+        fi.close()
+
+
     
-        print "selfloc test results written to: \n" +results_file
+        print "selfloc test results written to: \n" +results_file_selfloc

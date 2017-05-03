@@ -29,6 +29,7 @@ import dop
 from interpolation import corr_spline_interpolation
 import mds_self_tdoa
 from procrustes import procrustes
+import helpers
 
 class fusion_center():
     def __init__(self, options):
@@ -914,11 +915,11 @@ class fusion_center():
             gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
         time.sleep(0.05)
         if self.recording_results:
-            receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
+            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
             header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
-            + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
+            + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
             + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.selfloc_average_length) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "]\n" 
             results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
             fi = open(results_file_selfloc,'w')
@@ -939,41 +940,7 @@ class fusion_center():
             fi.write(str(tform.values()) + "\n")
             fi.close()
 
-    def build_results_strings(self, receivers):      
-        # build receivers strings for log file
-        receivers_position = "["
-        selected_positions = "["
-        receivers_gps = "["
-        receivers_antenna = "["
-        receivers_gain = "["
-        i = 1
-        for receiver in receivers.values():
-            if i == 1:
-                #TODO: general solution!!!
-                if receiver.selected_position in ["manual", "selfloc"]:
-                    receivers_position = receivers_position + str(receiver.coordinates)
-                else:
-                    receivers_position = receivers_position + str(receiver.coordinates_gps)
-                selected_positions = selected_positions + "'" + receiver.selected_position + "'"
-                receivers_gps = receivers_gps + "'" + receiver.gps + "'"
-                receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
-                receivers_gain = receivers_gain + str(receiver.gain)
-            else:
-                if receiver.selected_position in ["manual", "selfloc"]:
-                    receivers_position = receivers_position + "," + str(receiver.coordinates)
-                else:
-                    receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
-                selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
-                receivers_gps = receivers_gps + "," + "'" + receiver.gps + "'"
-                receivers_antenna = receivers_antenna + "," + "'" + receiver.antenna + "'"
-                receivers_gain = receivers_gain + "," + str(receiver.gain)
-            i = i + 1
-        receivers_position = receivers_position + "]"
-        selected_positions = selected_positions + "]"
-        receivers_gps = receivers_gps + "]"
-        receivers_antenna = receivers_antenna + "]"
-        receivers_gain = receivers_gain + "]"
-        return receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain
+
 
 
     def process_results(self, receivers, delay_auto_calibration):
@@ -1166,7 +1133,7 @@ class fusion_center():
 
         if self.recording_results:
             # build receivers strings for log file
-            receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain = self.build_results_strings(receivers)
+            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
 
             # remove grid from results to log
             for key in estimated_positions.keys():
@@ -1182,7 +1149,7 @@ class fusion_center():
             + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
-            + str(self.bbox) + "," + receivers_position + "," + selected_positions + "," \
+            + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
             + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," \
             + str(estimated_positions) + "," + str(index_ref_receiver) + "," \
             + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," \
@@ -1226,6 +1193,9 @@ class fusion_center():
             receiver.samples_calibration = np.array([])
             receiver.first_packet = True
             receiver.reception_complete = False
+            print("reception_complete in process_results:",receiver.reception_complete)
+        for key in self.receivers:
+            print("self.receivers.reception_complete process_results:",self.receivers[key].reception_complete) 
         self.processing=False
 
     def process_selfloc(self, receivers, delay_auto_calibration):
@@ -1281,7 +1251,10 @@ class fusion_center():
         # by now, unclear where to set this again(point when tx needs to be turned off again) self.transmitter = -1
 
     def main_loop(self):
+        reception_complete = {}
         while True:
+            for key in self.receivers:
+                print("sel.receivers.reception_complete main_loop:",self.receivers[key].reception_complete)  
             time.sleep(self.acquisition_time/4)
             if len(self.receivers) > 0:
                 if all(self.receivers[key].reception_complete for key in self.receivers):
@@ -1301,7 +1274,9 @@ class fusion_center():
                     self.probe_manager_lock.acquire()
                     reception_complete = {}
                     for key in self.receivers:
-                        reception_complete[key] = self.receivers[key].reception_complete                      
+                        reception_complete[key] = self.receivers[key].reception_complete
+                        print("reception_complete main_loop:",reception_complete[key])
+                        print("sel.receivers.reception_complete main_loop:",self.receivers[key].reception_complete)          
                     self.probe_manager.watcher(reception_complete)
                     self.probe_manager_lock.release()
 
