@@ -1193,9 +1193,6 @@ class fusion_center():
             receiver.samples_calibration = np.array([])
             receiver.first_packet = True
             receiver.reception_complete = False
-            print("reception_complete in process_results:",receiver.reception_complete)
-        for key in self.receivers:
-            print("self.receivers.reception_complete process_results:",self.receivers[key].reception_complete) 
         self.processing=False
 
     def process_selfloc(self, receivers, delay_auto_calibration):
@@ -1253,8 +1250,6 @@ class fusion_center():
     def main_loop(self):
         reception_complete = {}
         while True:
-            for key in self.receivers:
-                print("sel.receivers.reception_complete main_loop:",self.receivers[key].reception_complete)  
             time.sleep(self.acquisition_time/4)
             if len(self.receivers) > 0:
                 if all(self.receivers[key].reception_complete for key in self.receivers):
@@ -1275,8 +1270,6 @@ class fusion_center():
                     reception_complete = {}
                     for key in self.receivers:
                         reception_complete[key] = self.receivers[key].reception_complete
-                        print("reception_complete main_loop:",reception_complete[key])
-                        print("sel.receivers.reception_complete main_loop:",self.receivers[key].reception_complete)          
                     self.probe_manager.watcher(reception_complete)
                     self.probe_manager_lock.release()
 
