@@ -13,6 +13,7 @@ class receiver_item():
         self.selected_position= "manual"
         self.coordinates = [0.0,0.0]
         self.coordinates_gps = [0.0,0.0]
+        self.coordinates_selfloc = [0.0,0.0]
 
 class TableModelReceiversPosition(QtCore.QAbstractTableModel):
     def __init__(self, parent=None, *args):
@@ -33,7 +34,8 @@ class TableModelReceiversPosition(QtCore.QAbstractTableModel):
     def setData(self, index, value, role=QtCore.Qt.DisplayRole):
         if index.column() == 1:
             str_from_index = {0 : "manual",
-                              1 : "GPS",}[value]
+                              1 : "GPS",
+                              2 : "selfloc" }[value]
             serial_index = self.index(index.row(),index.column()-1)
             serial = self.data(serial_index)
             self.parent.receivers[serial].selected_position = str_from_index
@@ -185,6 +187,7 @@ class GpsComboDelegate(QtGui.QItemDelegate):
         li = []
         li.append("manual")
         li.append("GPS")
+        li.append("selfloc")
         combo.addItems(li)
         self.connect(combo, QtCore.SIGNAL("currentIndexChanged(int)"), self, QtCore.SLOT("currentIndexChanged()"))
         return combo
@@ -192,7 +195,8 @@ class GpsComboDelegate(QtGui.QItemDelegate):
     def setEditorData(self, editor, index):
         editor.blockSignals(True)
         n_index = {"manual": 0,
-                    "GPS" : 1,}[index.model().data(index)]
+                    "GPS" : 1,
+                    "selfloc" : 2,}[index.model().data(index)]
         editor.setCurrentIndex(n_index)
         editor.blockSignals(False)
 

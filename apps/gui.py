@@ -834,11 +834,16 @@ class gui(QtGui.QMainWindow):
                     pos_rx.insert(0,self.receivers[receiver].coordinates)
                 else:
                     pos_rx.append(self.receivers[receiver].coordinates)
-            else:
+            elif self.receivers[receiver].selected_position == "GPS":
                 if receiver == self.ref_receiver:
                     pos_rx.insert(0,self.receivers[receiver].coordinates_gps)
                 else:
                     pos_rx.append(self.receivers[receiver].coordinates_gps)
+            else:
+                if receiver == self.ref_receiver:
+                    pos_rx.insert(0,self.receivers[receiver].coordinates_selfloc)
+                else:
+                    pos_rx.append(self.receivers[receiver].coordinates_selfloc)
         for i in range(1,len(pos_rx)):
             if pos_tx is None:
                 hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx, self.results["delay"][i-1])

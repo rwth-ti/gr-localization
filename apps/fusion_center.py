@@ -306,16 +306,20 @@ class fusion_center():
             ref_receiver = self.receivers[self.ref_receiver]
             if ref_receiver.selected_position == "manual":
                 pos_ref = ref_receiver.coordinates
-            else:
+            elif ref_receiver.selected_position == "GPS" :
                 pos_ref = ref_receiver.coordinates_gps
+            else: 
+                pos_ref = ref_receiver.coordinates_selfloc
             index_delay_auto = 0
             for i in range(0,len(self.receivers)):
                 if not self.ref_receiver == self.receivers.keys()[i]:
                     receiver = self.receivers.values()[i]
                     if receiver.selected_position == "manual":
                         pos_receiver = receiver.coordinates
-                    else:
+                    elif receiver.selected_position == "GPS":
                         pos_receiver = receiver.coordinates_gps
+                    else:
+                        pos_receiver = receiver.coordinates_selfloc
                     d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                     d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
                     delay_true = (d_receiver-d_ref) * self.samp_rate * self.sample_interpolation / 299700000
