@@ -894,8 +894,9 @@ class fusion_center():
                     sum_square_tdoa += tdoa**2
                     D[j,l,k] = tdoa
         pos_selfloc = None
-        stress = 10
-        self.pos_selfloc, stress = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 500, 1.0, stress)
+        stress_list = [10]
+        self.pos_selfloc, stress_list = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 500, 1.0, stress_list)
+        print(stress_list)
         for j, receiver in enumerate(receivers.values()):
                 receiver.coordinates_selfloc = self.pos_selfloc[j]
                 receiver.selected_position = "selfloc"
@@ -938,10 +939,11 @@ class fusion_center():
             fi.write(str(self.anchor_gt_positions.tolist()) + "\n")
             fi.write(str(self.pos_selfloc.tolist()) + "\n")
             fi.write(str(self.pos_selfloc_procrustes.tolist()) + "\n")
-            fi.write(str(tform.keys()) + "\n")
+            #fi.write(str(tform.keys()) + "\n")
             tform["rotation"] = tform["rotation"].tolist()
             tform["translation"] = tform["translation"].tolist()
-            fi.write(str(tform.values()) + "\n")
+            #fi.write(str(tform.values()) + "\n")
+            fi.write(str(stress_list) + "\n")
             fi.close()
 
 

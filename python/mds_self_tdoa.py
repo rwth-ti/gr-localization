@@ -21,7 +21,7 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
     else: 
         pos_conf = prev_coordinates
     
-    stress = 10
+    stress = stress_last[-1]
     sigma = 0
     fail_count = 0
     while True:
@@ -52,9 +52,9 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
             it += 1
             # calculate STRESS criterion
             if max_it != 1:
-                stress_last = stress
+                stress_last.append(stress)
             stress = np.sqrt(sum_tdoa_diff/sum_square_tdoa)
-            stress_ratio = stress_last - stress
+            stress_ratio = stress_last[-1] - stress
             # center points
             center_conf = np.mean(pos_conf, axis = 0)
             pos_conf = pos_conf - center_conf
@@ -69,7 +69,8 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
     #             pos_conf = bsxfun(@minus,pos_conf,pos_conf(1,:)-pos_sensors(1,:))
         #     pos_conf(1,:) = pos_sensors(1,:)
         #     pos_conf(2,:) = pos_sensors(2,:)
-    return pos_conf, stress
+    stress_last.append(stress)
+    return pos_conf, stress_last
 
 #receivers list will need to be passed later
 def anchor(pos_sensors, pos_beacons, D_beacons):

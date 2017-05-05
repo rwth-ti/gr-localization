@@ -47,6 +47,8 @@ def parse_options():
                       help="hack to crop the default gui map to the region in front of the receiers")
     parser.add_option("-s", "--save", action="store_true", default=False,
                       help="Save plots to files")
+    parser.add_option("", "--stress", action="store_true", default=False,
+                      help="Plot stress function over time")
     (options, args) = parser.parse_args()
     if len(args) == 0 or (len(args) == 1 and options.replay) or len(args) >2:
         parser.error('Invalid number of inputs!')
@@ -98,6 +100,21 @@ if __name__ == "__main__":
     pos_selfloc_procrustes = np.array(eval(f_results.readline()))
     #tform = dict(zip(eval(f_results.readline()),eval(f_results.readline())))
     #print tform
+    stress_list = eval(f_results.readline())
+
+    plt.rc('text', usetex=True)
+    #plt.rc('font',**{'family':'serif','serif':['Helvetica']})
+    plt.rcParams['text.latex.preamble'] = [
+       r'\usepackage{siunitx}',   # i need upright \micro symbols, but you need...
+       r'\sisetup{detect-all}',   # ...this to force siunitx to actually use your fonts
+       r'\usepackage{amssymb, amsmath}',
+       r'\usepackage[EULERGREEK]{sansmath}',  # load up the sansmath so that math -> helvet
+       r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
+       ]
+    params = {'text.usetex' : True,
+          'font.size' : 16,
+          }
+    plt.rcParams.update(params) 
 
     print "+".join(str(j).replace(".",",") for j in bbox)
     if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
@@ -248,6 +265,16 @@ if __name__ == "__main__":
         # concatenate D and anchor_delay_history! for delays
         pass
 
+    if options.stress:
+        figure_stress = plt.figure()
+        axis_stress = figure_stress.add_subplot(111)
+        axis_stress.plot(stress_list)
+        axis_stress.set_ylabel(r'stress')
+        axis_stress.set_xlabel(r'Iterations')
+        if options.save:
+            #p.figure_map.tight_layout()
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_stress.pdf", dpi=150)
+
     plt.show()
     
     
@@ -364,7 +391,5 @@ if __name__ == "__main__":
         tform["translation"] = tform["translation"].tolist()
         fi.write(str(tform.values()) + "\n")
         fi.close()
-
-
-    
         print "selfloc test results written to: \n" +results_file_selfloc
+
