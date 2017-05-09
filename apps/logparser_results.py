@@ -7,6 +7,7 @@ matplotlib.rcParams['text.latex.unicode'] = True
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import numpy as np
+from numpy import array
 import sys, warnings, os
 from pyproj import Proj, transform
 from PIL import Image
@@ -26,6 +27,8 @@ from procrustes import procrustes
 
 # print with approopriate resolution
 np.set_printoptions(precision=20)
+matplotlib.rc('text', usetex=True)
+matplotlib.rc('font', family='serif')
 plt.rc('text', usetex=True)
 plt.rc('font', family='serif')
 
@@ -726,7 +729,7 @@ if __name__ == "__main__":
         offset=0.5
         bins = np.arange(np.min(delays_calibrated_ns[:,0])-1,np.max(delays_calibrated_ns[:,0])+1,1/(sampling_rate*10**-9*interpolation))
         ax_hist.hist(delays_calibrated_ns[:,0], bins=bins+offset, histtype='stepfilled', facecolor='green', alpha=0.75, label=labeld21)
-        bins = np.arange(np.min(delays_calibrated_ns[:,1])-1,np.max(delays_calibrated[:,1])+1,1/(sampling_rate*10**-9*interpolation))
+        bins = np.arange(np.min(delays_calibrated_ns[:,1])-1,np.max(delays_calibrated_ns[:,1])+1,1/(sampling_rate*10**-9*interpolation))
         ax_hist.hist(delays_calibrated_ns[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
         plt.legend()
         plt.autoscale(enable=True, axis='x', tight=True)

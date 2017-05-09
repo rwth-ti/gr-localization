@@ -38,7 +38,6 @@ def chan_3rx(pos_rx, d, xk_prio):
         #print "r21:"+str(r21)+"r31:"+str(r31)
         rmax21= np.sqrt(x21**2+y21**2)
         rmax31= np.sqrt(x31**2+y31**2)
-        
         #If a TDOA value that leads to distances greater than the real distance between 2 receivers occurs, clip it to maximum value.
         if r21>rmax21:
             r21=rmax21
@@ -238,8 +237,7 @@ def localize(receivers, ref_receiver, bbox, xk_prio=np.array([]), delay = []):
     else:
         for j, receiver in enumerate(receivers):
             if receiver != ref_receiver:
-                    d.append(delay[j]/sample_rate)
-
+                d.append(delay[j]/sample_rate)
 
     if len(pos_rx) == 3:
         return chan_3rx(pos_rx, d, xk_prio)

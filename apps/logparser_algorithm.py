@@ -19,6 +19,7 @@ from  kalman import kalman_filter
 from ConfigSectionMap import ConfigSectionMap
 import dop 
 from chan94_algorithm import estimate_delay_interpolated
+from interpolation import corr_spline_interpolation
 
 c = 299700000
 
@@ -31,7 +32,7 @@ def parse_options():
                       help="Geographical Map")
     parser.add_option("", "--enable-kalman", action="store_true", default=False,
                       help="Do Kalman filtering. Will ignore real time filtered values.")
-    parser.add_option("", "--reference-selection", type = "str", default="Min-DOP",
+    parser.add_option("", "--reference-selection", type = "str", default="Manual",
                       help="reference selection algorithm. Implemented options are: Manual, Max-signal-power, Min-signal-power, Min-DOP ")
     parser.add_option("-c", "--config", type="str", default="",
                       help="Configuration File for Kalman Filter")
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     lo_offset = acquisition[11]
     bbox = acquisition[12]
     receivers_positions = acquisition[13]
-    receivers_positions[1] = np.array(receivers_positions[1])#+array([-1.5,-2])
+    #receivers_positions[1] = np.array(receivers_positions[1])#+array([-1.5,-2])
     selected_positions = acquisition[14]
     receivers_gps = acquisition[15]
     receivers_antenna = acquisition[16]
@@ -85,6 +86,7 @@ if __name__ == "__main__":
         acquisition_time = acquisition[21]
         kalman_states = acquisition[22]
         init_settings_kalman = acquisition[23]
+        init_settings_kalman["num_rx"] = len(receivers_positions) 
     except:
         pass
     idx = 1
@@ -131,7 +133,7 @@ if __name__ == "__main__":
     
     f_results.close()
     f_samples = open(args[1],"r")
-
+    delay = []
     
     for line_number, line in enumerate(f_samples.readlines()):  
         if line_number >= len(timestamps):
@@ -150,11 +152,12 @@ if __name__ == "__main__":
             receivers[receiver_idx].samples_to_receive = samples_to_receive
             receivers[receiver_idx].samples = receivers_samples[receiver_idx] 
             receivers[receiver_idx].correlation_interpolation = True
-        for receiver in receivers.values():
-            x = np.linspace(0,len(receiver.samples),len(receiver.samples))
-            f = interpolate.interp1d(x, receiver.samples)
-            x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * interpolation)
-            #receiver.samples = f(x_interpolated)
+        if interpolation != 1:
+            for receiver in receivers.values():
+                x = np.linspace(0,len(receiver.samples),len(receiver.samples))
+                f = interpolate.interp1d(x, receiver.samples)
+                x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * interpolation)
+                #receiver.samples = f(x_interpolated)
         for receiver in receivers.values():
             if receiver != ref_receiver:
                 correlation = np.absolute(np.correlate(receiver.samples, receivers[ref_receiver].samples, "full"))
@@ -240,7 +243,15 @@ if __name__ == "__main__":
 
                 delays = (np.array(delays)+np.true_divide(np.array(delays_calibration),10)).tolist()
                 '''
-                line = "[" + str(timestamps[i]) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps ) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver) + "," + str(auto_calibrate) + "," + str(acquisition_time) + ","+ str(xk_1.tolist()).replace('\n', '') + ","+ str(init_settings_kalman) +","+  "'" + str(reference_selection) +"'"+","+str(x_cov) + ","+str(y_cov) +"]"
+                delay = []
+                for idx in range(len(receivers_steps[i])):
+                    if not ref_receiver == idx:
+                        # For the spline interpolation of the cross correlation, a sufficient support is necessary
+                        window_size = 13
+                        if receivers_steps[i][idx].correlation_interpolation:
+                            correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers_steps[i][idx].samples, receivers_steps[i][ref_receiver].samples,window_size)
+                            delay.append(delay_acquisition)
+                line = "[" + str(timestamps[i]) + "," + str(delay) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps ) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver) + "," + str(auto_calibrate) + "," + str(acquisition_time) + ","+ str(xk_1.tolist()).replace('\n', '') + ","+ str(init_settings_kalman) +","+  "'" + str(reference_selection) +"'"+","+str(x_cov) + ","+str(y_cov) +"]"
                 pprint.pprint(line,f,width=9000)
 
         if options.algorithm=="grid_based" or options.algorithm=="both":        
@@ -274,14 +285,24 @@ if __name__ == "__main__":
                             ref_receiver = np.argmin(signal_strength)
                         if options.reference_selection == "Max-signal-power":
                             ref_receiver = np.argmax(signal_strength)
+
+                        
                 if options.reference_selection == "Min-DOP":
                     ref_receiver,dop_location, H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers_steps[i])
                 print ref_receiver
-                estimated_positions["chan"]=chan94_algorithm.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
+                delay = []
+                for idx in range(len(receivers_steps[i])):
+                    if not ref_receiver == idx:
+                        # For the spline interpolation of the cross correlation, a sufficient support is necessary
+                        window_size = 13
+                        if receivers_steps[i][idx].correlation_interpolation:
+                            correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers_steps[i][idx].samples, receivers_steps[i][ref_receiver].samples,window_size)
+                            delay.append(delay_acquisition)
+                estimated_positions["chan"] = chan94_algorithm.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
             elif options.algorithm=="grid_based" or options.algorithm=="both":
                 estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],np.round(basemap(bbox[2],bbox[3])),1,interpolation*samples_to_receive,ref_receiver)
                 estimated_positions["grid_based"]["grid"]=0
-            line = "[" + str(timestamps[i]) + "," + str(delays) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver) + "," + str(auto_calibrate)+ "," + str(acquisition_time) + "," + str(xk_1).replace('\n', '') + "," + str(init_settings_kalman) + "," + "'" + str(reference_selection) +"'"+","+str(x_cov) + ","+str(y_cov) + "]"
+            line = "[" + str(timestamps[i]) + "," + str(delay) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver) + "," + str(auto_calibrate)+ "," + str(acquisition_time) + "," + str(xk_1).replace('\n', '') + "," + str(init_settings_kalman) + "," + "'" + str(reference_selection) +"'"+","+str(x_cov) + ","+str(y_cov) + "]"
             pprint.pprint(line,f,width=9000)
     f.close()
        
