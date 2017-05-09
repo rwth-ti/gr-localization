@@ -280,7 +280,7 @@ def parse_options():
                       help="real time plotting of measurements and ground-truth(if passed)")
     parser.add_option("", "--skip-acquisitions", type="int", default=0,
                       help="skip the first x acquisitons.")
-    parser.add_option("", "--crop-ict", action="store_true", default= True, 
+    parser.add_option("", "--crop-ict", action="store_true", default= False, 
                       help="hack to crop the default gui map to the region in front of the receiers")
     (options, args) = parser.parse_args()
     if len(args)<1:   # if filename is not given

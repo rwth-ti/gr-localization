@@ -218,7 +218,7 @@ class gui(QtGui.QMainWindow):
         title.setFont(Qt.QFont("Helvetica", 10, Qt.QFont.Bold))
         self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.yLeft, title)
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
-        self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.RightLegend);
+        self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.RightLegend)
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
 
         # create and set model for receivers position table view
