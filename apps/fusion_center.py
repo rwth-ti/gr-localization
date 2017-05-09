@@ -103,13 +103,16 @@ class fusion_center():
         
         # selfloc
         self.pos_selfloc = []
+        self.alpha = 1.0
+        self.init_stress = 10.0
+        self.max_it = 99 
 
         # Anchoring:
         self.num_anchor = 0
         self.num_anchors = 3
         self.anchoring = False
         self.anchor_loop = False
-        self.achor_average = 10
+        self.anchor_average = 10
         self.anchor_loop_delays = []
         self.anchor_positions = []
         self.anchor_gt_positions = []
@@ -136,13 +139,14 @@ class fusion_center():
         self.self_localization = False
         self.transmitter = -1 # No sensor is transmitting
         self.transmitter_debug = 0
-        self.selfloc_average_length = int(options.selfloc_average_length)
+        self.sample_average = int(options.selfloc_average_length)
         self.transmitter_history = []
         self.timestamp_history = []
         #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
         self.delay_tensor = [[[[]]]]
         self.cnt_j = 0
         self.cnt_average = 0
+        self.tx_gain = 50 #in db
 
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
@@ -182,8 +186,15 @@ class fusion_center():
         self.rpc_manager.add_interface("remove_calibration",self.remove_calibration)
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("set_calibration_average",self.set_calibration_average)
+        self.rpc_manager.add_interface("set_num_anchors",self.set_num_anchors)
+        self.rpc_manager.add_interface("set_anchor_average",self.set_anchor_average)
+        self.rpc_manager.add_interface("set_tx_gain",self.set_tx_gain)
+        self.rpc_manager.add_interface("set_sample_average",self.set_sample_average)
         self.rpc_manager.add_interface("set_location_average_length",self.set_location_average_length)
         self.rpc_manager.add_interface("set_target_dynamic",self.set_target_dynamic)
+        self.rpc_manager.add_interface("set_init_stress",self.set_init_stress)
+        self.rpc_manager.add_interface("set_max_it",self.set_max_it)
+        self.rpc_manager.add_interface("set_alpha",self.set_alpha)
         self.rpc_manager.add_interface("set_max_acc",self.set_max_acc)
         self.rpc_manager.add_interface("set_measurement_noise",self.set_measurement_noise)
         self.rpc_manager.add_interface("start_correlation",self.start_correlation)
@@ -345,6 +356,21 @@ class fusion_center():
         self.target_dynamic = target_dynamic
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_target_dynamic",[target_dynamic])
+
+    def set_alpha(self, alpha):
+        self.alpha = alpha
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_alpha",[alpha])
+
+    def set_init_stress(self, init_stress):
+        self.init_stress = init_stress
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_init_stress",[init_stress])
+
+    def set_max_it(self, max_it):
+        self.max_it = max_it
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_max_it",[max_it])
             
     def set_measurement_noise(self, measurement_noise):
         self.measurement_noise = measurement_noise
@@ -357,6 +383,30 @@ class fusion_center():
         self.calibration_average = calibration_average
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_calibration_average",[calibration_average])
+
+    def set_sample_average(self, sample_average):
+        self.sample_average = sample_average
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_sample_average",[sample_average])
+
+    def set_anchor_average(self, anchor_average):
+        self.anchor_average = anchor_average
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_anchor_average",[anchor_average])
+
+    def set_tx_gain(self, tx_gain):
+        self.tx_gain = tx_gain
+        for receiver in self.receivers.values():
+            receiver.set_tx_gain(tx_gain)
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_tx_gain",[tx_gain])
+            #TODO:new construction of usrp sink
+
+
+    def set_num_anchors(self, num_anchors):
+        self.num_anchors = num_anchors
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_num_anchors",[num_anchors])
 
     def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
         if len(self.calibration_loop_delays) > 0:
@@ -433,6 +483,10 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_bw_calibration",[self.bw_calibration])
             gui.rpc_manager.request("set_gui_auto_calibrate",[self.auto_calibrate])
             gui.rpc_manager.request("set_gui_calibration_average",[self.calibration_average])
+            gui.rpc_manager.request("set_gui_sample_average",[self.sample_average])
+            gui.rpc_manager.request("set_gui_anchor_average",[self.anchor_average])
+            gui.rpc_manager.request("set_gui_num_anchors",[self.num_anchors])
+            gui.rpc_manager.request("set_gui_tx_gain",[self.tx_gain])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_resolution",[self.grid_based["resolution"]])
             gui.rpc_manager.request("set_gui_TDOA_grid_based_num_samples",[self.grid_based["num_samples"]])
             gui.rpc_manager.request("set_gui_record_results",[self.record_results])
@@ -450,9 +504,12 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_acquisition_time",[self.acquisition_time])
             gui.rpc_manager.request("set_gui_grid_based_active",[self.grid_based_active])
             gui.rpc_manager.request("set_gui_target_dynamic",[self.target_dynamic])
+            gui.rpc_manager.request("set_gui_max_it",[self.max_it])
+            gui.rpc_manager.request("set_gui_alpha",[self.alpha])
+            gui.rpc_manager.request("set_gui_init_stress",[self.init_stress])
             gui.rpc_manager.request("set_gui_max_acc",[self.max_acc])
             gui.rpc_manager.request("set_gui_measurement_noise",[self.measurement_noise])
-            gui.rpc_manager.request("set_num_anchors",[self.num_anchors])
+
 
 
             for gui in self.guis.values():
@@ -605,13 +662,13 @@ class fusion_center():
         self.samples_file = "../log/samples_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
-        #acquisitions = len(self.receivers)*self.selfloc_average_length
-        acquisitions = len(self.receivers)*self.selfloc_average_length
+        #acquisitions = len(self.receivers)*self.sample_average
+        acquisitions = len(self.receivers)*self.sample_average
         self.transmitter_history = []
         self.timestamp_history = []
         self.cnt_j = 0
         self.cnt_average = 0
-        self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.selfloc_average_length))
+        self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.sample_average))
         self.switch_transmitter(self.cnt_j)
         self.self_localization = True
         self.run_loop = True
@@ -852,9 +909,8 @@ class fusion_center():
             else:
                 return False
             
-    def start_anchoring_loop(self, num_anchor, average_length):
+    def start_anchoring_loop(self, num_anchor):
         self.num_anchor = num_anchor
-        self.anchor_average = average_length
         print("num_anchor: ", num_anchor)
         #tbd build up similar to calibration loop?
         #acquire delay/position similar to calibration_loop_delays/calibration_loop
@@ -862,7 +918,7 @@ class fusion_center():
         self.anchor_loop = True
         self.recording_results = False
         self.run_loop = True
-        self.start_receivers(average_length)
+        self.start_receivers(self.anchor_average)
 
     # rename/even necessary?!
     def set_anchor_position(self,position):
@@ -890,12 +946,12 @@ class fusion_center():
             for l in range(len(receivers)):
                 for k in range(len(receivers)):
                     # average distance differences
-                    tdoa = sum(self.delay_tensor[j,l,k]) / self.selfloc_average_length / self.samp_rate * 299700000.0
+                    tdoa = sum(self.delay_tensor[j,l,k]) / self.sample_average / self.samp_rate * 299700000.0
                     sum_square_tdoa += tdoa**2
                     D[j,l,k] = tdoa
         pos_selfloc = None
-        stress_list = [10]
-        self.pos_selfloc, stress_list = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, 500, 1.0, stress_list)
+        stress_list = [self.init_stress]
+        self.pos_selfloc, stress_list = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, stress_list)
         print(stress_list)
         for j, receiver in enumerate(receivers.values()):
                 receiver.coordinates_selfloc = self.pos_selfloc[j]
@@ -925,7 +981,7 @@ class fusion_center():
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
-            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.selfloc_average_length) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "]\n" 
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "]\n" 
             results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
             fi = open(results_file_selfloc,'w')
             fi.write(header)
@@ -1228,7 +1284,7 @@ class fusion_center():
         self.cnt_average += 1
         self.transmitter_history.append(self.cnt_j)
         self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
-        if self.cnt_average == self.selfloc_average_length:
+        if self.cnt_average == self.sample_average:
             self.cnt_average = 0
             self.cnt_j += 1
             if self.cnt_j == len(receivers):

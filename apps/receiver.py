@@ -148,6 +148,7 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("program_gps_position",self.program_gps_position)
         self.rpc_manager.add_interface("stop_transmitter", self.stop_transmitter)
         self.rpc_manager.add_interface("start_transmitter", self.start_transmitter)
+        self.rpc_manager.add_interface("set_tx_gain", self.set_tx_gain)
         self.rpc_manager.start_watcher()
 
 
@@ -197,6 +198,9 @@ class top_block(gr.top_block):
         time.sleep(0.0001)
         self.unlock()
 
+    def set_tx_gain(self,tx_gain):
+        self.tx_bpsk_0.set_gain(tx_gain)
+
     def set_run_loop(self, run_loop):
         self.run_loop = run_loop
 
@@ -210,7 +214,6 @@ class top_block(gr.top_block):
 
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)
-        #self.tx_bpsk_0.set_gain(gain)
 
     def set_antenna(self,antenna):
         self.usrp_source.set_antenna(antenna, 0)

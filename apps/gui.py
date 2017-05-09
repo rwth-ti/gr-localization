@@ -100,6 +100,10 @@ class gui(QtGui.QMainWindow):
         self.map_file = ""
         self.coordinates_type = ""
 
+        self.alpha = 1.0
+        self.init_stres = 10.0
+        self.max_it = 99
+
         self.grid_based_active = False
 
         self.gui.comboBoxMapType.addItem("Online")
@@ -154,9 +158,16 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_coordinates_type",self.set_gui_coordinates_type)
         self.rpc_manager.add_interface("set_gui_auto_calibrate",self.set_gui_auto_calibrate)
         self.rpc_manager.add_interface("set_gui_calibration_average",self.set_gui_calibration_average)
+        self.rpc_manager.add_interface("set_gui_sample_average",self.set_gui_sample_average)
+        self.rpc_manager.add_interface("set_gui_anchor_average",self.set_gui_anchor_average)
+        self.rpc_manager.add_interface("set_gui_num_anchors",self.set_gui_num_anchors)
+        self.rpc_manager.add_interface("set_gui_tx_gain",self.set_gui_tx_gain)
         self.rpc_manager.add_interface("set_gui_location_average_length",self.set_gui_location_average_length)
         self.rpc_manager.add_interface("set_gui_measurement_noise",self.set_gui_measurement_noise)
         self.rpc_manager.add_interface("set_gui_target_dynamic",self.set_gui_target_dynamic)
+        self.rpc_manager.add_interface("set_gui_alpha",self.set_gui_alpha)
+        self.rpc_manager.add_interface("set_gui_max_it",self.set_gui_max_it)
+        self.rpc_manager.add_interface("set_gui_init_stress",self.set_gui_init_stress)
         self.rpc_manager.add_interface("set_gui_max_acc",self.set_gui_max_acc)
         self.rpc_manager.add_interface("set_gui_record_results",self.set_gui_record_results)
         self.rpc_manager.add_interface("set_gui_record_samples",self.set_gui_record_samples)
@@ -168,7 +179,6 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("calibration_loop",self.calibration_loop)
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
         self.rpc_manager.add_interface("start_anchoring", self.start_anchoring)
-        self.rpc_manager.add_interface("set_num_anchors", self.set_num_anchors)
         self.rpc_manager.add_interface("set_anchor_position", self.set_anchor_position)
         self.rpc_manager.start_watcher()
 
@@ -324,19 +334,24 @@ class gui(QtGui.QMainWindow):
         self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
-        self.connect(self.gui.pushButtonStartTransmitter, QtCore.SIGNAL("clicked()"), self.switch_transmitter)
         self.connect(self.gui.pushButtonSelfLocalization, QtCore.SIGNAL("clicked()"), self.start_selfloc_loop)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
-        self.connect(self.gui.pushButtonStopTransmitter, QtCore.SIGNAL("clicked()"), self.stop_transmitter)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
         self.connect(self.gui.pushButtonStopReceiversLoop, QtCore.SIGNAL("clicked()"), self.stop_loop)
         self.connect(self.gui.pushButtonSetCalibration, QtCore.SIGNAL("clicked()"), self.set_calibration)
         self.connect(self.gui.checkBoxAutocalibrate, QtCore.SIGNAL("clicked()"), self.set_auto_calibrate)
         self.connect(self.gui.calibrationAverageSpin, QtCore.SIGNAL("valueChanged(int)"), self.set_calibration_average)
+        self.connect(self.gui.spinBoxSampleAverage, QtCore.SIGNAL("valueChanged(int)"), self.set_sample_average)
+        self.connect(self.gui.spinBoxAnchorAverage, QtCore.SIGNAL("valueChanged(int)"), self.set_anchor_average)
+        self.connect(self.gui.spinBoxNumAnchors, QtCore.SIGNAL("valueChanged(int)"), self.set_num_anchors)
+        self.connect(self.gui.spinBoxTransmitGain, QtCore.SIGNAL("valueChanged(int)"), self.set_tx_gain)
         self.connect(self.gui.spinBoxAverageLength, QtCore.SIGNAL("valueChanged(int)"), self.set_location_average_length)
         self.connect(self.gui.spinBoxMeasurementNoise, QtCore.SIGNAL("valueChanged(double)"), self.set_measurement_noise)
+        self.connect(self.gui.spinBoxMaxIt, QtCore.SIGNAL("valueChanged(int)"), self.set_max_it)
         self.connect(self.gui.doubleSpinBoxDynamic, QtCore.SIGNAL("valueChanged(double)"), self.set_target_dynamic)
+        self.connect(self.gui.doubleSpinBoxAlpha, QtCore.SIGNAL("valueChanged(double)"), self.set_alpha)
+        self.connect(self.gui.doubleSpinBoxInitStress, QtCore.SIGNAL("valueChanged(double)"), self.set_init_stress)
         self.connect(self.gui.spinBoxMaxAcc, QtCore.SIGNAL("valueChanged(double)"), self.set_max_acc)
         self.connect(self.gui.spinBoxTrackPlotLength, QtCore.SIGNAL("valueChanged(int)"), self.set_trackplot_length)
         self.connect(self.gui.pushButtonUpdate, QtCore.SIGNAL("clicked()"), self.update_receivers)
@@ -400,9 +415,6 @@ class gui(QtGui.QMainWindow):
             self.calibration_setButton.setEnabled(True)
             self.calibration_gpsInputButton.setEnabled(True)
 
-    def set_num_anchors(self,num_anchors):
-        self.num_anchors = num_anchors
-
     def set_anchor_position(self, position):
         self.anchor_setButton.setEnabled(True)
         self.anchor_gpsInputButton.setEnabled(True)
@@ -438,7 +450,7 @@ class gui(QtGui.QMainWindow):
     def start_anchoring_loop(self):
         self.pushButtonOK.setEnabled(False)
         if self.num_anchor_position < self.num_anchors:
-            self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position,self.calibration_average])
+            self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position])
             self.anchor_setButton.setEnabled(False)
             self.anchor_gpsInputButton.setEnabled(False)
         else:
@@ -471,6 +483,22 @@ class gui(QtGui.QMainWindow):
         self.calibration_average = self.gui.calibrationAverageSpin.value()
         self.rpc_manager.request("set_calibration_average",[self.calibration_average])
 
+    def set_sample_average(self):
+        self.sample_average = self.gui.spinBoxSampleAverage.value()
+        self.rpc_manager.request("set_sample_average",[self.sample_average])
+
+    def set_anchor_average(self):
+        self.anchor_average = self.gui.spinBoxAnchorAverage.value()
+        self.rpc_manager.request("set_anchor_average",[self.anchor_average])
+
+    def set_num_anchors(self):
+        self.num_anchors = self.gui.spinBoxNumAnchors.value()
+        self.rpc_manager.request("set_num_anchors",[self.num_anchors])
+
+    def set_tx_gain(self):
+        self.tx_gain = self.gui.spinBoxTransmitGain.value()
+        self.rpc_manager.request("set_tx_gain",[self.tx_gain])
+
     def set_location_average_length(self):
         self.location_average_length = self.gui.spinBoxAverageLength.value()
         self.rpc_manager.request("set_location_average_length",[self.location_average_length])
@@ -478,6 +506,18 @@ class gui(QtGui.QMainWindow):
     def set_target_dynamic(self):
         self.target_dynamic = self.gui.doubleSpinBoxDynamic.value()
         self.rpc_manager.request("set_target_dynamic",[self.target_dynamic])
+
+    def set_max_it(self):
+        self.max_it = self.gui.spinBoxMaxIt.value()
+        self.rpc_manager.request("set_max_it",[self.max_it])
+
+    def set_alpha(self):
+        self.alpha = self.gui.doubleSpinBoxAlpha.value()
+        self.rpc_manager.request("set_alpha",[self.alpha])
+
+    def set_init_stress(self):
+        self.init_stress = self.gui.doubleSpinBoxInitStress.value()
+        self.rpc_manager.request("set_init_stress",[self.init_stress])
         
     def set_max_acc(self):
         self.max_acc = self.gui.spinBoxMaxAcc.value()
@@ -1087,6 +1127,22 @@ class gui(QtGui.QMainWindow):
         self.calibration_average = calibration_average
         self.gui.calibrationAverageSpin.setValue(calibration_average)
 
+    def set_gui_num_anchors(self, num_anchors):
+        self.num_anchors = num_anchors
+        self.gui.spinBoxNumAnchors.setValue(num_anchors)
+
+    def set_gui_sample_average(self, sample_average):
+        self.sample_average = sample_average
+        self.gui.spinBoxSampleAverage.setValue(sample_average)
+
+    def set_gui_anchor_average(self, anchor_average):
+        self.anchor_average = anchor_average
+        self.gui.spinBoxAnchorAverage.setValue(anchor_average)
+
+    def set_gui_tx_gain(self, tx_gain):
+        self.tx_gain = tx_gain
+        self.gui.spinBoxTransmitGain.setValue(tx_gain)
+
     def set_gui_location_average_length(self, location_average_length):
         self.location_average_length = location_average_length
         self.gui.spinBoxAverageLength.setValue(location_average_length)
@@ -1098,6 +1154,18 @@ class gui(QtGui.QMainWindow):
     def set_gui_target_dynamic(self, target_dynamic):
         self.target_dynamic = target_dynamic
         self.gui.doubleSpinBoxDynamic.setValue(target_dynamic)
+
+    def set_gui_init_stress(self, init_stress):
+        self.init_stress = init_stress
+        self.gui.doubleSpinBoxInitStress.setValue(init_stress)
+
+    def set_gui_max_it(self, max_it):
+        self.max_it = max_it
+        self.gui.spinBoxMaxIt.setValue(max_it)
+
+    def set_gui_alpha(self, alpha):
+        self.alpha = alpha
+        self.gui.doubleSpinBoxAlpha.setValue(alpha)
      
     def set_gui_max_acc(self, max_acc):
         self.max_acc = max_acc
