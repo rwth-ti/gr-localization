@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
     f_samples.close()
     
-    results_file="../log/results_post_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
+    results_file="../log/results_post_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
     if any(receivers):
         f=open(results_file,"w")
         pprint.pprint("##########################################################################################################################################################################################", f)
