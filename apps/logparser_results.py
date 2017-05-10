@@ -15,6 +15,7 @@ import math
 import datetime
 import calendar
 import requests
+import pdb
 from StringIO import StringIO
 from mpl_toolkits.basemap import Basemap
 import time
@@ -27,10 +28,8 @@ from procrustes import procrustes
 
 # print with approopriate resolution
 np.set_printoptions(precision=20)
-matplotlib.rc('text', usetex=True)
-matplotlib.rc('font', family='serif')
 plt.rc('text', usetex=True)
-plt.rc('font', family='serif')
+plt.rc('font', size = '15', family='serif', serif = 'cm10')
 
 class parser():
     def __init__(self,bbox,filename,options):
@@ -446,22 +445,7 @@ if __name__ == "__main__":
     if any(delays_calibration_list) and any(delays_auto_calibration_list):
         delays_not_calibrated = np.array(delays_list) - np.array(delays_auto_calibration_list) - np.array(delays_calibration_list)
 
-    filename = args[0].split("/")[-1].split(".")[0]
-
-    plt.rc('text', usetex=True)
-    #plt.rc('font',**{'family':'serif','serif':['Helvetica']})
-    plt.rcParams['text.latex.preamble'] = [
-       r'\usepackage{siunitx}',   # i need upright \micro symbols, but you need...
-       r'\sisetup{detect-all}',   # ...this to force siunitx to actually use your fonts
-       r'\usepackage{amssymb, amsmath}',
-       r'\usepackage[EULERGREEK]{sansmath}',  # load up the sansmath so that math -> helvet
-       r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
-       ]
-    params = {'text.usetex' : True,
-          'font.size' : 16,
-          }
-    plt.rcParams.update(params) 
-    
+    filename = args[0].split("/")[-1].split(".")[0]    
     t_list=np.array(t_list)
     if any(np.diff(t_list) != acquisition_time):
         print "warning: measurements missing"
@@ -608,7 +592,7 @@ if __name__ == "__main__":
             p.ax.axis([88,172,57,114])
             p.basemap.drawmapscale(lon=6.06201, lat=50.77874, lon0=6.06201, lat0=50.77874, length=20,  units='m',barstyle='fancy',fontsize = 30, yoffset=1.2)
         else:
-            p.basemap.drawmapscale(lon=bbox[0]-0.17*(bbox[0]-bbox[2]), lat=bbox[1]-0.05*(bbox[1]-bbox[3]), lon0=bbox[0]-0.17*(bbox[0]-bbox[2]), lat0=bbox[1]-0.05*(bbox[1]-bbox[3]), length=int(np.linalg.norm(basemap(bbox[0],bbox[1])-basemap(bbox[2],bbox[1]))),  units='m',barstyle='fancy',fontsize = 18)
+            p.basemap.drawmapscale(lon=bbox[0]-0.17*(bbox[0]-bbox[2]), lat=bbox[1]-0.05*(bbox[1]-bbox[3]), lon0=bbox[0]-0.17*(bbox[0]-bbox[2]), lat0=bbox[1]-0.05*(bbox[1]-bbox[3]), length=50,  units='m',barstyle='fancy',fontsize = 18)
             
         """
         p.ax.set_xticks(np.linspace(80,180,int(10)))
@@ -718,20 +702,22 @@ if __name__ == "__main__":
         d21variance = np.var(delays_calibrated_ns[:,0])
         d31mean = np.mean(delays_calibrated_ns[:,1])
         d31variance = np.var(delays_calibrated_ns[:,1])
-        labeld21 = r'$\Delta\tau_{21}$, $\mu=' + "{0:.5f}".format(d21mean) + '$, $\sigma^2=' + "{0:.5f}".format(d21variance) + '$'
-        labeld31 = r'$\Delta\tau_{31}$, $\mu=' + "{0:.5f}".format(d31mean) + '$, $\sigma^2=' + "{0:.5f}".format(d31variance) + '$'
-
+        labeld21 = r'$\tau_{21}$, $\mu=' + "{0:.5f}".format(d21mean) + '$, $\sigma^2=' + "{0:.5f}".format(d21variance) + '$'
+        labeld31 = r'$\tau_{31}$, $\mu=' + "{0:.5f}".format(d31mean) + '$, $\sigma^2=' + "{0:.5f}".format(d31variance) + '$'
         figure_hist = plt.figure()
         figure_hist.canvas.set_window_title(filename + "_histogram_delays")
         ax_hist = figure_hist.add_subplot(111)
-        ax_hist.set_xlabel(r'$\Delta\tau$[ns]')
+        ax_hist.set_xlabel(r'$\tau$[ns]')
         # the histogram of the data
         offset=0.5
-        bins = np.arange(np.min(delays_calibrated_ns[:,0])-1,np.max(delays_calibrated_ns[:,0])+1,1/(sampling_rate*10**-9*interpolation))
+        scale_factor = 1
+        if interpolation == 1:
+            scale_factor = 10 
+        bins = np.arange(np.min(delays_calibrated_ns[:,0])-1,np.max(delays_calibrated_ns[:,0])+1,1/(sampling_rate*10**-9*5*interpolation*scale_factor))
         ax_hist.hist(delays_calibrated_ns[:,0], bins=bins+offset, histtype='stepfilled', facecolor='green', alpha=0.75, label=labeld21)
-        bins = np.arange(np.min(delays_calibrated_ns[:,1])-1,np.max(delays_calibrated_ns[:,1])+1,1/(sampling_rate*10**-9*interpolation))
+        bins = np.arange(np.min(delays_calibrated_ns[:,1])-1,np.max(delays_calibrated_ns[:,1])+1,1/(sampling_rate*10**-9*5*interpolation*scale_factor))
         ax_hist.hist(delays_calibrated_ns[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
-        plt.legend()
+        plt.legend(fontsize = 15)
         plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_delays.pdf")

@@ -302,6 +302,8 @@ if __name__ == "__main__":
             elif options.algorithm=="grid_based" or options.algorithm=="both":
                 estimated_positions["grid_based"]=grid_based_algorithm.localize(receivers_steps[i],np.round(basemap(bbox[2],bbox[3])),1,interpolation*samples_to_receive,ref_receiver)
                 estimated_positions["grid_based"]["grid"]=0
+            for idx in len(receivers_positions):
+                receivers_positions[idx] = receivers_positions[idx].tolist() 
             line = "[" + str(timestamps[i]) + "," + str(delay) + "," + str(delays_calibration) + "," + str(delays_auto_calibration) + "," + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," + str(calibration_position) + "," + str(interpolation) + "," + str(bandwidth)+ "," + str(samples_to_receive) + "," + str(lo_offset) + "," + str(bbox) + "," + str(receivers_positions) + "," + str(selected_positions) + "," + str(receivers_gps )+ "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(estimated_positions) + "," + str(ref_receiver) + "," + str(auto_calibrate)+ "," + str(acquisition_time) + "," + str(xk_1).replace('\n', '') + "," + str(init_settings_kalman) + "," + "'" + str(reference_selection) +"'"+","+str(x_cov) + ","+str(y_cov) + "]"
             pprint.pprint(line,f,width=9000)
     f.close()
