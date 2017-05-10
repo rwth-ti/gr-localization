@@ -59,12 +59,9 @@ if __name__ == "__main__":
     receivers_steps=[]
     # args[0] ^= selfloc log   
     f_results=open(args[0],"r")
-    '''
     line=f_results.readline()
     line=f_results.readline()
     line=f_results.readline()
-    line=f_results.readline()
-    '''
     #header
     line = f_results.readline()
     acquisition = eval(line)
@@ -86,6 +83,7 @@ if __name__ == "__main__":
     num_anchors = acquisition[15]
     anchor_average = acquisition[16]
     ref_receiver = acquisition[17]
+    alpha = acquisition[18]
 
     #selfloc results
     transmitter_history = eval(f_results.readline())
@@ -339,8 +337,8 @@ if __name__ == "__main__":
                     D[j,l,k] = tdoa
 
         pos_selfloc = None
-        stress = 10
-        pos_selfloc, stress = mds_self_tdoa.selfloc(D,basemap(bbox[2],bbox[3]), sum_square_tdoa, pos_selfloc, 500, 1.0, stress)
+        stress = [10]
+        pos_selfloc, stress = mds_self_tdoa.selfloc(D,basemap(bbox[2],bbox[3]), sum_square_tdoa, pos_selfloc, 500, alpha, stress)
         anchor_loop_delays = []
         anchor_loop_delay_history = []
         anchor_positions = []
@@ -372,9 +370,12 @@ if __name__ == "__main__":
         + str(calibration_position) + "," + str(interpolation) + "," \
         + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," \
         + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
-        + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," + str(receivers.keys().index(ref_receiver)) + "]\n" 
+        + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," + str(receivers.keys().index(ref_receiver)) + "," + str(alpha) + "]\n" 
         results_file_selfloc = "../log/results_post_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         fi = open(results_file_selfloc,'w')
+        fi.write("##########################################################################################################################################################################################\n")
+        fi.write("rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
+        fi.write("##########################################################################################################################################################################################\n")
         fi.write(header)
         fi.write(str(transmitter_history) + "\n")
         fi.write(str(timestamp_history) + "\n")
@@ -386,10 +387,11 @@ if __name__ == "__main__":
         fi.write(str(anchor_gt_positions.tolist()) + "\n")
         fi.write(str(pos_selfloc.tolist()) + "\n")
         fi.write(str(pos_selfloc_procrustes.tolist()) + "\n")
-        fi.write(str(tform.keys()) + "\n")
-        tform["rotation"] = tform["rotation"].tolist()
-        tform["translation"] = tform["translation"].tolist()
-        fi.write(str(tform.values()) + "\n")
+        #fi.write(str(tform.keys()) + "\n")
+        #tform["rotation"] = tform["rotation"].tolist()
+        #tform["translation"] = tform["translation"].tolist()
+        #fi.write(str(tform.values()) + "\n")
+        fi.write(str(stress) + "\n")
         fi.close()
         print "selfloc test results written to: \n" +results_file_selfloc
 
