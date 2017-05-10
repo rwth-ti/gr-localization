@@ -112,7 +112,7 @@ class fusion_center():
         self.num_anchors = 3
         self.anchoring = False
         self.anchor_loop = False
-        self.anchor_average = 10
+        self.anchor_average = 3
         self.anchor_loop_delays = []
         self.anchor_positions = []
         self.anchor_gt_positions = []
@@ -981,9 +981,12 @@ class fusion_center():
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
-            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "]\n" 
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n" 
             results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
             fi = open(results_file_selfloc,'w')
+            fi.write("##########################################################################################################################################################################################\n")
+            fi.write("rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
+            fi.write("##########################################################################################################################################################################################\n")
             fi.write(header)
             fi.write(str(self.transmitter_history) + "\n")
             fi.write(str(self.timestamp_history) + "\n")
@@ -1417,7 +1420,7 @@ def parse_options():
                       help="Activate reference calibration station")
     parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
-    parser.add_option("", "--selfloc-average-length", type="string", default="1",
+    parser.add_option("", "--selfloc-average-length", type="string", default="3",
                       help="Average length for self localization")
                       
     (options, args) = parser.parse_args()
