@@ -102,6 +102,7 @@ class fusion_center():
         self.calibrating = False
         
         # selfloc
+        self.sample_history = []
         self.pos_selfloc = []
         self.alpha = 1.0
         self.init_stress = 10.0
@@ -976,6 +977,8 @@ class fusion_center():
                 receiver.coordinates_selfloc = self.pos_selfloc[j]
                 receiver.selected_position = "selfloc"
         # Wait for gui here
+        # Split!
+
         anchoring_complete = False
         while anchoring_complete == False:
             anchoring_complete = self.start_anchoring()
@@ -984,6 +987,9 @@ class fusion_center():
             self.anchor_interrupt = False
             return
         print("anchoring done")
+
+        # Split!
+
         self.anchor_gt_positions = np.array(self.anchor_gt_positions)
         self.anchor_positions = np.array(self.anchor_positions)
         d, coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
@@ -997,6 +1003,9 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
         time.sleep(0.05)
+
+        # Split!
+
         if self.recording_results:
             receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
             header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
@@ -1026,8 +1035,11 @@ class fusion_center():
             #fi.write(str(tform.values()) + "\n")
             fi.write(str(stress_list) + "\n")
             fi.close()
-
-
+        if self.recording_samples: 
+            f_s = open(self.samples_file,"a")
+            for entry in self.sample_history:
+                pprint.pprint(str(entry) + "\n",f_s,width=9000)
+            f_s.close() 
 
 
     def process_results(self, receivers, delay_auto_calibration):
@@ -1063,12 +1075,16 @@ class fusion_center():
         if self.recording_samples:
             self.cnt_smpl_log +=1
             print("cnt_smpl: ",self.cnt_smpl_log)
-            f_s = open(self.samples_file,"a")
+            
             receiver_samples = []
             for receiver in receivers.values():
                 receiver_samples.append(receiver.samples.tolist())
-            pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
-            f_s.close()   
+            if self.anchor_loop:
+                self.sample_history.append(receiver_samples)
+            else:
+                f_s = open(self.samples_file,"a")
+                pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
+                f_s.close()   
                     
         # interpolate samples
         signal_strength = []
@@ -1289,13 +1305,10 @@ class fusion_center():
         # just take samples from sensors that are not transmitting. Should not be disturbing if other sensor receives if the samples are not processed.
         if self.recording_samples:
             self.cnt_smpl_log += 1
-            print("cnt_smpl: ",self.cnt_smpl_log)
-            f_s = open(self.samples_file,"a")
             receiver_samples = []
             for receiver in receivers.values():
                 receiver_samples.append(receiver.samples.tolist())
-            pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
-            f_s.close()   
+            self.sample_history.append(receiver_samples)
         
         for cnt_l, rx_l in enumerate(receivers):
             for cnt_k, rx_k in enumerate(receivers):

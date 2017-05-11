@@ -282,8 +282,7 @@ if __name__ == "__main__":
         # mabe build in check?
         f_samples = open(args[1],"r")
         for line_number, line in enumerate(f_samples.readlines()):  
-            acquisition_samples = eval(eval(line))
-            receivers_samples = acquisition_samples[0]
+            receivers_samples = eval(eval(line))
             receivers=dict()
             for receiver_idx in range(len(receivers_samples)):
                 receivers[receiver_idx] = receiver_interface.receiver_interface(None,None,receiver_idx)
