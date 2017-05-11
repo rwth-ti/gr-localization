@@ -235,6 +235,7 @@ class fusion_center():
         self.rpc_manager.add_interface("program_gps_receiver",self.program_gps_receiver)
         self.rpc_manager.add_interface("set_anchor_gt_position",self.set_anchor_gt_position)
         self.rpc_manager.add_interface("start_anchoring_loop",self.start_anchoring_loop)
+        self.rpc_manager.add_interface("stop_selfloc", self.stop_selfloc)
         self.rpc_manager.start_watcher()
 
         self.probe_manager_lock = threading.Lock()
@@ -672,6 +673,7 @@ class fusion_center():
         self.switch_transmitter(self.cnt_j)
         self.self_localization = True
         self.run_loop = True
+        self.anchor_interrupt = False
         self.anchor_positions = []
         self.anchor_gt_positions = []
         self.start_receivers(acquisitions)
@@ -901,6 +903,8 @@ class fusion_center():
             self.anchoring = False
             return True
         else:
+            if self.anchor_interrupt:
+                return True
             if not self.anchoring:
                 if len(self.anchor_gt_positions) == 0:
                     for gui in self.guis.values():
@@ -914,6 +918,7 @@ class fusion_center():
         print("num_anchor: ", num_anchor)
         #tbd build up similar to calibration loop?
         #acquire delay/position similar to calibration_loop_delays/calibration_loop
+        self.anchor_loop_delays = []
         self.anchoring = True
         self.anchor_loop = True
         self.recording_results = False
@@ -938,6 +943,20 @@ class fusion_center():
         self.recording_samples = self.record_samples
         print("delay tensor recordings complete")
 
+    def stop_selfloc(self):
+        self.cnt_j = 0
+        self.self_localization = False
+        self.stop_transmitter()
+        self.stop_loop()
+        # continue logging samples!
+        self.processing = False 
+        self.recording_samples = False
+        self.anchor_loop = False
+        for receiver in self.receivers.values():
+            receiver.reset_receiver()
+        self.anchor_interrupt = True
+        print("self localization process stopped")
+
     def evaluate_selfloc(self,receivers):
         print("cnt_smpl: ",self.cnt_smpl_log)
         D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
@@ -961,6 +980,9 @@ class fusion_center():
         while anchoring_complete == False:
             anchoring_complete = self.start_anchoring()
             time.sleep(0.5)
+        if self.anchor_interrupt:
+            self.anchor_interrupt = False
+            return
         print("anchoring done")
         self.anchor_gt_positions = np.array(self.anchor_gt_positions)
         self.anchor_positions = np.array(self.anchor_positions)

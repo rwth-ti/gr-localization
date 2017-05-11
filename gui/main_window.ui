@@ -83,17 +83,6 @@
              </item>
             </layout>
            </widget>
-           <widget class="QWidget" name="verticalLayoutWidget">
-            <layout class="QVBoxLayout" name="verticalLayout_2">
-             <item>
-              <widget class="QPushButton" name="pushButtonSelfLocalization">
-               <property name="text">
-                <string>Self Localization</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
           </widget>
           <widget class="QWidget" name="layoutWidget">
            <layout class="QVBoxLayout" name="verticalLayout_9">
@@ -403,7 +392,7 @@
             </item>
             <item>
              <layout class="QGridLayout" name="gridLayout_12">
-              <item row="0" column="0">
+              <item row="1" column="0">
                <widget class="QPushButton" name="pushButtonSetCalibration">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -424,8 +413,14 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>Calibrate
-TX</string>
+                 <string>Calibrate TX</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QPushButton" name="pushButtonSelfLocalization">
+                <property name="text">
+                 <string>Self Localization</string>
                 </property>
                </widget>
               </item>
@@ -1616,7 +1611,7 @@ TX</string>
              <item row="0" column="0">
               <widget class="QLabel" name="label_27">
                <property name="text">
-                <string>Sample average length</string>
+                <string>Transmitter average length</string>
                </property>
               </widget>
              </item>
@@ -1657,7 +1652,7 @@ TX</string>
          <item>
           <widget class="QGroupBox" name="groupBox_8">
            <property name="title">
-            <string>MDS-Algorithm</string>
+            <string>DMDS-Algorithm</string>
            </property>
            <widget class="QWidget" name="gridLayoutWidget_3">
             <property name="geometry">
@@ -1710,7 +1705,11 @@ TX</string>
               </widget>
              </item>
              <item row="2" column="1">
-              <widget class="QSpinBox" name="spinBoxMaxIt"/>
+              <widget class="QSpinBox" name="spinBoxMaxIt">
+               <property name="maximum">
+                <number>1000</number>
+               </property>
+              </widget>
              </item>
             </layout>
            </widget>
