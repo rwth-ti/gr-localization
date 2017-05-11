@@ -304,28 +304,59 @@ class gui(QtGui.QMainWindow):
         
 
         # Dialog box for anchoring
+        
         self.anchor_dialog = QtGui.QDialog(self)
+        self.anchor_dialog.setWindowTitle("Self-localization")
+        layout = QtGui.QFormLayout()
+        #self.waitText3 = QtGui.QLabel("Please wait until the required samples are received.")
+        #layout.addRow(self.waitText3)
+        self.groupBoxDmds = QtGui.QGroupBox("1. Self-localization (relative)")
+        self.pushButtonDMDS = QtGui.QPushButton("Start")
+        helpLayout = QtGui.QHBoxLayout()
+        self.waitText3 = QtGui.QLabel("Place sensors and press 'Start'")
+        helpLayout.addWidget(self.waitText3)
+        helpLayout.addWidget(self.pushButtonDMDS)
+        self.groupBoxDmds.setLayout(helpLayout)
+        layout.addRow(self.groupBoxDmds)
+        self.groupBoxAnchoring = QtGui.QGroupBox("2. Anchoring (absolute)")
+        layoutAnchoring = QtGui.QFormLayout()
+
+        self.curr_anchor_text = QtGui.QLabel("Anchor Number:")
+        self.curr_anchor_spin = QtGui.QSpinBox()
+        self.curr_anchor_spin.setValue(1)
+        layout_hor = QtGui.QHBoxLayout()
+        layout_hor.addWidget(self.curr_anchor_text)
+        layout_hor.addWidget(self.curr_anchor_spin)
+        layoutAnchoring.addRow(layout_hor)
+        
+        self.waitText2 = QtGui.QLabel("Place anchor and press 'Start'")
+        self.pushButtonOK = QtGui.QPushButton("Start")
+        self.connect(self.pushButtonOK, QtCore.SIGNAL("clicked()"), self.start_anchoring_loop)
+        
+        layoutAnchoring.addRow(self.waitText2, self.pushButtonOK)
+        self.latLabel_anc = QtGui.QLabel("Latitude (+=N ; -=S)")
+        self.lineEditLatitude_anc = QtGui.QLineEdit()
+        layoutAnchoring.addRow(self.latLabel_anc,self.lineEditLatitude_anc)
+        self.longLabel_anc = QtGui.QLabel("Longitude (+=E ; -=W)")
+        self.lineEditLongitude_anc = QtGui.QLineEdit()
+        layoutAnchoring.addRow(self.longLabel_anc,self.lineEditLongitude_anc)
         self.anchor_mBox = QtGui.QDialogButtonBox(self)
         self.anchor_setButton = self.anchor_mBox.addButton("Get coordinates from map", QtGui.QDialogButtonBox.AcceptRole)
         self.anchor_gpsInputButton = self.anchor_mBox.addButton("Set anchor position", QtGui.QDialogButtonBox.AcceptRole)
-        self.anchor_cancelButton = self.anchor_mBox.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
+        #self.anchor_cancelButton = self.anchor_mBox.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
         self.anchor_mBox.clicked.connect(self.set_anchor_gt_position)
-        self.anchor_dialog.setWindowTitle("Receiving samples for anchor.")
-        self.waitText3 = QtGui.QLabel("Please wait until a sufficient number of samples is received.")
-        self.waitText2 = QtGui.QLabel("Press 'Start' if the transmitter is at the desired position.")
-        self.pushButtonOK = QtGui.QPushButton("Start")
-        self.connect(self.pushButtonOK, QtCore.SIGNAL("clicked()"), self.start_anchoring_loop)
-        layout = QtGui.QFormLayout()
-        layout.addWidget(self.waitText2)
-        layout.addWidget(self.pushButtonOK)
-        layout.addRow(self.waitText3)
-        self.latLabel_anc = QtGui.QLabel("latitude (+=N ; -=S)")
-        self.lineEditLatitude_anc = QtGui.QLineEdit()
-        layout.addRow(self.latLabel_anc,self.lineEditLatitude_anc)
-        self.longLabel_anc = QtGui.QLabel("longitude (+=E ; -=W)")
-        self.lineEditLongitude_anc = QtGui.QLineEdit()
-        layout.addRow(self.longLabel_anc,self.lineEditLongitude_anc)
-        layout.addRow(self.anchor_mBox)
+        layoutAnchoring.addRow(self.anchor_mBox)
+        
+        self.groupBoxAnchoring.setLayout(layoutAnchoring)
+        self.anchor_cancelButton = QtGui.QPushButton("Cancel")
+        self.anchor_doneButton = QtGui.QPushButton("Done")
+        self.anchor_doneButton.setEnabled(False)
+        layout.addRow(self.groupBoxAnchoring)
+        layout_hor = QtGui.QHBoxLayout()
+        layout_hor.addItem(QtGui.QSpacerItem(40,20, QtGui.QSizePolicy.Expanding,QtGui.QSizePolicy.Minimum))
+        layout_hor.addWidget(self.anchor_cancelButton)
+        layout_hor.addWidget(self.anchor_doneButton)
+        layout.addRow(layout_hor)
         self.anchor_dialog.setLayout(layout)
         
         
@@ -334,7 +365,8 @@ class gui(QtGui.QMainWindow):
         self.signal_error_set_map.connect(self.error_set_map)
         self.connect(self.update_timer, QtCore.SIGNAL("timeout()"), self.process_results)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
-        self.connect(self.gui.pushButtonSelfLocalization, QtCore.SIGNAL("clicked()"), self.start_selfloc_loop)
+        self.connect(self.gui.pushButtonSelfLocalization, QtCore.SIGNAL("clicked()"), self.start_selfloc)
+        self.connect(self.gui.pushButtonDMDS, QtCore.SIGNAL("clicked()"), self.start_selfloc_loop)
         self.connect(self.gui.pushButtonChat, QtCore.SIGNAL("clicked()"), self.send_chat)
         self.connect(self.gui.pushButtonRunReceivers, QtCore.SIGNAL("clicked()"), self.start_correlation)
         self.connect(self.gui.pushButtonRunReceiversLoop, QtCore.SIGNAL("clicked()"), self.start_correlation_loop)
@@ -389,6 +421,8 @@ class gui(QtGui.QMainWindow):
         self.shortcut_stop = QtGui.QShortcut(Qt.QKeySequence("Ctrl+C"), self.gui)
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
         self.connect(self.shortcut_exit, QtCore.SIGNAL("activated()"), self.gui.close)
+        self.connect(self.anchor_cancelButton, QtCore.SIGNAL("clicked()"), self.cancel_all_selfloc)
+        self.connect(self.anchor_doneButton, QtCore.SIGNAL("clicked()"), self.anchor_dialog.accept)
 
         # Grid based signals
         self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(double)"), self.set_TDOA_grid_based_resolution)
@@ -445,6 +479,7 @@ class gui(QtGui.QMainWindow):
     def start_anchoring(self):
         self.num_anchor_position = 0
         self.anchor_positions = []
+        self.curr_anchor_spin.setValue(1)
         self.pushButtonOK.setEnabled(True)
 
     def start_anchoring_loop(self):
@@ -454,13 +489,22 @@ class gui(QtGui.QMainWindow):
             self.anchor_setButton.setEnabled(False)
             self.anchor_gpsInputButton.setEnabled(False)
         else:
-            self.anchor_dialog.accept()
+            self.anchor_doneButton.setEnabled(True)
+            self.pushButtonDMDS.setEnabled(True)
+            self.curr_anchor_spin.setEnabled(True)
+
+    def cancel_all_selfloc(self):
+        self.rpc_manager.request("stop_selfloc")
+        #reset all buttons to prevent deadlock
+        self.pushButtonDMDS.setEnabled(True)
+        self.pushButtonOK.setEnabled(True)
+        self.anchor_setButton.setEnabled(True)
+        self.anchor_gpsInputButton.setEnabled(True)
+        self.curr_anchor_spin.setEnabled(True)
+        self.anchor_dialog.reject()
 
     def set_anchor_gt_position(self, button):
-        if button.text() == "Cancel":
-            self.rpc_manager.request("stop_selfloc")
-            self.anchor_dialog.reject()
-        elif button.text() == "Get coordinates from map" :
+        if button.text() == "Get coordinates from map" :
             if hasattr(self, "zp"):
                 self.setting_calibration = True
                 self.zp.enabled = False
@@ -473,6 +517,7 @@ class gui(QtGui.QMainWindow):
             self.anchor_setButton.setEnabled(False)
             self.anchor_gpsInputButton.setEnabled(False)
             self.num_anchor_position += 1
+            self.curr_anchor_spin.setValue(self.num_anchor_position)
             
     def set_trackplot_length(self):
         self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
@@ -987,12 +1032,16 @@ class gui(QtGui.QMainWindow):
                 self.position_dialog.accept()
     def switch_transmitter(self):
         self.rpc_manager.request("switch_transmitter")
-    
-    def start_selfloc_loop(self):
+
+    def start_selfloc(self):
         self.anchor_dialog.show()        
         self.pushButtonOK.setEnabled(False)
         self.anchor_setButton.setEnabled(False)
         self.anchor_gpsInputButton.setEnabled(False)
+        self.curr_anchor_spin.setEnabled(False)
+    
+    def start_selfloc_loop(self):
+        self.pushButtonDMDS.setEnabled(False)
         self.rpc_manager.request("start_selfloc_loop")
 
     def stop_transmitter(self):

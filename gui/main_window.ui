@@ -413,14 +413,14 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>Calibrate TX</string>
+                 <string>Calibrate clock offset</string>
                 </property>
                </widget>
               </item>
               <item row="2" column="0">
                <widget class="QPushButton" name="pushButtonSelfLocalization">
                 <property name="text">
-                 <string>Self Localization</string>
+                 <string>Self-localization</string>
                 </property>
                </widget>
               </item>
