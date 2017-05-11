@@ -267,8 +267,8 @@ def parse_options():
                       help="Save plots to files")
     parser.add_option("", "--delay-threshold", type="int", default="0",
                       help="Threshold to filter TDOAs")
-    parser.add_option("", "--histogram-errors", action="store_true", default=False,
-                      help="Activate error histogram")
+    parser.add_option("", "--error-history", action="store_true", default=False,
+                      help="Activate error histogry plot")
     parser.add_option("", "--procrustes", action="store_true", default=False,
                       help="error calculation with procrustes analysis")
     parser.add_option("", "--lineplot-velocity", action="store_true", default=False,
@@ -520,11 +520,11 @@ if __name__ == "__main__":
             err_chan_kalman = np.square(xdiff_chan_kalman) + np.square(ydiff_chan_kalman)
             rmse_chan_kalman = np.sqrt(np.mean(err_chan_kalman) )
 
-        if options.histogram_errors:
+        if options.error_history:
             err_handles = []
             err_labels = []
             figure_errors = plt.figure()
-            figure_errors.canvas.set_window_title(filename + "_histogram_errors")
+            figure_errors.canvas.set_window_title(filename + "_error_history")
             ax_errors = figure_errors.add_subplot(111)
             ax_errors.set_ylabel(r'$(\Delta s)^2 [m^2]$')
             ax_errors.set_xlabel(r'Acquisitions')
@@ -676,7 +676,7 @@ if __name__ == "__main__":
         ax_hist_m_x.set_xlabel(r'x[m]')
         # the histogram of the data
         offset=0.5
-        bins = np.arange(np.min(chan_x)-1,np.max(chan_x)+1,299700000/(sampling_rate*interpolation))
+        bins = np.arange(np.min(chan_x)-1,np.max(chan_x)+1,0.1)
         n, bins, patches = ax_hist_m_x.hist(chan_x, bins=bins, histtype='stepfilled', facecolor='blue', alpha=0.75, label=label_chan_x)
         if len(grid_x)>0:
             bins = np.arange(np.min(grid_x)-1,np.max(grid_x)+1,estimated_positions["grid_based"]["resolution"])
@@ -684,7 +684,7 @@ if __name__ == "__main__":
         plt.legend()
         ax_hist_m_y = figure_hist_m.add_subplot(212)
         ax_hist_m_y.set_xlabel(r'y[m]')
-        bins = np.arange(np.min(chan_y)-1,np.max(chan_y)+1,299700000/(sampling_rate*interpolation))
+        bins = np.arange(np.min(chan_y)-1,np.max(chan_y)+1,0.1)
         n, bins, patches = ax_hist_m_y.hist(chan_y, bins=bins, histtype='stepfilled', facecolor='blue', alpha=0.75, label=label_chan_y)
         if len(grid_x)>0:
             bins = np.arange(np.min(grid_y)-1,np.max(grid_y)+1,estimated_positions["grid_based"]["resolution"])
@@ -779,7 +779,7 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_lineplot_cov.pdf")
             pass
     '''        
-    if options.histogram_errors:
+    if options.error_history:
         # histogram of errors
         xdiff_chan = chan_x - gt_x 
         ydiff_chan = chan_y - gt_y
