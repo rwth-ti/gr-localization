@@ -171,4 +171,4 @@ class receiver_interface():
     
     def set_tx_gain(self,tx_gain):
         self.tx_gain = tx_gain
-        self.rpc_mgr.request("start_transmitter",[self.tx_gain])
+        self.rpc_mgr.request("set_tx_gain",[self.tx_gain])
