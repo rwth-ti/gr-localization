@@ -120,7 +120,7 @@ class top_block(gr.top_block):
             gps = self.gps,
             bandwidth=5000000,
             center_freq=2510000000,
-            gain=70,
+            gain=89,
             num_pulses=20000,
             pulse_length=1,
             samp_rate=1000000,
