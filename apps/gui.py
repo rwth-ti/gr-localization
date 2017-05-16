@@ -287,7 +287,7 @@ class gui(QtGui.QMainWindow):
         # reuse long and lat label from calibration Dialog
         # add altitude
         self.altLabel = QtGui.QLabel("altitude (m)")
-        self.lineEditAltitude = QtGui.QLineEdit() 
+        self.lineEditAltitude_pos = QtGui.QLineEdit() 
         layout = QtGui.QFormLayout()
         layout.addRow(self.waitText_pos)
         self.latLabel_pos = QtGui.QLabel("latitude (+=N ; -=S)")
@@ -296,7 +296,7 @@ class gui(QtGui.QMainWindow):
         self.longLabel_pos = QtGui.QLabel("longitude (+=E ; -=W)")
         self.lineEditLongitude_pos = QtGui.QLineEdit()
         layout.addRow(self.longLabel_pos,self.lineEditLongitude_pos)
-        layout.addRow(self.altLabel,self.lineEditAltitude)
+        layout.addRow(self.altLabel,self.lineEditAltitude_pos)
         layout.addRow(self.position_mBox_pos)
         #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
         self.position_dialog.setLayout(layout)
