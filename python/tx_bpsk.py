@@ -16,7 +16,7 @@ import time
 
 class tx_bpsk(gr.hier_block2):
 
-    def __init__(self, serial, gps, mcr, bandwidth=50000000, center_freq=2510000000, gain=50, num_pulses=20000, pulse_length=1, samp_rate=10000000):
+    def __init__(self, serial = "", gps = "internal", mcr = 0, bandwidth=50000000, center_freq=2510000000, gain=50, num_pulses=20000, pulse_length=1, samp_rate=10000000):
         gr.hier_block2.__init__(
             self, "Tx Bpsk",
             gr.io_signature(0, 0, 0),

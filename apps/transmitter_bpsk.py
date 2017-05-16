@@ -45,7 +45,7 @@ class top_block(gr.top_block):
             pulse_length=1,
             samp_rate=10000000,
         )
-        self.connect(tx_bpsk)
+        self.connect(self.tx_bpsk_0)
 
     def get_samp_rate(self):
         return self.samp_rate
