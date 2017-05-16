@@ -120,7 +120,7 @@ class top_block(gr.top_block):
             gps = self.gps,
             bandwidth=5000000,
             center_freq=2510000000,
-            gain=89,
+            gain=89.5,
             num_pulses=20000,
             pulse_length=1,
             samp_rate=1000000,
@@ -192,14 +192,14 @@ class top_block(gr.top_block):
     def start_transmitter(self):
         self.lock()
         if not self.transmit_flag:
-            print "!!!!!!!!!!!!!!!!!!!!!!           Transmitter start             !!!!!!!!!!!!!!!!!!!"
+            print "--------------------Transmitter start------------------"
             self.connect(self.tx_bpsk_0)
             self.transmit_flag = True
         time.sleep(0.0001)
         self.unlock()
 
     def set_tx_gain(self,tx_gain):
-        self.tx_bpsk_0.set_gain(tx_gain)
+        self.tx_bpsk_0.set_gain(89.5)
 
     def set_run_loop(self, run_loop):
         self.run_loop = run_loop

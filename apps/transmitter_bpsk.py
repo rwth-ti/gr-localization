@@ -40,7 +40,7 @@ class top_block(gr.top_block):
         self.tx_bpsk_0 = tx_bpsk(
             bandwidth=10000000,
             center_freq=2510000000,
-            gain=50,
+            gain=89.5,
             num_pulses=20000,
             pulse_length=1,
             samp_rate=10000000,

@@ -16,7 +16,7 @@ import time
 
 class tx_bpsk(gr.hier_block2):
 
-    def __init__(self, serial = "", gps = "internal", mcr = 0, bandwidth=50000000, center_freq=2510000000, gain=50, num_pulses=20000, pulse_length=1, samp_rate=10000000):
+    def __init__(self, serial = "", gps = "internal", mcr = 0, bandwidth=50000000, center_freq=2510000000, gain=89.5, num_pulses=20000, pulse_length=1, samp_rate=10000000):
         gr.hier_block2.__init__(
             self, "Tx Bpsk",
             gr.io_signature(0, 0, 0),
@@ -31,7 +31,6 @@ class tx_bpsk(gr.hier_block2):
         self.gps = gps
         self.bandwidth = bandwidth
         self.center_freq = center_freq
-        self.gain = gain
         self.num_pulses = num_pulses
         self.pulse_length = pulse_length
         self.samp_rate = samp_rate
@@ -97,7 +96,6 @@ class tx_bpsk(gr.hier_block2):
         self.uhd_usrp_sink_0.set_center_freq(center_freq, 0)
         self.uhd_usrp_sink_0.set_gain(gain, 0)
         self.uhd_usrp_sink_0.set_antenna('TX/RX', 0)
-        self.uhd_usrp_sink_0.set_bandwidth(bandwidth, 0)
         self.blocks_vector_source_x_0 = blocks.vector_source_c(np.reshape(np.matlib.repmat(np.random.randint(0,2,num_pulses)*2-1,pulse_length,1).T,[1,num_pulses*pulse_length])[0].tolist(), True, 1, [])
 
         ##################################################
@@ -119,12 +117,12 @@ class tx_bpsk(gr.hier_block2):
         self.center_freq = center_freq
         self.uhd_usrp_sink_0.set_center_freq(self.center_freq, 0)
 
-    def get_gain(self):
-        return self.gain
 
     def set_gain(self, gain):
-        self.gain = gain
-        self.uhd_usrp_sink_0.set_gain(self.gain, 0)
+        print "set tx gain to: ",gain
+        #self.uhd_usrp_sink_0.set_gain(gain, 0)
+        print "gain set to: ", self.uhd_usrp_sink_0.get_gain()
+        
         	
 
     def get_num_pulses(self):
