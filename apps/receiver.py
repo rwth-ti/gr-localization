@@ -466,7 +466,8 @@ class top_block(gr.top_block):
             print "Correct"
         else:
             print "Error: difference between USB and UHD"
-            print "Difference: ",usrp_coordinates[0], usrp_coordinates[1]
+            print "USRP coordinates: ",usrp_coordinates[0], usrp_coordinates[1]
+            print "Difference: ",usrp_coordinates[0] - longitude, usrp_coordinates[1] - latitude
 
 
 ###############################################################################
