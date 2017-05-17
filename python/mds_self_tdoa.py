@@ -72,49 +72,10 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
     stress_last.append(stress)
     return pos_conf, stress_last
 
-#receivers list will need to be passed later
-def anchor(pos_sensors, pos_beacons, D_beacons):
-    num_sensors = len(pos_sensors)
-    for idx_tag in range(len(pos_beacons)):
-        for idx_node in range(1,num_sensors):
-            tdoas_beacon[idx_node-1] = geometric_tdoa(pos_sensors[1],pos_sensors[idx_node],pos_beacons[idx_tag]) + sigma*randn
-        Q_tdoas = 0.5*(np.ones(num_sensors-1)+np.identity(num_sensors-1))
-        Q_sensors = 0.5*(np.ones(2*num_sensors)+np.identity(2*num_sensors))
-        '''
-        pos_beacons_chan_true[idx_tag] = TDOALoc(pos_sensors.T,tdoas_beacon.T,Q_tdoas)
-        pos_beacons_chan_false[idx_tag] = TDOALoc(pos_conf.T,tdoas_beacon.T,Q_tdoas)
-        '''
-    # determine the procrustes transform based on the beacons ground truth
-    a,pos_beacons_proc, T= procrustes(pos_beacons,pos_beacons_chan_false)
-    reflection = np.linalg.det(T.T)
-
-    # transform sensor configuration accordingly
-    pos_conf_proc = pos_conf*T.T + T.c[1]
 
 def geometric_tdoa(a,b,c):
     d_ab = np.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
     d_ac = np.sqrt((a[0]-c[0])**2+(a[1]-c[1])**2)
     tdoa = d_ab - d_ac
     return tdoa
-
-if __name__ == "__main__":
-    pos_sensors = np.array([[120,20],[30,80],[200,80],[120,150]])
-    pos_beacons = np.array([[120,90],[120,70],[95,80]])
-    sum_tdoa = 0
-    D = np.ndarray(shape=(len(pos_sensors),len(pos_sensors),len(pos_sensors)))
-    for idx_node_l in range(len(pos_sensors)):
-        for idx_node_j in range(len(pos_sensors)):
-            for idx_node_k in range(len(pos_sensors)):
-                if idx_node_l != idx_node_j and idx_node_l != idx_node_k and idx_node_j != idx_node_k:
-                    # determine TDOA between target, node and another node,
-                    # add error
-                    tdoa = geometric_tdoa(pos_sensors[idx_node_l], pos_sensors[idx_node_k],pos_sensors[idx_node_j])
-                    # for STRESS
-                    sum_tdoa = sum_tdoa + tdoa**2
-                    # store tensor with tdoa information
-                    D[idx_node_l,idx_node_k,idx_node_j] = tdoa
-    pos_curr = None
-    stress = 10
-    #for idx in range(30):
-    pos_curr, stress = selfloc(D, pos_sensors[2:], sum_tdoa, pos_curr, 500, 1.0, stress)
-    print procrustes(pos_sensors, pos_curr)[1]
+    
