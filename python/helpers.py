@@ -11,8 +11,10 @@ def build_results_strings(receivers):
     for receiver in receivers.values():
         if i == 1:
             #TODO: general solution!!!
-            if receiver.selected_position in ["manual", "selfloc"]:
+            if receiver.selected_position == "manual":
                 receivers_position = receivers_position + str(receiver.coordinates)
+            elif receiver.selected_position == "selfloc":
+                receivers_position = receivers_position + str(receiver.coordinates_selfloc)
             else:
                 receivers_position = receivers_position + str(receiver.coordinates_gps)
             selected_positions = selected_positions + "'" + receiver.selected_position + "'"
@@ -20,8 +22,10 @@ def build_results_strings(receivers):
             receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
             receivers_gain = receivers_gain + str(receiver.gain)
         else:
-            if receiver.selected_position in ["manual", "selfloc"]:
+            if receiver.selected_position == "manual":
                 receivers_position = receivers_position + "," + str(receiver.coordinates)
+            elif receiver.selected_position == "selfloc":
+                receivers_position = receivers_position + "," + str(receiver.coordinates_selfloc)
             else:
                 receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
             selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
@@ -35,3 +39,4 @@ def build_results_strings(receivers):
     receivers_antenna = receivers_antenna + "]"
     receivers_gain = receivers_gain + "]"
     return receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain
+    

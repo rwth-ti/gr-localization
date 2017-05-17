@@ -972,8 +972,16 @@ class fusion_center():
         stress_list = [self.init_stress]
         self.pos_selfloc, stress_list = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, stress_list)
         print(stress_list)
+        if self.recording_results:
+            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
+            header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+            + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
+            + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
+            + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n" 
         for j, receiver in enumerate(receivers.values()):
                 receiver.coordinates_selfloc = self.pos_selfloc[j]
+                #FIXME logs
                 receiver.selected_position = "selfloc"
         # Wait for gui here
         # Split!
@@ -1006,12 +1014,6 @@ class fusion_center():
         # Split!
 
         if self.recording_results:
-            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
-            header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
-            + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
-            + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
-            + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
-            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n" 
             results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
             fi = open(results_file_selfloc,'w')
             fi.write("##########################################################################################################################################################################################\n")
