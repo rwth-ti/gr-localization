@@ -434,7 +434,7 @@ class top_block(gr.top_block):
             latitude = nmea.split(",")[3:5]
             # the NMEA sentence may vary for each receiver. This code works for 
             # the next structure in latitude DDMM.XXXXXX
-            if len(latitude):
+            if len(latitude) > 1:
                 if latitude[1] == "N":
                     latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
                 else:
