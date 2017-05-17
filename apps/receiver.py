@@ -199,7 +199,7 @@ class top_block(gr.top_block):
         self.unlock()
 
     def set_tx_gain(self,tx_gain):
-        self.tx_bpsk_0.set_gain(89.5)
+        self.tx_bpsk_0.set_gain(tx_gain)
 
     def set_run_loop(self, run_loop):
         self.run_loop = run_loop
