@@ -516,7 +516,7 @@ class gui(QtGui.QMainWindow):
             self.anchor_setButton.setEnabled(False)
             self.anchor_gpsInputButton.setEnabled(False)
             self.num_anchor_position += 1
-            if self.num_anchor_position == num_anchors:
+            if self.num_anchor_position == self.num_anchors:
                 self.anchor_doneButton.setEnabled(True)
             self.curr_anchor_spin.setValue(self.num_anchor_position)
             

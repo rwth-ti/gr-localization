@@ -622,7 +622,6 @@ class fusion_center():
     def localize(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
             # check if receiver coordinates have been set:
-            print(receivers.values()[0].selected_position,receivers.values()[0].coordinates_selfloc)
             if self.check_receiver_positions(self.receivers):
                 self.localizing = True
                 self.start_receivers()
