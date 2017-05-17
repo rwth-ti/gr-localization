@@ -1061,12 +1061,14 @@ class fusion_center():
                     print (i,receivers.values()[i].serial,receivers.values()[i].tags)
                 for receiver in self.receivers.values():
                     receiver.reset_receiver()
+                self.processing = False
                 return
             if self.auto_calibrate:
                 if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
                     print("Error: calibration timestamps do not match")
                     for receiver in self.receivers.values():
                         receiver.reset_receiver()
+                    self.processing = False
                     return
         
         # all timestamps correct -> continue processing
@@ -1296,7 +1298,7 @@ class fusion_center():
             receiver.samples_calibration = np.array([])
             receiver.first_packet = True
             receiver.reception_complete = False
-        self.processing=False
+        self.processing = False
 
     def process_selfloc(self, receivers, delay_auto_calibration):
         # transmitter=rx_j
@@ -1336,6 +1338,7 @@ class fusion_center():
                 self.stop_selfloc_loop()
                 # Average all measurements:
                 self.evaluate_selfloc(receivers)
+                self.processing = False
                 return
             self.switch_transmitter(self.cnt_j)
         
