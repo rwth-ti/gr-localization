@@ -26,8 +26,15 @@ from chan94_algorithm import estimate_delay_interpolated
 from procrustes import procrustes
 import mds_self_tdoa
 import helpers
+
+#mpl
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.unicode'] = True
+matplotlib.rcParams['font.size'] = 15
+matplotlib.rcParams['font.family'] = "serif"
+matplotlib.rcParams['font.serif'] = "cm10"
+
+
 c = 299700000
 
 def parse_options():
@@ -100,19 +107,7 @@ if __name__ == "__main__":
     #print tform
     stress_list = eval(f_results.readline())
 
-    plt.rc('text', usetex=True)
-    #plt.rc('font',**{'family':'serif','serif':['Helvetica']})
-    plt.rcParams['text.latex.preamble'] = [
-       r'\usepackage{siunitx}',   # i need upright \micro symbols, but you need...
-       r'\sisetup{detect-all}',   # ...this to force siunitx to actually use your fonts
-       r'\usepackage{amssymb, amsmath}',
-       r'\usepackage[EULERGREEK]{sansmath}',  # load up the sansmath so that math -> helvet
-       r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
-       ]
-    params = {'text.usetex' : True,
-          'font.size' : 16,
-          }
-    plt.rcParams.update(params) 
+
 
     print "+".join(str(j).replace(".",",") for j in bbox)
     if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
@@ -169,11 +164,17 @@ if __name__ == "__main__":
     outProj = Proj(init='epsg:3857')
     x0, y0 = transform(inProj,outProj,bbox[0],bbox[1])
     x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
-    receivers_positions = np.array(receivers_positions)
     x = x1 - x0
     y = y1 - y0
     f_results.close()
     
+    receivers_positions = []
+    
+    hacked_position_list = [(6.06274836, 50.77902740),(6.06228259, 50.77913433),(6.06223227, 50.77883295),(6.06253711, 50.77878010)]
+    for pos in hacked_position_list:
+        receivers_positions.append(basemap(pos[0],pos[1]))
+    
+    receivers_positions = np.array(receivers_positions)
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
     
     if options.map:
@@ -250,18 +251,46 @@ if __name__ == "__main__":
 
         if options.save:
             #p.figure_map.tight_layout()
-            plt.savefig(args[0].split("/")[-1].split(".")[0]+options.mapplot_mode + "_map.pdf", dpi=150)
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_map.pdf", dpi=150)
 
     if options.history:
         #make delay plots here
         #maybe useful for debugging, but too much effort?
         figure_history = plt.figure()
-        axis_history = figure_history.add_subplot(111)
+        axis_history = figure_history.add_subplot(221)
+        axis_history.set_ylabel("Acquisitions")
+        axis_history.set_ylabel("Transmitter")
+        
         axis_history.plot(transmitter_history)
-        print delay_history
-        print anchor_loop_delay_history
+        axis_delays = figure_history.add_subplot(222)
+
+        #delay_vector = np.ndarray(shape=(4,4,4*selfloc_average_length))
+
+        delay_12 = []
+        delay_13 = []
+        delay_14 = []
+        delay_23 = []
+        delay_24 = []
+        delay_34 = []
+        for cnt_j in range(len(delay_tensor)):
+            delay_12.extend(delay_tensor[cnt_j,0,1,:].tolist())
+            delay_13.extend(delay_tensor[cnt_j,0,2,:].tolist())
+            delay_14.extend(delay_tensor[cnt_j,0,3,:].tolist())
+            delay_23.extend(delay_tensor[cnt_j,1,2,:].tolist())
+            delay_24.extend(delay_tensor[cnt_j,1,3,:].tolist())
+            delay_34.extend(delay_tensor[cnt_j,2,3,:].tolist())
+        
+        plt_12 = axis_delays.plot(delay_12,label = "Delay 12" )
+        plt_13 = axis_delays.plot(delay_13,label = "Delay 13" )
+        plt_14 = axis_delays.plot(delay_14,label = "Delay 14" )
+        plt_23 = axis_delays.plot(delay_23,label = "Delay 23" )
+        plt_24 = axis_delays.plot(delay_24,label = "Delay 24" )
+        plt_34 = axis_delays.plot(delay_34,label = "Delay 34" )
+        pdb.set_trace()
+        axis_delays.set_xlabel("Acquisitions")
+        axis_delays.set_ylabel("Delay(samples)")
+        axis_delays.legend()
         # concatenate D and anchor_delay_history! for delays
-        pass
 
     if options.stress:
         figure_stress = plt.figure()
@@ -337,7 +366,7 @@ if __name__ == "__main__":
 
         pos_selfloc = None
         stress = [10]
-        pos_selfloc, stress = mds_self_tdoa.selfloc(D,basemap(bbox[2],bbox[3]), sum_square_tdoa, pos_selfloc, 500, alpha, stress)
+        pos_selfloc, stress = mds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, pos_selfloc, 500, alpha, stress)
         anchor_loop_delays = []
         anchor_loop_delay_history = []
         anchor_positions = []
@@ -359,10 +388,12 @@ if __name__ == "__main__":
 
         anchor_gt_positions = np.array(anchor_gt_positions)
         anchor_positions = np.array(anchor_positions)
-        d, coordinates_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling = False)
+        d, coordinates_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling = True)
+        print anchor_gt_positions
         print(coordinates_procrustes)
         reflection = np.linalg.det(tform["rotation"])
         pos_selfloc_procrustes =  np.dot(pos_selfloc,tform["rotation"]) + tform["translation"]
+
 
         
         header =  "["  + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," \
