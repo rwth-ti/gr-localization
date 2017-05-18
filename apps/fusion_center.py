@@ -972,7 +972,8 @@ class fusion_center():
         stress_list = [self.init_stress]
         self.pos_selfloc, stress_list = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, stress_list)
         print(stress_list)
-        if self.recording_results:
+        if self.record_results:
+            print(self.recording_results)
             receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
             header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
