@@ -100,9 +100,14 @@ class gui(QtGui.QMainWindow):
         self.map_file = ""
         self.coordinates_type = ""
 
+        # self localization
         self.alpha = 1.0
         self.init_stres = 10.0
         self.max_it = 99
+        self.results_selfloc = {}
+        self.transmitter = None
+        self.new_selfloc = False
+
 
         self.grid_based_active = False
 
@@ -1385,9 +1390,17 @@ class gui(QtGui.QMainWindow):
         else:
             self.gui.gridBasedCheckBox.setChecked(0)
 
-    def get_results(self, results):
+    def get_results(self, results, results_selfloc):
+        if results == None:
+            results = {}
+        if results_selfloc == None:
+            results_selfloc = {}
         self.results = results
-        self.new_results = True
+        if len(results_selfloc) != 0:
+            self.new_selfloc = True
+            self.results = results_selfloc
+        if len(results) != 0:
+            self.new_results = True
 
     def process_results(self):
         # new reference selected => update plot 
@@ -1447,7 +1460,7 @@ class gui(QtGui.QMainWindow):
 
         if self.new_results:
             if self.results["correlation"] != None:
-                print "Delay:",self.results["delay"]
+                
                 if self.gui.checkBoxCorrelation.isChecked():
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -20*self.sample_interpolation,20*self.sample_interpolation)
                 else:
@@ -1461,23 +1474,25 @@ class gui(QtGui.QMainWindow):
                 if len(self.results["correlation"]) > 2:
                     self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][2], self.results["delay"][2],Qt.Qt.green, self.results["correlation_labels"][2])
                 self.gui.qwtPlotCorrelation.replot()
-                # clear the previous points from the plot
-                self.gui.qwtPlotDelayHistory.clear()
-                if len(self.results["delay_history"]) > 0:
-                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
-                    print "delay hist "+str(self.results["delay_history"][0][-1])
-                    delay_history_max = self.results["delay_history"][0][-1]
-                    delay_history_min = self.results["delay_history"][0][-1]
-                    if len(self.results["delay_history"]) > 1:
-                        self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
-                        delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][1][-1]) )
-                        delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][1][-1]) )
-                        if len(self.results["delay_history"]) > 2:
-                            self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][2],Qt.Qt.green)
-                            delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][2][-1]) )
-                            delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][2][-1]) )
-                    self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
-                    self.gui.qwtPlotDelayHistory.replot()
+        if self.new_results or self.new_selfloc:
+            self.transmitter = self.results["Tx"]
+            self.reset_receiver_combo_boxes()
+            self.gui.qwtPlotDelayHistory.clear()
+            if len(self.results["delay_history"]) > 0:
+                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
+                print "Delay:",self.results["delay"]
+                delay_history_max = self.results["delay_history"][0][-1]
+                delay_history_min = self.results["delay_history"][0][-1]
+                if len(self.results["delay_history"]) > 1:
+                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
+                    delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][1][-1]) )
+                    delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][1][-1]) )
+                    if len(self.results["delay_history"]) > 2:
+                        self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][2],Qt.Qt.green)
+                        delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][2][-1]) )
+                        delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][2][-1]) )
+                self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
+                self.gui.qwtPlotDelayHistory.replot()
 
             if len(self.results["receivers"]) > 0:
                 self.plot_receiver(self.gui.qwtPlotReceiver1, self.gui.checkBoxFFT1, self.results["receivers"][self.gui.comboBoxReceiver1.currentIndex()])
@@ -1488,6 +1503,7 @@ class gui(QtGui.QMainWindow):
             if self.results["estimated_positions"] != None:
                 self.set_tx_position(self.results["estimated_positions"])
         self.new_results = False
+        self.new_selfloc = False
 
     def register_receiver(self, serial, gain, antenna, gain_calibration):
         if not self.receivers.has_key(serial):
@@ -1501,13 +1517,16 @@ class gui(QtGui.QMainWindow):
                 self.gui.comboBoxRefReceiver.addItem(serial)
             self.gui.comboBoxRefReceiver.setCurrentIndex(0)
             # populate Combo Boxes for sample plots
+            self.reset_receiver_combo_boxes()
+    def reset_receiver_combo_boxes(self):
             self.gui.comboBoxReceiver1.clear()
             self.gui.comboBoxReceiver2.clear()
             self.gui.comboBoxReceiver3.clear()
             for serial in self.receivers.keys():
-                self.gui.comboBoxReceiver1.addItem(serial)
-                self.gui.comboBoxReceiver2.addItem(serial)
-                self.gui.comboBoxReceiver3.addItem(serial)
+                if serial != self.transmitter:
+                    self.gui.comboBoxReceiver1.addItem(serial)
+                    self.gui.comboBoxReceiver2.addItem(serial)
+                    self.gui.comboBoxReceiver3.addItem(serial)
             self.gui.comboBoxReceiver1.setCurrentIndex(0)
             if len(self.receivers.keys())>1:
                 self.gui.comboBoxReceiver2.setCurrentIndex(1)

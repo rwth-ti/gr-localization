@@ -95,7 +95,8 @@ class fusion_center():
         self.results_file = ""
         if not os.path.exists("../log"):
             os.makedirs("../log")
-        self.results = None
+        self.results = {}
+        self.results_selfloc = {}
         self.run_loop = False
         self.localizing = False
         self.ntp_sync = False
@@ -296,6 +297,8 @@ class fusion_center():
                         receiver = self.receivers.values()[i]
                         if receiver.selected_position == "manual":
                             pos_receiver = receiver.coordinates
+                        elif ref_receiver.selected_position == "selfloc" :
+                            pos_ref = ref_receiver.coordinates_gps
                         else:
                             pos_receiver = receiver.coordinates_gps
                         d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
@@ -622,6 +625,8 @@ class fusion_center():
     def localize(self, freq, lo_offset, samples_to_receive):
         if len(self.receivers) > 2:
             # check if receiver coordinates have been set:
+            for receiver in self.receivers.values():
+                print(self.basemap(receiver.coordinates[0],receiver.coordinates[1], inverse = True))
             if self.check_receiver_positions(self.receivers):
                 self.localizing = True
                 self.start_receivers()
@@ -1234,9 +1239,9 @@ class fusion_center():
         receivers_samples = []
         for receiver in receivers.values():
             receivers_samples.append(receiver.samples)
-        self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels,"ref_receiver": self.ref_receiver}
+        self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels,"ref_receiver": self.ref_receiver, "Tx":None}
         for gui in self.guis.values():
-            gui.rpc_manager.request("get_results",[self.results])
+            gui.rpc_manager.request("get_results",[self.results, {}])
 
         if self.recording_results:
             # build receivers strings for log file
@@ -1307,11 +1312,11 @@ class fusion_center():
         # add possibility to log!
         # "nested loop in class"
         # just take samples from sensors that are not transmitting. Should not be disturbing if other sensor receives if the samples are not processed.
+        receiver_samples = []
+        for receiver in receivers.values():
+            receiver_samples.append(receiver.samples.tolist())
         if self.recording_samples:
             self.cnt_smpl_log += 1
-            receiver_samples = []
-            for receiver in receivers.values():
-                receiver_samples.append(receiver.samples.tolist())
             self.sample_history.append(receiver_samples)
         
         for cnt_l, rx_l in enumerate(receivers):
@@ -1323,25 +1328,44 @@ class fusion_center():
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
                 else:
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0.0
-        self.cnt_average += 1
         self.transmitter_history.append(self.cnt_j)
         self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
+        delay = []
+        delay_labels = []
+        for idx in range(len(self.delay_tensor)):
+            for idx_2 in range(len(self.delay_tensor)):
+                if idx_2 < idx and idx_2 != self.cnt_j and idx != self.cnt_j:
+                    delay.append(self.delay_tensor[self.cnt_j,idx_2,idx,self.cnt_average])
+                    delay_labels.append("Delay%i"%(10*(idx_2+1)+idx+1))
+        print("Delay: ",delay)
+        if len(self.delay_history) < len(delay):
+            self.delay_history = []
+            for i in range(0,len(delay)):
+                self.delay_history.append([])
+        for i in range(0,len(delay)):
+            self.delay_history[i].append(delay[i])
+        self.results_selfloc = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receiver_samples,"correlation":None,"delay":delay,"delay_history":self.delay_history,"delay_labels": delay_labels, "estimated_positions":None,"correlation_labels":None,"ref_receiver": None, "Tx":self.receivers.keys()[self.cnt_j]}
+        for gui in self.guis.values():
+            gui.rpc_manager.request("get_results",[{}, self.results_selfloc])
+        self.cnt_average += 1
         if self.cnt_average == self.sample_average:
             self.cnt_average = 0
+            self.delay_history = []
             self.cnt_j += 1
             if self.cnt_j == len(receivers):
-                # split into loop stop and final processing!
                 for receiver in receivers.values():
                     receiver.samples = np.array([])
                     receiver.samples_calibration = np.array([])
                     receiver.first_packet = True
                     receiver.reception_complete = False
                 self.processing = False
+
+                # Recording of delays finished
                 self.stop_selfloc_loop()
-                # Average all measurements:
                 self.evaluate_selfloc(receivers)
                 self.processing = False
                 return
+
             self.switch_transmitter(self.cnt_j)
         
         for receiver in receivers.values():
@@ -1434,11 +1458,11 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="50e6",
+    parser.add_option("", "--samp-rate", type="string", default="30.72e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
-    parser.add_option("", "--bandwidth", type="string", default="50e6",
+    parser.add_option("", "--bandwidth", type="string", default="10e6",
                       help="Bandwidth")
     parser.add_option("", "--num-samples-calibration", type="string", default="300",
                       help="Number of samples in burst for calibration")

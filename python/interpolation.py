@@ -20,7 +20,6 @@ def corr_spline_interpolation(y1,y2, window_size):
     tck = interpolate.splrep(window_interp, corr[window_interp], s=0, k=4)
     dspl = interpolate.splder(tck)
     delay_spl = interpolate.sproot(dspl, mest = 20)
-    print delay_spl
     if len(delay_spl) > 1: 
         delay = delay_spl[np.argmax(interpolate.splev(delay_spl, tck, der=0))]
     else:
