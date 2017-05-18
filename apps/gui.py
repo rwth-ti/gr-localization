@@ -225,6 +225,7 @@ class gui(QtGui.QMainWindow):
         self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
         self.gui.qwtPlotCorrelation.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.RightLegend)
         self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, -10, 10)
+        self.gui.qwtPlotDelayHistory.insertLegend(Qwt.QwtLegend(), Qwt.QwtPlot.RightLegend)
 
         # create and set model for receivers position table view
         self.tmrp = gui_helpers.TableModelReceiversPosition(self)
@@ -1479,16 +1480,16 @@ class gui(QtGui.QMainWindow):
             self.reset_receiver_combo_boxes()
             self.gui.qwtPlotDelayHistory.clear()
             if len(self.results["delay_history"]) > 0:
-                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue)
+                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
                 print "Delay:",self.results["delay"]
                 delay_history_max = self.results["delay_history"][0][-1]
                 delay_history_min = self.results["delay_history"][0][-1]
                 if len(self.results["delay_history"]) > 1:
-                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red)
+                    self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][1],Qt.Qt.red,self.results["correlation_labels"][1])
                     delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][1][-1]) )
                     delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][1][-1]) )
                     if len(self.results["delay_history"]) > 2:
-                        self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][2],Qt.Qt.green)
+                        self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][2],Qt.Qt.green, self.results["correlation_labels"][2])
                         delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][2][-1]) )
                         delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][2][-1]) )
                 self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
@@ -1585,12 +1586,12 @@ class gui(QtGui.QMainWindow):
         marker_max.attach(plot)
         marker_max.setXValue(delay)
         
-    def plot_delay_history(self, plot, samples, color):
+    def plot_delay_history(self, plot, samples, color, label):
         if len(samples) > 0:
             x = range(0,len(samples),1)
             y = samples
             # draw curve with new points and plot
-            curve = Qwt.QwtPlotCurve()
+            curve = Qwt.QwtPlotCurve(label)
             curve.setPen(Qt.QPen(color, 2))
             curve.attach(plot)
             curve.setData(x, y)

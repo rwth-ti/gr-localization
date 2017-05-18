@@ -1344,7 +1344,7 @@ class fusion_center():
                 self.delay_history.append([])
         for i in range(0,len(delay)):
             self.delay_history[i].append(delay[i])
-        self.results_selfloc = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receiver_samples,"correlation":None,"delay":delay,"delay_history":self.delay_history,"delay_labels": delay_labels, "estimated_positions":None,"correlation_labels":None,"ref_receiver": None, "Tx":self.receivers.keys()[self.cnt_j]}
+        self.results_selfloc = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receiver_samples,"correlation":None,"delay":delay,"delay_history":self.delay_history, "estimated_positions":None,"correlation_labels": delay_labels,"ref_receiver": None, "Tx":self.receivers.keys()[self.cnt_j]}
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[{}, self.results_selfloc])
         self.cnt_average += 1
