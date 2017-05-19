@@ -72,7 +72,6 @@ class probe_manager():
                     offset_out = numpy.fromstring(msg_packed[3:11], numpy.dtype('uint64'))
                     #print "offset_out",offset_out
                     rcv_ntags = numpy.fromstring(msg_packed[11:19], numpy.dtype('uint64'))
-                    
 
                     if rcv_ntags == 3:
                         # extract all the tags

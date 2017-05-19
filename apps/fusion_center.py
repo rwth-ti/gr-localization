@@ -577,8 +577,9 @@ class fusion_center():
         if not self.processing:
             time_to_receive = np.ceil(time.time()) + 1
             self.init_kalman = True
-            for receiver in self.receivers.values():
-                threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, acquisitions)).start()
+            for idx, receiver in enumerate(self.receivers.values()):
+                if idx != self.transmitter:
+                    threading.Thread(target = self.start_receiver, args = (receiver, time_to_receive, acquisitions)).start()
 
 
     def start_receiver(self, receiver, time_to_receive, acquisitions):
@@ -669,19 +670,18 @@ class fusion_center():
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
         #acquisitions = len(self.receivers)*self.sample_average
-        acquisitions = len(self.receivers)*self.sample_average
         self.transmitter_history = []
         self.timestamp_history = []
         self.cnt_j = 0
         self.cnt_average = 0
         self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.sample_average))
-        self.switch_transmitter(self.cnt_j)
         self.self_localization = True
         self.run_loop = True
         self.anchor_interrupt = False
         self.anchor_positions = []
         self.anchor_gt_positions = []
-        self.start_receivers(acquisitions)
+        self.switch_transmitter(self.cnt_j)
+        
 
                 
     def stop_loop(self):
@@ -896,6 +896,8 @@ class fusion_center():
             self.receivers.values()[self.transmitter].stop_transmitter()
         self.receivers.values()[idx_new].start_transmitter()
         self.transmitter = idx_new
+        self.run_loop = True
+        self.start_receivers(self.sample_average)
 
     def stop_transmitter(self):
         if self.transmitter != -1:
@@ -1318,7 +1320,7 @@ class fusion_center():
         if self.recording_samples:
             self.cnt_smpl_log += 1
             self.sample_history.append(receiver_samples)
-        
+        print("tRANSMITTER: ",receivers.keys()[self.cnt_j])
         for cnt_l, rx_l in enumerate(receivers):
             for cnt_k, rx_k in enumerate(receivers):
                 if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
@@ -1326,10 +1328,14 @@ class fusion_center():
                     #by now ugly hack, rethink later
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] 
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
+                    print (receivers.keys()[cnt_l], receivers.keys()[cnt_k], self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average])
+                    if len(receivers.values()[cnt_l].samples) == 0:
+                        print("Error in: ",receivers.keys()[cnt_l])
                 else:
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0.0
         self.transmitter_history.append(self.cnt_j)
-        self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
+        # Transmitter should not be -1 in this function
+        self.timestamp_history.append(receivers.values()[len(self.receivers) - self.transmitter - 1].tags["rx_time"]) 
         delay = []
         delay_labels = []
         for idx in range(len(self.delay_tensor)):
@@ -1344,12 +1350,12 @@ class fusion_center():
                 self.delay_history.append([])
         for i in range(0,len(delay)):
             self.delay_history[i].append(delay[i])
-        self.results_selfloc = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receiver_samples,"correlation":None,"delay":delay,"delay_history":self.delay_history, "estimated_positions":None,"correlation_labels": delay_labels,"ref_receiver": None, "Tx":self.receivers.keys()[self.cnt_j]}
+        del receiver_samples[self.cnt_j]
+        self.results_selfloc = {"rx_time":receivers.values()[len(self.receivers) - self.transmitter - 1].tags["rx_time"],"receivers":receiver_samples,"correlation":None,"delay":delay,"delay_history":self.delay_history, "estimated_positions":None,"correlation_labels": delay_labels,"ref_receiver": None, "Tx":self.receivers.keys()[self.cnt_j]}
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[{}, self.results_selfloc])
         self.cnt_average += 1
         if self.cnt_average == self.sample_average:
-            self.cnt_average = 0
             self.delay_history = []
             self.cnt_j += 1
             if self.cnt_j == len(receivers):
@@ -1364,16 +1370,18 @@ class fusion_center():
                 self.stop_selfloc_loop()
                 self.evaluate_selfloc(receivers)
                 self.processing = False
-                return
-
-            self.switch_transmitter(self.cnt_j)
-        
-        for receiver in receivers.values():
-            receiver.samples = np.array([])
-            receiver.samples_calibration = np.array([])
-            receiver.first_packet = True
-            receiver.reception_complete = False
+                return        
+        for idx, receiver in enumerate(receivers.values()):
+            if idx != self.transmitter:
+                receiver.samples = np.array([])
+                receiver.samples_calibration = np.array([])
+                receiver.first_packet = True
+                receiver.reception_complete = False
         self.processing = False
+        
+        if self.cnt_average == self.sample_average:
+            self.cnt_average = 0
+            self.switch_transmitter(self.cnt_j)
         # by now, unclear where to set this again(point when tx needs to be turned off again) self.transmitter = -1
 
     def main_loop(self):

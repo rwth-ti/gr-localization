@@ -188,6 +188,7 @@ class top_block(gr.top_block):
             self.transmit_flag = False
         time.sleep(0.0001)
         self.unlock()
+        self.run_loop = True
     
     def start_transmitter(self):
         self.lock()
@@ -197,6 +198,7 @@ class top_block(gr.top_block):
             self.transmit_flag = True
         time.sleep(0.0001)
         self.unlock()
+        self.run_loop = False
 
     def set_tx_gain(self,tx_gain):
         self.tx_bpsk_0.set_gain(tx_gain)
@@ -230,6 +232,7 @@ class top_block(gr.top_block):
             time.sleep(10)
 
     def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions, acquisition_time):
+        print "reception loop started"
         threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, autocalibrate, acquisitions, acquisition_time)).start()
 
 

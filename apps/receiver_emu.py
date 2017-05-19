@@ -64,7 +64,6 @@ class top_block(gr.top_block):
             self.track_coordinates = genfromtxt(options.movement_file, delimiter=',')
             print self.track_coordinates
             self.tx_coordinates = self.track_coordinates[0,:]
-            self.track_coordinates = np.delete(self.track_coordinates,0,0)
         else:
             self.track_coordinates = np.array([])
         # blocks
@@ -88,6 +87,8 @@ class top_block(gr.top_block):
         self.rpc_manager.add_interface("set_run_loop",self.set_run_loop)
         self.rpc_manager.add_interface("sync_time",self.sync_time)
         self.rpc_manager.add_interface("program_gps_position",self.program_gps_position)
+        self.rpc_manager.add_interface("stop_transmitter", self.stop_transmitter)
+        self.rpc_manager.add_interface("start_transmitter", self.start_transmitter)
         self.rpc_manager.start_watcher()
 
 
@@ -115,6 +116,18 @@ class top_block(gr.top_block):
         print "Reset seed"
         self.seed = 10
 
+    def stop_transmitter(self):
+        pass
+
+    def start_transmitter(self):
+        print "!!!!!!!!!!!!!!start transmitter called!!!!!!!!!!!!!"
+        self.run_loop = False
+        j = 0
+        while j < 3:
+            self.track_coordinates = np.delete(self.track_coordinates,0,0)
+            j += 1 
+        self.seed += 3
+
     def register_receiver(self):
         first = True
         while(True):
@@ -124,11 +137,12 @@ class top_block(gr.top_block):
             time.sleep(10)
 
     def start_fg(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions, acquisition_time):
+        print "reception loop started"
         threading.Thread(target = self.start_reception, args = (samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions, acquisition_time)).start()
 
 
     def start_reception(self, samples_to_receive, freq, lo_offset, bw, gain, samples_to_receive_calibration, freq_calibration, lo_offset_calibration, bw_calibration, gain_calibration, time_to_recv, auto_calibrate, acquisitions, acquisition_time):
-
+        print acquisitions
         self.freq = freq
         self.freq_calibration = freq_calibration
         
@@ -160,14 +174,12 @@ class top_block(gr.top_block):
                     print "Sending " + str(samples_to_receive) + " samples"
                     if self.delay == 0:
                         # calculate delay from transmitter position
-                        print self.tx_coordinates
-                        delay = self.get_delay_from_location(self.tx_coordinates)
                         if len(self.track_coordinates):
                             # update target location for next acquisition
                             self.tx_coordinates = self.track_coordinates[0,:]
                             self.track_coordinates = np.delete(self.track_coordinates,0,0)
-                            #print self.tx_coordinates
-                            #print self.track_coordinates
+                            print self.tx_coordinates
+                        delay = self.get_delay_from_location(self.tx_coordinates)
                         print "Delay is " + str(delay)
                     else:
                         delay = self.delay
@@ -313,6 +325,7 @@ class ModulatorBlock(gr.hier_block2):
         rx_rate_tag.value = pmt.from_double(samp_rate)
         rx_rate_tag.srcid = pmt.string_to_symbol(str('gr uhd usrp source1'))
         pulse_width = 4
+        np.random.seed(seed=seed)
         tx_vector = np.reshape(np.matlib.repmat(np.random.randint(0,2,(5*samples_to_receive)/pulse_width)*2-1,pulse_width,1).T,[1,5*samples_to_receive])[0].tolist()
         # delay signal vector -> insert zeros at beginnig; nothing happens if signal has not reached the receiver:
         tx_vector_delayed = np.hstack((np.zeros(delay),tx_vector))

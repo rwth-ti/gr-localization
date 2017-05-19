@@ -114,8 +114,8 @@ class receiver_interface():
                     print "Error: USRP-source tag shows unexpected target carrier frequency"
             elif tags is None:
                 if len(self.samples) < self.samples_to_receive:
+                    print "Not enough samples received!"
                     self.error_detected = True
-                    
                     if self.samples.any() and samples.any():
                         self.samples = np.concatenate((self.samples, samples),axis=0)
                     if len(self.samples) == self.samples_to_receive and self.auto_calibrate:
@@ -165,10 +165,12 @@ class receiver_interface():
     '''
     def stop_transmitter(self):
         self.rpc_mgr.request("stop_transmitter")
+        self.reception_complete = False
 
     def start_transmitter(self):
         self.rpc_mgr.request("start_transmitter")
-    
+        self.reception_complete = True
+
     def set_tx_gain(self,tx_gain):
         self.tx_gain = tx_gain
         self.rpc_mgr.request("set_tx_gain",[self.tx_gain])

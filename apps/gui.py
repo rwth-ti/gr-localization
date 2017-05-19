@@ -1477,9 +1477,10 @@ class gui(QtGui.QMainWindow):
                     self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][2], self.results["delay"][2],Qt.Qt.green, self.results["correlation_labels"][2])
                 self.gui.qwtPlotCorrelation.replot()
         if self.new_results or self.new_selfloc:
+            print self.results["Tx"]
             if self.transmitter != self.results["Tx"]:
+                self.transmitter = self.results["Tx"]
                 self.reset_receiver_combo_boxes()
-            self.transmitter = self.results["Tx"]
             self.gui.qwtPlotDelayHistory.clear()
             if len(self.results["delay_history"]) > 0:
                 self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
@@ -1521,6 +1522,7 @@ class gui(QtGui.QMainWindow):
             self.gui.comboBoxRefReceiver.setCurrentIndex(0)
             # populate Combo Boxes for sample plots
             self.reset_receiver_combo_boxes()
+
     def reset_receiver_combo_boxes(self):
             self.gui.comboBoxReceiver1.clear()
             self.gui.comboBoxReceiver2.clear()
