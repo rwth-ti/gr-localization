@@ -38,7 +38,7 @@ class top_block(gr.top_block):
         self.options = options
         self.cnt = 0
         self.run_loop = False
-        self.samp_rate = 50000000
+        self.samp_rate = 100000000
         self.hostname = os.uname()[1]
         self.gps = "emu_"
         self.id_rx = options.id_rx

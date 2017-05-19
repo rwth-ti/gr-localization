@@ -1336,7 +1336,7 @@ class fusion_center():
             for idx_2 in range(len(self.delay_tensor)):
                 if idx_2 < idx and idx_2 != self.cnt_j and idx != self.cnt_j:
                     delay.append(self.delay_tensor[self.cnt_j,idx_2,idx,self.cnt_average])
-                    delay_labels.append("Delay%i"%(10*(idx_2+1)+idx+1))
+                    delay_labels.append("Rx" + str(idx_2) + ",Rx" + str(idx))
         print("Delay: ",delay)
         if len(self.delay_history) < len(delay):
             self.delay_history = []

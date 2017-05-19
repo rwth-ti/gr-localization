@@ -106,6 +106,7 @@ class gui(QtGui.QMainWindow):
         self.max_it = 99
         self.results_selfloc = {}
         self.transmitter = None
+        self.transmitter_prev = None
         self.new_selfloc = False
 
 
@@ -1476,8 +1477,9 @@ class gui(QtGui.QMainWindow):
                     self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][2], self.results["delay"][2],Qt.Qt.green, self.results["correlation_labels"][2])
                 self.gui.qwtPlotCorrelation.replot()
         if self.new_results or self.new_selfloc:
+            if self.transmitter != self.results["Tx"]:
+                self.reset_receiver_combo_boxes()
             self.transmitter = self.results["Tx"]
-            self.reset_receiver_combo_boxes()
             self.gui.qwtPlotDelayHistory.clear()
             if len(self.results["delay_history"]) > 0:
                 self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
