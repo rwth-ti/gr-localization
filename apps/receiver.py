@@ -208,11 +208,11 @@ class top_block(gr.top_block):
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
-        self.tx_bpsk_0.set_samp_rate(2048000)
+        self.tx_bpsk_0.set_samp_rate(10240000)
 
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
-        self.tx_bpsk_0.set_bandwidth(100000)
+        self.tx_bpsk_0.set_bandwidth(5000000)
 
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)

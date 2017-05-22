@@ -897,6 +897,7 @@ class fusion_center():
         self.receivers.values()[idx_new].start_transmitter()
         self.transmitter = idx_new
         self.run_loop = True
+        time.sleep(5)
         self.start_receivers(self.sample_average)
 
     def stop_transmitter(self):
