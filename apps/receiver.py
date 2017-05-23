@@ -438,20 +438,23 @@ class top_block(gr.top_block):
             # the NMEA sentence may vary for each receiver. This code works for 
             # the next structure in latitude DDMM.XXXXXX
             if len(latitude) > 1:
-                if latitude[1] == "N":
-                    latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
-                else:
-                    latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
+                if latitude[0] != "":
+                    print latitude
+                    if latitude[1] == "N":
+                        latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+                    else:
+                        latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
-                longitude = nmea.split(",")[5:7]
-                # the NMEA sentence may vary for each receiver. This code works for 
-                # the next structure in longitude DDDMM.XXXXXX
-                if longitude[1] == "E":
-                    longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
-                else:
-                    longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
+                    longitude = nmea.split(",")[5:7]
+                    # the NMEA sentence may vary for each receiver. This code works for 
+                    # the next structure in longitude DDDMM.XXXXXX
+                    if longitude[1] == "E":
+                        longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+                    else:
+                        longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
             else:
                 # set to ict rooftop if coordinates are missing
+                print "invalid message!"
                 latitude = 50.7793333333
                 longitude = 6.06295555555
         # basemap requires [long,lat]; we want to put in [lat,long] => swap
