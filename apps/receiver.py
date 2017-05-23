@@ -452,9 +452,14 @@ class top_block(gr.top_block):
                         longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
                     else:
                         longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
+                else:
+                    # set to ict rooftop if coordinates are missing
+                    print "Invalid NMEA-message! Set to default coordinates"
+                    latitude = 50.7793333333
+                    longitude = 6.06295555555
             else:
                 # set to ict rooftop if coordinates are missing
-                print "invalid message!"
+                print "Invalid NMEA-message! Set to default coordinates"
                 latitude = 50.7793333333
                 longitude = 6.06295555555
         # basemap requires [long,lat]; we want to put in [lat,long] => swap

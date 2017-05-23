@@ -4,25 +4,25 @@ import serial
 from ctypes import c_long, c_ulong, c_ushort, c_short
 
 
-def set_tmode2_fixed(lat,lon,alt,acc):
+def tmode2_message(lat,lon,alt,acc):
     #from: u-blox 8 / u-blox M8 Receiver Description Including Protocol Specification p 144
     #accuracy in mm!
     syncchars = r'\xB5\x62'
     clss = r'\x06'# CFG
     ID = r'\x3D' # TMODE2    
-    length = int_to_byte_stream(28,0)
+    length = int_to_bytes(28,0)
     mode = r'\x02' #fixed mode
     reserved = r'\x00'
-    flags = int_to_byte_stream(1,0) #lat/lon/alt;alt valid
+    flags = int_to_bytes(1,0) #lat/lon/alt;alt valid
     #lon/lat accuracy: 7 decimal places
-    lat = long_to_byte_stream(int(lat*1e7), 1)
-    lon = long_to_byte_stream(int(lon*1e7), 1)
+    lat = long_to_bytes(int(lat*1e7), 1)
+    lon = long_to_bytes(int(lon*1e7), 1)
     # altitude in cm
-    alt = long_to_byte_stream(int(alt*1e2), 1)
+    alt = long_to_bytes(int(alt*1e2), 1)
     #accuracy in mm
-    acc = long_to_byte_stream(int(acc*1000), 0)
-    smindur = long_to_byte_stream(0, 0)
-    sminacc = long_to_byte_stream(0, 0)
+    acc = long_to_bytes(int(acc*1000), 0)
+    smindur = long_to_bytes(0, 0)
+    sminacc = long_to_bytes(0, 0)
     stream_center = clss + ID + length +  mode + reserved + flags + lat + lon + alt + acc + smindur + sminacc
     # calculate Fletcher16 checksum
     CK_A = 0
@@ -33,10 +33,11 @@ def set_tmode2_fixed(lat,lon,alt,acc):
     #CK_0 = 255-((CK_B+CK_A)%255)
     #CK_1 = 255-((CK_0+CK_A)%255)
     bytestream =  syncchars + stream_center + r'\x%002x' % (c_ushort(CK_A).value) + r'\x%002x' % (c_ushort(CK_B).value)
+    bytestream.replace('\\x',' 0x')
     return bytestream
 
     
-def long_to_byte_stream(integer,signed):
+def long_to_bytes(integer,signed):
     if signed:
         hexstring = '0x%008x' % (c_long(integer).value)
     else:
@@ -48,7 +49,7 @@ def long_to_byte_stream(integer,signed):
     bytestream = r'\x'.join(['']+hexlist)
     return bytestream
     
-def int_to_byte_stream(integer,signed):
+def int_to_bytes(integer,signed):
     if signed:
         hexstring = '0x%004x' % (c_short(integer).value)
     else:
@@ -63,14 +64,13 @@ def int_to_byte_stream(integer,signed):
  
 def set_ublox_coordinates_fixed(lat, lon, alt, accuracy):
     # check if m8f is connected! (in receiver) 
-    bytestream = set_tmode2_fixed(lat,lon,alt,accuracy)
-    bytestream.replace('\\x',' 0x')
+    message = tmode2_message(lat,lon,alt,accuracy)
     try:
         print "Send serial command through USB"
         ser = serial.Serial('/dev/ttyACM0',9600)
-        ser.write(bytestream.decode('string_escape'))
+        ser.write(message.decode('string_escape'))
         print "Wait.."
-        time.sleep(10)
+        time.sleep(4)
         print 'Done'
         # close connection and destroy serial instance
         ser.close()
