@@ -439,7 +439,6 @@ class top_block(gr.top_block):
             # the next structure in latitude DDMM.XXXXXX
             if len(latitude) > 1:
                 if latitude[0] != "":
-                    print latitude
                     if latitude[1] == "N":
                         latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
                     else:

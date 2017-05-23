@@ -70,7 +70,7 @@ def set_ublox_coordinates_fixed(lat, lon, alt, accuracy):
         ser = serial.Serial('/dev/ttyACM0',9600)
         ser.write(message.decode('string_escape'))
         print "Wait.."
-        time.sleep(4)
+        time.sleep(15)
         print 'Done'
         # close connection and destroy serial instance
         ser.close()
