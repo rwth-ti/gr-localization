@@ -110,9 +110,15 @@ def chan_tdoa(pos, d, Q):
     x_i1 = np.zeros((M-1,1))
     y_i1 = np.zeros((M-1,1))
     for i in range(M-1):
-        r_i1[i] = c * d[i]
+        r_i1[i] = c * d[i] 
         x_i1[i] = pos[i+1,0] - pos[0,0]
         y_i1[i] = pos[i+1,1] - pos[0,1]
+        
+        r_i1_max = np.sqrt(x_i1[i]**2+y_i1[i]**2)
+        if r_i1[i] > r_i1_max:
+            r_i1[i] = r_i1_max
+        elif r_i1[i] < -r_i1_max:
+            r_i1[i] = - r_i1_max
     
     
     #try:
