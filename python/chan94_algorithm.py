@@ -117,8 +117,10 @@ def chan_tdoa(pos, d, Q):
         r_i1_max = np.sqrt(x_i1[i]**2+y_i1[i]**2)
         if r_i1[i] > r_i1_max:
             r_i1[i] = r_i1_max
+            print "Warning: invalid TDOA"
         elif r_i1[i] < -r_i1_max:
             r_i1[i] = - r_i1_max
+            print "Warning: invalid TDOA"
     
     
     #try:
@@ -241,10 +243,11 @@ def localize(receivers, ref_receiver, bbox, xk_prio=np.array([]), delay = []):
                 else:
                     d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
     else:
-        for j, receiver in enumerate(receivers):
+        j= 0
+        for receiver in receivers:
             if receiver != ref_receiver:
                 d.append(delay[j]/sample_rate)
-
+                j += 1
     if len(pos_rx) == 3:
         return chan_3rx(pos_rx, d, xk_prio)
     else:
