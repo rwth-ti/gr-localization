@@ -309,9 +309,17 @@ class fusion_center():
                         print(self.calibration_loop_delays)
                         # int correct?!
                         if len(self.delay_calibration) < len(self.calibration_loop_delays[-1]):
-                            self.delay_calibration.append(int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay]))
+                            if self.correlation_interpolation:
+                                # More than integer accuracy 
+                                self.delay_calibration.append(delay_true - np.array(self.calibration_loop_delays).mean(0)[index_delay])
+                            else:
+                                self.delay_calibration.append(int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay]))
                         else:
-                            self.delay_calibration[index_delay] = int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay])
+                            if self.correlation_interpolation:
+                                # More than integer accuracy 
+                                self.delay_calibration[index_delay] = delay_true - np.array(self.calibration_loop_delays).mean(0)[index_delay]
+                            else:
+                                self.delay_calibration[index_delay] = int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay])
                         index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
             self.calibrating = False
@@ -341,9 +349,15 @@ class fusion_center():
                     delay_true = (d_receiver-d_ref) * self.samp_rate * self.sample_interpolation / 299700000
                     print("True delay: ",delay_true)
                     if len(self.delay_auto_calibration) < len(delays):
-                        self.delay_auto_calibration.append(int(np.floor(delay_true)-delays[index_delay_auto]))
+                        if self.correlation_interpolation:
+                            self.delay_auto_calibration.append(delay_true-delays[index_delay_auto])
+                        else:
+                            self.delay_auto_calibration.append(int(np.floor(delay_true)-delays[index_delay_auto]))
                     else:
-                        self.delay_auto_calibration[index_delay_auto] = int(np.floor(delay_true)-delays[index_delay_auto])
+                        if self.correlation_interpolation:
+                            self.delay_auto_calibration[index_delay_auto] = delay_true - delays[index_delay_auto]
+                        else:
+                            self.delay_auto_calibration[index_delay_auto] = int(np.floor(delay_true)-delays[index_delay_auto])
                     index_delay_auto += 1
             print ("Delay auto calibration: ", self.delay_auto_calibration)
 
@@ -405,7 +419,7 @@ class fusion_center():
             receiver.set_tx_gain(tx_gain)
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_tx_gain",[tx_gain])
-            #TODO:new construction of usrp sink
+            #TODO: new construction of usrp sink
 
 
     def set_num_anchors(self, num_anchors):
@@ -988,10 +1002,11 @@ class fusion_center():
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
             + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n" 
+        selected_positions_prev = []
         for j, receiver in enumerate(receivers.values()):
-                receiver.coordinates_selfloc = self.pos_selfloc[j]
-                #FIXME logs
-                receiver.selected_position = "selfloc"
+            selected_positions_prev.append(receiver.selected_position)
+            receiver.coordinates_selfloc = self.pos_selfloc[j]
+            receiver.selected_position = "selfloc" 
         # Wait for gui here
         # Split!
 
@@ -1015,11 +1030,12 @@ class fusion_center():
         print(self.pos_selfloc_procrustes)
         for j, receiver in enumerate(receivers.values()):
                 receiver.coordinates_selfloc = self.pos_selfloc_procrustes[j]
-                receiver.selected_position = "selfloc"
+                receiver.selected_position = selected_positions_prev[j]
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
             gui.rpc_manager.request("plot_anchor_positions",[coordinates_procrustes.tolist(), self.anchor_gt_positions.tolist()])
         time.sleep(0.05)
+
 
         # Split!
 
@@ -1129,6 +1145,19 @@ class fusion_center():
         estimated_positions = {}
         kalman_states = {}
 
+        correlation, delay, correlation_labels = None,None,None
+        if len(receivers) > 1:
+            correlation, delay, correlation_labels = self.correlate(receivers)
+            if len(self.delay_history) < len(delay):
+                self.delay_history = []
+                for i in range(0,len(delay)):
+                    self.delay_history.append([])
+            for i in range(0,len(delay)):
+                self.delay_history[i].append(delay[i])
+        receivers_samples = []
+        for receiver in receivers.values():
+            receivers_samples.append(receiver.samples)
+
         if self.auto_calibrate and len(receivers) > 1:
             correlation, delay, correlation_labels = self.correlate(receivers, True)
             self.calibrate(self.coordinates_calibration, delay)
@@ -1137,20 +1166,23 @@ class fusion_center():
             index_delay_auto = 0
             for i in range(0,len(receivers)):
                 if not self.ref_receiver == receivers.keys()[i]:
-                    receivers.values()[i].samples = np.roll(receivers.values()[i].samples,delay_auto_calibration[index_delay_auto])
+                    delay[index_delay_auto] -= delay_auto_calibration[index_delay_auto]
+                    if not self.correlation_interpolation:
+                        receivers.values()[i].samples = np.roll(receivers.values()[i].samples,delay_auto_calibration[index_delay_auto])
                     index_delay_auto += 1
 
         if len(self.delay_calibration) > 0:
             index_delay = 0
             for i in range(0,len(receivers)):
                 if not self.ref_receiver == receivers.keys()[i]:
-                    receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
+                    delay[index_delay] -= self.delay_calibration[index_delay]
+                    if not self.correlation_interpolation:
+                        receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
                     index_delay += 1
         
         if self.localizing:
-
             if not self.filtering_type=="Kalman filter":
-                estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay = delay)
                 if self.reference_selection == "Min-DOP" :
                     try:
                         self.ref_receiver,dop_location,H = dop.reference_selection_dop(estimated_positions["chan"]["coordinates"],receivers)
@@ -1180,7 +1212,7 @@ class fusion_center():
                     print (self.init_settings_kalman)
                     self.init_settings_kalman["num_rx"] = len(self.receivers.values())
                     self.kalman_filter = kalman.kalman_filter(self.init_settings_kalman)
-                    estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])))
+                    estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay = delay)
                     if self.grid_based_active:
                         estimated_positions["grid_based"] = grid_based_algorithm.localize(receivers,np.round(self.basemap(self.bbox[2],self.bbox[3])), self.grid_based["resolution"], self.grid_based["num_samples"], self.ref_receiver)
                         self.xk_1_grid = np.hstack((np.array(list(estimated_positions["grid_based"]["coordinates"])),np.zeros(self.kalman_filter.get_state_size()-2)))
@@ -1202,7 +1234,7 @@ class fusion_center():
                         dop_location = 10
                     '''
                     
-                    estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2])
+                    estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])),self.kalman_filter.get_a_priori_est(self.xk_1_chan)[:2], delay = delay)
                     #print (estimated_positions["chan"]["coordinates"])
                     measurement = self.kalman_filter.pre_filter(estimated_positions["chan"]["coordinates"],self.xk_1_chan)
                     if self.reference_selection == "Min-DOP" :
@@ -1231,18 +1263,6 @@ class fusion_center():
             else:
                 self.init_kalman = False 
 
-        correlation, delay, correlation_labels = None,None,None
-        if len(receivers) > 1:
-            correlation, delay, correlation_labels = self.correlate(receivers)
-            if len(self.delay_history) < len(delay):
-                self.delay_history = []
-                for i in range(0,len(delay)):
-                    self.delay_history.append([])
-            for i in range(0,len(delay)):
-                self.delay_history[i].append(delay[i])
-        receivers_samples = []
-        for receiver in receivers.values():
-            receivers_samples.append(receiver.samples)
         self.results = {"rx_time":receivers.values()[0].tags["rx_time"],"receivers":receivers_samples,"correlation":correlation,"delay":delay,"delay_history":self.delay_history,"estimated_positions":estimated_positions,"correlation_labels":correlation_labels,"ref_receiver": self.ref_receiver, "Tx":None}
         for gui in self.guis.values():
             gui.rpc_manager.request("get_results",[self.results, {}])
@@ -1322,7 +1342,7 @@ class fusion_center():
         if self.recording_samples:
             self.cnt_smpl_log += 1
             self.sample_history.append(receiver_samples)
-        print("tRANSMITTER: ",receivers.keys()[self.cnt_j])
+        #print("tRANSMITTER: ",receivers.keys()[self.cnt_j])
         for cnt_l, rx_l in enumerate(receivers):
             for cnt_k, rx_k in enumerate(receivers):
                 if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
@@ -1330,7 +1350,7 @@ class fusion_center():
                     #by now ugly hack, rethink later
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] 
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
-                    print (receivers.keys()[cnt_l], receivers.keys()[cnt_k], self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average])
+                    #print (receivers.keys()[cnt_l], receivers.keys()[cnt_k], self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average])
                     if len(receivers.values()[cnt_l].samples) == 0:
                         print("Error in: ",receivers.keys()[cnt_l])
                 else:
@@ -1460,7 +1480,7 @@ def parse_options():
                       help="Server hostname")
     parser.add_option("-c", "--clientname", type="string", default="localhost",
                       help="Server hostname")
-    parser.add_option("", "--num-samples", type="string", default="300",
+    parser.add_option("", "--num-samples", type="string", default="1000",
                       help="Number of samples in burst")
     parser.add_option("", "--interpolation", type="string", default="1",
                       help="Interpolation factor")
