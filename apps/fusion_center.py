@@ -1018,6 +1018,7 @@ class fusion_center():
                 receiver.selected_position = "selfloc"
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
+            gui.rpc_manager.request("plot_anchor_positions",[coordinates_procrustes.tolist(), self.anchor_gt_positions.tolist()])
         time.sleep(0.05)
 
         # Split!

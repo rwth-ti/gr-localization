@@ -150,6 +150,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
+        self.rpc_manager.add_interface("plot_anchor_positions", self.plot_anchor_positions)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_resolution",self.set_gui_TDOA_grid_based_resolution)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_num_samples",self.set_gui_TDOA_grid_based_num_samples)
         self.rpc_manager.add_interface("set_gui_TDOA_grid_based_channel_model",self.set_gui_TDOA_grid_based_channel_model)
@@ -449,6 +450,7 @@ class gui(QtGui.QMainWindow):
         self.queue_tx_coordinates = deque()
 
     def calibration_loop(self, status):
+        print "in calibration_loop", status
         if status:
             self.calibration_setButton.setEnabled(False)
             self.calibration_gpsInputButton.setEnabled(False)
@@ -478,10 +480,13 @@ class gui(QtGui.QMainWindow):
                 self.zp.enabled = False
         elif button.text() == "Set calibration" :
             # calibrate with gps coordinates from line inputs
-            latitude = float(self.lineEditLatitude_cal.text())
-            longitude = float(self.lineEditLongitude_cal.text())
-            self.rpc_manager.request("calibrate",[self.basemap(longitude,latitude)])
-            self.calibration_dialog.accept()
+            try:
+                latitude = float(self.lineEditLatitude_cal.text())
+                longitude = float(self.lineEditLongitude_cal.text())
+                self.rpc_manager.request("calibrate",[self.basemap(longitude,latitude)])
+                self.calibration_dialog.accept()
+            except:
+                print "Position is not defined!"
 
     def start_anchoring(self):
         self.num_anchor_position = 0
@@ -516,16 +521,19 @@ class gui(QtGui.QMainWindow):
                 self.zp.enabled = False
         elif button.text() == "Set anchor position" :
             # calibrate with gps coordinates from line inputs
-            latitude = float(self.lineEditLatitude_anc.text())
-            longitude = float(self.lineEditLongitude_anc.text())
-            self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
-            self.pushButtonOK.setEnabled(True)
-            self.anchor_setButton.setEnabled(False)
-            self.anchor_gpsInputButton.setEnabled(False)
-            self.num_anchor_position += 1
-            if self.num_anchor_position == self.num_anchors:
-                self.anchor_doneButton.setEnabled(True)
-            self.curr_anchor_spin.setValue(self.num_anchor_position)
+            try:
+                latitude = float(self.lineEditLatitude_anc.text())
+                longitude = float(self.lineEditLongitude_anc.text())
+                self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
+                self.pushButtonOK.setEnabled(True)
+                self.anchor_setButton.setEnabled(False)
+                self.anchor_gpsInputButton.setEnabled(False)
+                self.num_anchor_position += 1
+                if self.num_anchor_position == self.num_anchors:
+                    self.anchor_doneButton.setEnabled(True)
+                self.curr_anchor_spin.setValue(self.num_anchor_position)
+            except:
+                print "Position is not defined!"
             
     def set_trackplot_length(self):
         self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
@@ -786,7 +794,7 @@ class gui(QtGui.QMainWindow):
                             + str(np.round(receiver.coordinates_selfloc,2)))
                             
 
-                receiver.annotation_selfloc = self.ax.annotate(text, receiver.coordinates_selfloc,fontweight='bold',bbox=dict(facecolor='b', alpha=0.9, zorder=20))
+                receiver.annotation_selfloc = self.ax.annotate(text, receiver.coordinates_selfloc,fontweight='bold',bbox=dict(facecolor='c', alpha=0.9, zorder=20))
 
                 self.canvas.draw()
             else:
@@ -817,6 +825,29 @@ class gui(QtGui.QMainWindow):
             self.canvas.draw()      
         else:
             # ax not rendered yet, so update position when available
+            self.pending_receivers_to_plot = True
+
+    def plot_anchor_positions(self, coordinates, coordinates_gt):
+        if not hasattr(self, "basemap"):
+            return
+        # remove point from map if was set
+        if hasattr(self, "scatters_anc"):
+            self.scatters_anc.remove()
+            self.scatters_anc_gt.remove()
+            #self.annotations_anc.remove()
+            #self.annotations_anc_gt.remove()
+        if hasattr(self, "ax"):
+            # save scattered point into receiver properties
+            for i in range(len(coordinates)):
+                print coordinates
+                print coordinates_gt
+                scatters_anc = self.ax.scatter(coordinates[i][0], coordinates[i][1],linewidths=2, marker='^', c='m', s=200, alpha=0.9)
+                scatters_anc_gt = self.ax.scatter(coordinates_gt[i][0], coordinates_gt[i][1],linewidths=2, marker='^', c='y', s=200, alpha=0.9)
+            # set annotation Rxi          
+            #annotations_anc = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
+            self.canvas.draw()      
+        else:
+            # how to handle here?
             self.pending_receivers_to_plot = True
 
     def set_tx_position(self, transmitter_positions):
@@ -1029,15 +1060,18 @@ class gui(QtGui.QMainWindow):
 
         elif button.text() == "Set" :
             # calibrate with gps coordinates from line inputs
-            latitude = float(self.lineEditLatitude_pos.text())
-            longitude = float(self.lineEditLongitude_pos.text())
-            altitude = float(self.lineEditAltitude_pos.text())
-            # program gps coordinates for receiver that corresponds to the clicked button
-            # see gui_helpers PushButtonPositionDelegate
-            print "receiver:",self.setting_pos_receiver
-            if self.setting_pos_receiver is not "": 
-                self.rpc_manager.request("program_gps_receiver",[self.setting_pos_receiver,latitude, longitude, altitude])
-                self.position_dialog.accept()
+            try:
+                latitude = float(self.lineEditLatitude_pos.text())
+                longitude = float(self.lineEditLongitude_pos.text())
+                altitude = float(self.lineEditAltitude_pos.text())
+                # program gps coordinates for receiver that corresponds to the clicked button
+                # see gui_helpers PushButtonPositionDelegate
+                print "receiver:",self.setting_pos_receiver
+                if self.setting_pos_receiver is not "": 
+                    self.rpc_manager.request("program_gps_receiver",[self.setting_pos_receiver,latitude, longitude, altitude])
+                    self.position_dialog.accept()
+            except:
+                print "Position is not defined!"
     def switch_transmitter(self):
         self.rpc_manager.request("switch_transmitter")
 
