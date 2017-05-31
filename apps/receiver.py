@@ -159,6 +159,7 @@ class top_block(gr.top_block):
         else:
             s.connect(("www.rwth-aachen.de",80))
         self.ip_addr = s.getsockname()[0]
+        print "Master clock rate: ", self.usrp_source.get_clock_rate()
         self.stop_transmitter() # transmit flag toggled inside
 
 
@@ -466,7 +467,7 @@ class top_block(gr.top_block):
 
     def program_gps_position(self, latitude, longitude, altitude):
         # needed in ublox settings; by now we assume at least dm accuracy
-        ground_truth_accuracy = 0.1
+        ground_truth_accuracy = 0.3
         print 'Configure u-blox TMODE2 through USB'        
         set_ublox_coordinates_fixed(latitude, longitude, altitude, ground_truth_accuracy)
         print "Check position through UHD NMEA"
