@@ -102,12 +102,25 @@ class fusion_center():
         self.ntp_sync = False
         self.calibrating = False
         
-        # selfloc
-        self.sample_history = []
+        # Parameters for self-localization:
         self.pos_selfloc = []
-        self.alpha = 1.0
+        self.alpha = 0.3
         self.init_stress = 10.0
-        self.max_it = 99 
+        self.max_it = 100
+        self.stress_list = []
+        self.coordinates_procrustes = []
+        self.selected_positions_prev = []
+        self.self_localization = False
+        self.transmitter = -1 # No sensor is transmitting
+        self.transmitter_debug = 0
+        self.sample_average = int(options.selfloc_average_length)
+        self.transmitter_history = []
+        self.timestamp_history = []
+        #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
+        self.delay_tensor = [[[[]]]]
+        self.cnt_j = 0
+        self.cnt_average = 0
+        self.tx_gain = 89 #in db
 
         # Anchoring:
         self.num_anchor = 0
@@ -116,10 +129,12 @@ class fusion_center():
         self.anchor_loop = False
         self.anchor_average = 3
         self.anchor_loop_delays = []
-        self.anchor_positions = []
-        self.anchor_gt_positions = []
-        self.anchor_loop_delay_history = []
-        
+        self.anchor_positions = [None] * self.num_anchors
+        self.anchor_gt_positions = [None] * self.num_anchors
+        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average) 
+        self.completed_anchors = [0] * self.num_anchors
+        self.sample_history = [0] * (4 * self.sample_average + self.num_anchors * self.anchor_average) 
+
         self.map_type = "Online"
         self.map_file = "../maps/map.png"
         self.coordinates_type = "Geographical"
@@ -137,18 +152,7 @@ class fusion_center():
         self.init_settings_kalman["max_acceleration"] = self.max_acc
 
 
-        # Parameters for self-localization:
-        self.self_localization = False
-        self.transmitter = -1 # No sensor is transmitting
-        self.transmitter_debug = 0
-        self.sample_average = int(options.selfloc_average_length)
-        self.transmitter_history = []
-        self.timestamp_history = []
-        #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
-        self.delay_tensor = [[[[]]]]
-        self.cnt_j = 0
-        self.cnt_average = 0
-        self.tx_gain = 50 #in db
+       
 
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
@@ -238,6 +242,8 @@ class fusion_center():
         self.rpc_manager.add_interface("set_anchor_gt_position",self.set_anchor_gt_position)
         self.rpc_manager.add_interface("start_anchoring_loop",self.start_anchoring_loop)
         self.rpc_manager.add_interface("stop_selfloc", self.stop_selfloc)
+        self.rpc_manager.add_interface("selfloc_done", self.selfloc_done)
+        self.rpc_manager.add_interface("new_result_procrustes", self.new_result_procrustes)
         self.rpc_manager.start_watcher()
 
         self.probe_manager_lock = threading.Lock()
@@ -677,6 +683,7 @@ class fusion_center():
         print("selfloc_loop")
         self.delay_history = []
         self.estimated_positions_history = []
+        self.sample_history[:len(self.receivers) * self.sample_average] = [0] * (len(self.receivers) * self.sample_average) 
         self.stop_transmitter()
         self.recording_results = self.record_results
         self.recording_samples = self.record_samples
@@ -692,8 +699,8 @@ class fusion_center():
         self.self_localization = True
         self.run_loop = True
         self.anchor_interrupt = False
-        self.anchor_positions = []
-        self.anchor_gt_positions = []
+        self.stress_list = []
+        # loop gets started in switch_transmitter!
         self.switch_transmitter(self.cnt_j)
         
 
@@ -921,14 +928,14 @@ class fusion_center():
 
     def start_anchoring(self):
         # immediatly interrupt if all positions required are optained
-        if (len(self.anchor_gt_positions) == self.num_anchors) and (len(self.anchor_positions) == self.num_anchors):
+        if all(self.completed_anchors[j] == j + 1 for j in range(self.num_anchors)):
             self.anchoring = False
             return True
         else:
             if self.anchor_interrupt:
                 return True
             if not self.anchoring:
-                if len(self.anchor_gt_positions) == 0:
+                if all(self.completed_anchors[j] == 0 for j in range(self.num_anchors)):
                     for gui in self.guis.values():
                         gui.rpc_manager.request("start_anchoring")
                 return False
@@ -941,6 +948,10 @@ class fusion_center():
         #tbd build up similar to calibration loop?
         #acquire delay/position similar to calibration_loop_delays/calibration_loop
         self.anchor_loop_delays = []
+        self.completed_anchors[self.num_anchor] = 0
+        self.anchor_gt_positions[self.num_anchor] = None
+        self.anchor_positions[self.num_anchor] = None
+        self.cnt_anc_average = 0
         self.anchoring = True
         self.anchor_loop = True
         self.recording_results = False
@@ -954,7 +965,10 @@ class fusion_center():
             gui.rpc_manager.request("set_anchor_position", [self.anchor_position])
 
     def set_anchor_gt_position(self,pos):
-        self.anchor_gt_positions.append(np.array(pos))
+        self.anchor_gt_positions[self.num_anchor] = np.array(pos)
+        print("in gt_pos: ",self.num_anchor)
+        if self.anchor_positions[self.num_anchor] != None:
+            self.completed_anchors[self.num_anchor] = self.num_anchor + 1
 
     def stop_selfloc_loop(self):
         self.cnt_j = 0
@@ -981,7 +995,7 @@ class fusion_center():
 
     def evaluate_selfloc(self,receivers):
         print("cnt_smpl: ",self.cnt_smpl_log)
-        D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
+        self.D = np.ndarray(shape=(len(receivers),len(receivers),len(receivers)))
         sum_square_tdoa = 0
         for j in range(len(receivers)):
             for l in range(len(receivers)):
@@ -989,85 +1003,85 @@ class fusion_center():
                     # average distance differences
                     tdoa = sum(self.delay_tensor[j,l,k]) / self.sample_average / self.samp_rate * 299700000.0
                     sum_square_tdoa += tdoa**2
-                    D[j,l,k] = tdoa
+                    self.D[j,l,k] = tdoa
         pos_selfloc = None
-        stress_list = [self.init_stress]
-        self.pos_selfloc, stress_list = mds_self_tdoa.selfloc(D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, stress_list)
-        print(stress_list)
+        self.stress_list = [self.init_stress]
+        self.pos_selfloc, self.stress_list = mds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
+        print(self.stress_list)
         if self.record_results:
             print(self.recording_results)
             receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
-            header =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+            self.header_selfloc =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
             + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n" 
-        selected_positions_prev = []
+        self.wait_anchors(receivers)
+
+    def wait_anchors(self, receivers):
+        #receivers changed or not?
+        self.selected_positions_prev = []
         for j, receiver in enumerate(receivers.values()):
-            selected_positions_prev.append(receiver.selected_position)
+            self.selected_positions_prev.append(receiver.selected_position)
             receiver.coordinates_selfloc = self.pos_selfloc[j]
             receiver.selected_position = "selfloc" 
-        # Wait for gui here
-        # Split!
-
         anchoring_complete = False
         while anchoring_complete == False:
             anchoring_complete = self.start_anchoring()
             time.sleep(0.5)
-        if self.anchor_interrupt:
-            self.anchor_interrupt = False
-            return
-        print("anchoring done")
 
-        # Split!
+    def selfloc_done(self):
+        print(self.recording_results, self.recording_samples)
+        if self.recording_results:
+            self.log_selfloc_results()
+        if self.recording_samples: 
+            self.log_samples()
 
+    def new_result_procrustes(self):
         self.anchor_gt_positions = np.array(self.anchor_gt_positions)
         self.anchor_positions = np.array(self.anchor_positions)
-        d, coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
-        print(coordinates_procrustes)
+        d, self.coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
+        print(self.coordinates_procrustes)
         reflection = np.linalg.det(tform["rotation"])
         self.pos_selfloc_procrustes =  np.dot(self.pos_selfloc,tform["rotation"]) + tform["translation"]
-        print(self.pos_selfloc_procrustes)
-        for j, receiver in enumerate(receivers.values()):
+        print(self.anchor_gt_positions)
+        for j, receiver in enumerate(self.receivers.values()):
                 receiver.coordinates_selfloc = self.pos_selfloc_procrustes[j]
-                receiver.selected_position = selected_positions_prev[j]
+                receiver.selected_position = self.selected_positions_prev[j]
         for gui in self.guis.values():
             gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
-            gui.rpc_manager.request("plot_anchor_positions",[coordinates_procrustes.tolist(), self.anchor_gt_positions.tolist()])
+            gui.rpc_manager.request("plot_anchor_positions",[self.coordinates_procrustes.tolist(), self.anchor_gt_positions.tolist()])
         time.sleep(0.05)
+           
+    def log_selfloc_results(self):
+        results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
+        fi = open(results_file_selfloc,'w')
+        fi.write("##########################################################################################################################################################################################\n")
+        fi.write("rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
+        fi.write("##########################################################################################################################################################################################\n")
+        fi.write(self.header_selfloc)
+        fi.write(str(self.transmitter_history) + "\n")
+        fi.write(str(self.timestamp_history) + "\n")
+        fi.write(str(self.delay_tensor.tolist()) + "\n")
+        fi.write(str(self.D.tolist()) + "\n")
+        fi.write(str(self.anchor_loop_delay_history) + "\n")
+        fi.write(str(self.anchor_positions.tolist()) + "\n")
+        fi.write(str(self.coordinates_procrustes.tolist()) + "\n")
+        fi.write(str(self.anchor_gt_positions.tolist()) + "\n")
+        fi.write(str(self.pos_selfloc.tolist()) + "\n")
+        fi.write(str(self.pos_selfloc_procrustes.tolist()) + "\n")
+        #fi.write(str(tform.keys()) + "\n")
+        #tform["rotation"] = tform["rotation"].tolist()
+        #tform["translation"] = tform["translation"].tolist()
+        #fi.write(str(tform.values()) + "\n")
+        fi.write(str(self.stress_list) + "\n")
+        fi.close()
 
-
-        # Split!
-
-        if self.recording_results:
-            results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
-            fi = open(results_file_selfloc,'w')
-            fi.write("##########################################################################################################################################################################################\n")
-            fi.write("rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
-            fi.write("##########################################################################################################################################################################################\n")
-            fi.write(header)
-            fi.write(str(self.transmitter_history) + "\n")
-            fi.write(str(self.timestamp_history) + "\n")
-            fi.write(str(self.delay_tensor.tolist()) + "\n")
-            fi.write(str(D.tolist()) + "\n")
-            fi.write(str(self.anchor_loop_delay_history) + "\n")
-            fi.write(str(self.anchor_positions.tolist()) + "\n")
-            fi.write(str(coordinates_procrustes.tolist()) + "\n")
-            fi.write(str(self.anchor_gt_positions.tolist()) + "\n")
-            fi.write(str(self.pos_selfloc.tolist()) + "\n")
-            fi.write(str(self.pos_selfloc_procrustes.tolist()) + "\n")
-            #fi.write(str(tform.keys()) + "\n")
-            tform["rotation"] = tform["rotation"].tolist()
-            tform["translation"] = tform["translation"].tolist()
-            #fi.write(str(tform.values()) + "\n")
-            fi.write(str(stress_list) + "\n")
-            fi.close()
-        if self.recording_samples: 
-            f_s = open(self.samples_file,"a")
-            for entry in self.sample_history:
-                pprint.pprint(str(entry) + "\n",f_s,width=9000)
-            f_s.close() 
-
+    def log_samples(self):
+        f_s = open(self.samples_file,"a")
+        for entry in self.sample_history:
+            pprint.pprint(str(entry) + "\n",f_s,width=9000)
+        f_s.close() 
 
     def process_results(self, receivers, delay_auto_calibration):
         # check if timestamps are equal for all the receivers
@@ -1109,7 +1123,7 @@ class fusion_center():
             for receiver in receivers.values():
                 receiver_samples.append(receiver.samples.tolist())
             if self.anchor_loop:
-                self.sample_history.append(receiver_samples)
+                self.sample_history[len(self.receivers)* self.sample_average + self.num_anchor * self.anchor_average + self.cnt_anc_average] = receiver_samples
             else:
                 f_s = open(self.samples_file,"a")
                 pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
@@ -1309,15 +1323,19 @@ class fusion_center():
         if self.anchor_loop:
             self.anchor_loop_delays.append(delay)
             # no sensor is transmitting
+            self.cnt_anc_average += 1
             self.transmitter_history.append(-1)
             self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
             if len(self.anchor_loop_delays) == self.anchor_average:
                 self.run_loop = False
                 delay_mean = np.array(self.anchor_loop_delays).mean(0)
-                self.anchor_positions.append(chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay_mean)["coordinates"])
-                self.set_anchor_position(self.anchor_positions[-1])
+                self.anchor_positions[self.num_anchor] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay_mean)["coordinates"]
+                print("num_anchor", self.num_anchor)
+                if self.anchor_gt_positions[self.num_anchor] != None:
+                    self.completed_anchors[self.num_anchor] = self.num_anchor + 1
+                self.set_anchor_position(self.anchor_positions[self.num_anchor])
                 self.anchor_loop = False
-                self.anchor_loop_delay_history.append(self.anchor_loop_delays)
+                self.anchor_loop_delay_history[self.num_anchor] = self.anchor_loop_delays
                 self.anchor_loop_delays = []
                 self.stop_loop()
                 self.recording_samples = self.record_samples
@@ -1341,7 +1359,7 @@ class fusion_center():
             receiver_samples.append(receiver.samples.tolist())
         if self.recording_samples:
             self.cnt_smpl_log += 1
-            self.sample_history.append(receiver_samples)
+            self.sample_history[self.cnt_j * self.sample_average + self.cnt_average] = receiver_samples
         #print("tRANSMITTER: ",receivers.keys()[self.cnt_j])
         for cnt_l, rx_l in enumerate(receivers):
             for cnt_k, rx_k in enumerate(receivers):

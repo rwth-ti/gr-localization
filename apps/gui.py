@@ -123,7 +123,8 @@ class gui(QtGui.QMainWindow):
         
         self.num_anchor_position = 0
         self.num_anchors = 3
-
+        # list for checking which anchors have been set and localized
+        self.completed_anchors = [0] * self.num_anchors
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
@@ -292,8 +293,6 @@ class gui(QtGui.QMainWindow):
         self.position_dialog.setWindowTitle("Set receiver position")
         self.waitText_pos = QtGui.QLabel("Provide receiver coordinates or select by clicking on the map.")
 
-        # reuse long and lat label from calibration Dialog
-        # add altitude
         self.altLabel = QtGui.QLabel("altitude (m)")
         self.lineEditAltitude_pos = QtGui.QLineEdit() 
         layout = QtGui.QFormLayout()
@@ -330,11 +329,11 @@ class gui(QtGui.QMainWindow):
         layoutAnchoring = QtGui.QFormLayout()
 
         self.curr_anchor_text = QtGui.QLabel("Anchor Number:")
-        self.curr_anchor_spin = QtGui.QSpinBox()
-        self.curr_anchor_spin.setValue(1)
+        self.comboBoxCurrAnchor = QtGui.QComboBox()
+        self.comboBoxCurrAnchor.setCurrentIndex(0)
         layout_hor = QtGui.QHBoxLayout()
         layout_hor.addWidget(self.curr_anchor_text)
-        layout_hor.addWidget(self.curr_anchor_spin)
+        layout_hor.addWidget(self.comboBoxCurrAnchor)
         layoutAnchoring.addRow(layout_hor)
         
         self.waitText2 = QtGui.QLabel("Place anchor and press 'Start'")
@@ -367,6 +366,7 @@ class gui(QtGui.QMainWindow):
         layout.addRow(layout_hor)
         self.anchor_dialog.setLayout(layout)
         
+        self.comboBoxCurrAnchor.setAutoFillBackground(True)
         
 
         #Signals
@@ -430,8 +430,8 @@ class gui(QtGui.QMainWindow):
         self.shortcut_exit = QtGui.QShortcut(Qt.QKeySequence("Ctrl+D"), self.gui)
         self.connect(self.shortcut_exit, QtCore.SIGNAL("activated()"), self.gui.close)
         self.connect(self.anchor_cancelButton, QtCore.SIGNAL("clicked()"), self.cancel_all_selfloc)
-        self.connect(self.anchor_doneButton, QtCore.SIGNAL("clicked()"), self.anchor_dialog.accept)
-
+        self.connect(self.anchor_doneButton, QtCore.SIGNAL("clicked()"), self.selfloc_done)
+        self.connect(self.comboBoxCurrAnchor, QtCore.SIGNAL("activated(int)"), self.set_current_anchor)
         # Grid based signals
         self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(double)"), self.set_TDOA_grid_based_resolution)
         self.connect(self.gui.spinGridNumCompSamps, QtCore.SIGNAL("valueChanged(int)"), self.set_TDOA_grid_based_num_samples)
@@ -442,6 +442,8 @@ class gui(QtGui.QMainWindow):
         self.timer_register = threading.Thread(target = self.register_gui)
         self.timer_register.daemon = True
         self.timer_register.start()
+        #init
+        self.check_anchor_complete()
 
     def remove_trackplots(self):
         if self.track_plot:
@@ -463,6 +465,29 @@ class gui(QtGui.QMainWindow):
         self.anchor_gpsInputButton.setEnabled(True)
         self.anchor_positions.append(position)
 
+    def check_anchor_complete(self):
+        self.comboBoxCurrAnchor.clear()
+        model = self.comboBoxCurrAnchor.model()
+        for j in range(self.num_anchors):
+            item = QtGui.QStandardItem(str(j+1))
+            #FIXME Background
+            if j+1 in self.completed_anchors:
+                item.setForeground(QtGui.QColor('green'))
+            else:
+                item.setForeground(QtGui.QColor('red'))
+            model.appendRow(item)
+        if self.num_anchor_position < self.num_anchors:
+            self.comboBoxCurrAnchor.setCurrentIndex(self.num_anchor_position)
+        else:
+            self.comboBoxCurrAnchor.setCurrentIndex(0)
+
+    def set_current_anchor(self):
+        print "num_anchor_pos: ", self.num_anchor_position
+        self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
+
+    def selfloc_done(self):
+        self.anchor_dialog.accept()
+        self.rpc_manager.request("selfloc_done")
 
     def calibration_status(self, status):
         if status:
@@ -489,20 +514,20 @@ class gui(QtGui.QMainWindow):
                 print "Position is not defined!"
 
     def start_anchoring(self):
-        self.num_anchor_position = 0
+        self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
         self.anchor_positions = []
-        self.curr_anchor_spin.setValue(1)
         self.pushButtonOK.setEnabled(True)
+        self.comboBoxCurrAnchor.setEnabled(True)
 
     def start_anchoring_loop(self):
         self.pushButtonOK.setEnabled(False)
-        if self.num_anchor_position < self.num_anchors:
-            self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position])
-            self.anchor_setButton.setEnabled(False)
-            self.anchor_gpsInputButton.setEnabled(False)
-        else:
-            self.pushButtonDMDS.setEnabled(True)
-            self.curr_anchor_spin.setEnabled(True)
+        self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
+        self.completed_anchors[self.num_anchor_position] = 0
+        self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position])
+        self.anchor_setButton.setEnabled(False)
+        self.anchor_gpsInputButton.setEnabled(False)
+        self.comboBoxCurrAnchor.setEnabled(False)
+
 
     def cancel_all_selfloc(self):
         self.rpc_manager.request("stop_selfloc")
@@ -511,7 +536,7 @@ class gui(QtGui.QMainWindow):
         self.pushButtonOK.setEnabled(True)
         self.anchor_setButton.setEnabled(True)
         self.anchor_gpsInputButton.setEnabled(True)
-        self.curr_anchor_spin.setEnabled(True)
+        self.comboBoxCurrAnchor.setEnabled(True)
         self.anchor_dialog.reject()
 
     def set_anchor_gt_position(self, button):
@@ -524,14 +549,21 @@ class gui(QtGui.QMainWindow):
             try:
                 latitude = float(self.lineEditLatitude_anc.text())
                 longitude = float(self.lineEditLongitude_anc.text())
-                self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
                 self.pushButtonOK.setEnabled(True)
                 self.anchor_setButton.setEnabled(False)
                 self.anchor_gpsInputButton.setEnabled(False)
+                self.completed_anchors[self.num_anchor_position] = self.num_anchor_position + 1
                 self.num_anchor_position += 1
-                if self.num_anchor_position == self.num_anchors:
+                if self.num_anchor_position < self.num_anchors:
+                    self.comboBoxCurrAnchor.setCurrentIndex(self.num_anchor_position)
+                self.comboBoxCurrAnchor.setEnabled(True)
+                self.check_anchor_complete()
+                self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
+                if all(self.completed_anchors[i] == i +1 for i in range(self.num_anchors)):
+                    self.rpc_manager.request("new_result_procrustes")
                     self.anchor_doneButton.setEnabled(True)
-                self.curr_anchor_spin.setValue(self.num_anchor_position)
+                    self.pushButtonDMDS.setEnabled(True)
+            
             except:
                 print "Position is not defined!"
             
@@ -555,6 +587,7 @@ class gui(QtGui.QMainWindow):
     def set_num_anchors(self):
         self.num_anchors = self.gui.spinBoxNumAnchors.value()
         self.rpc_manager.request("set_num_anchors",[self.num_anchors])
+        self.check_anchor_complete()
 
     def set_tx_gain(self):
         self.tx_gain = self.gui.spinBoxTransmitGain.value()
@@ -832,19 +865,17 @@ class gui(QtGui.QMainWindow):
             return
         # remove point from map if was set
         if hasattr(self, "scatters_anc"):
-            self.scatters_anc.remove()
-            self.scatters_anc_gt.remove()
-            #self.annotations_anc.remove()
-            #self.annotations_anc_gt.remove()
+            for i in range(len(self.scatters_anc)):
+                self.scatters_anc[i].remove()
+                self.scatters_anc_gt[i].remove()
         if hasattr(self, "ax"):
             # save scattered point into receiver properties
+            self.scatters_anc = []
+            self.scatters_anc_gt = []
             for i in range(len(coordinates)):
-                print coordinates
-                print coordinates_gt
-                scatters_anc = self.ax.scatter(coordinates[i][0], coordinates[i][1],linewidths=2, marker='^', c='m', s=200, alpha=0.9)
-                scatters_anc_gt = self.ax.scatter(coordinates_gt[i][0], coordinates_gt[i][1],linewidths=2, marker='^', c='y', s=200, alpha=0.9)
-            # set annotation Rxi          
-            #annotations_anc = self.ax.annotate(text_gps, receiver.coordinates_gps,fontweight='bold',bbox=dict(facecolor='#33ff33', alpha=0.9, zorder=20))
+                self.scatters_anc.append(self.ax.scatter(coordinates[i][0], coordinates[i][1],linewidths=2, marker='^', c='m', s=200, alpha=0.9))
+                self.scatters_anc_gt.append(self.ax.scatter(coordinates_gt[i][0], coordinates_gt[i][1],linewidths=2, marker='^', c='y', s=200, alpha=0.9))
+
             self.canvas.draw()      
         else:
             # how to handle here?
@@ -1080,7 +1111,7 @@ class gui(QtGui.QMainWindow):
         self.pushButtonOK.setEnabled(False)
         self.anchor_setButton.setEnabled(False)
         self.anchor_gpsInputButton.setEnabled(False)
-        self.curr_anchor_spin.setEnabled(False)
+        self.comboBoxCurrAnchor.setEnabled(False)
     
     def start_selfloc_loop(self):
         self.pushButtonDMDS.setEnabled(False)
@@ -1221,6 +1252,7 @@ class gui(QtGui.QMainWindow):
     def set_gui_num_anchors(self, num_anchors):
         self.num_anchors = num_anchors
         self.gui.spinBoxNumAnchors.setValue(num_anchors)
+        self.check_anchor_complete()
 
     def set_gui_sample_average(self, sample_average):
         self.sample_average = sample_average
@@ -1558,19 +1590,19 @@ class gui(QtGui.QMainWindow):
             self.reset_receiver_combo_boxes()
 
     def reset_receiver_combo_boxes(self):
-            self.gui.comboBoxReceiver1.clear()
-            self.gui.comboBoxReceiver2.clear()
-            self.gui.comboBoxReceiver3.clear()
-            for serial in self.receivers.keys():
-                if serial != self.transmitter:
-                    self.gui.comboBoxReceiver1.addItem(serial)
-                    self.gui.comboBoxReceiver2.addItem(serial)
-                    self.gui.comboBoxReceiver3.addItem(serial)
-            self.gui.comboBoxReceiver1.setCurrentIndex(0)
-            if len(self.receivers.keys())>1:
-                self.gui.comboBoxReceiver2.setCurrentIndex(1)
-            if len(self.receivers.keys())>2:
-                self.gui.comboBoxReceiver3.setCurrentIndex(2)
+        self.gui.comboBoxReceiver1.clear()
+        self.gui.comboBoxReceiver2.clear()
+        self.gui.comboBoxReceiver3.clear()
+        for serial in self.receivers.keys():
+            if serial != self.transmitter:
+                self.gui.comboBoxReceiver1.addItem(serial)
+                self.gui.comboBoxReceiver2.addItem(serial)
+                self.gui.comboBoxReceiver3.addItem(serial)
+        self.gui.comboBoxReceiver1.setCurrentIndex(0)
+        if len(self.receivers.keys())>1:
+            self.gui.comboBoxReceiver2.setCurrentIndex(1)
+        if len(self.receivers.keys())>2:
+            self.gui.comboBoxReceiver3.setCurrentIndex(2)
 
     def register_another_gui(self, serial):
         self.tmg.registerGui(serial)
