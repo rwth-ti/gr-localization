@@ -113,7 +113,7 @@ class top_block(gr.top_block):
             self.file_sink = blocks.file_sink(gr.sizeof_gr_complex*1, file_name, True)
             self.file_sink.set_unbuffered(False)
 
-        # call constructor at fist for not harming synchronization 
+        # call constructor at fist to secure synchronization 
         self.tx_bpsk_0 = tx_bpsk(
             serial = self.options.serial,
             mcr= self.options.mcr,
@@ -123,7 +123,7 @@ class top_block(gr.top_block):
             gain=89.5,
             num_pulses=20000,
             pulse_length=1,
-            samp_rate=10240000,
+            samp_rate=20000000,
         )
         self.connect(self.tx_bpsk_0)
         # connects
@@ -209,7 +209,7 @@ class top_block(gr.top_block):
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
-        self.tx_bpsk_0.set_samp_rate(10240000)
+        self.tx_bpsk_0.set_samp_rate(20000000)
 
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
@@ -495,7 +495,7 @@ def parse_options():
                       help="GPS type")
     parser.add_option("-i", "--id-rx", type="int", default="1",
                       help="Receiver ID")
-    parser.add_option("--mcr", type="float", default="0",
+    parser.add_option("--mcr", type="float", default="40e6",
                       help="Master clock rate")
     parser.add_option("", "--coordinates-m", type="string", default="0.0,0.0",
                       help="Receiver coordinates in meters")

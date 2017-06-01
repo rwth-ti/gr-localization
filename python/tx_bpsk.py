@@ -91,7 +91,6 @@ class tx_bpsk(gr.hier_block2):
             self.nmea_external_lock = threading.Lock()
             threading.Thread(target = self.poll_lea_m8f).start()
 
-        self.uhd_usrp_sink_0.set_clock_rate(30.72e6, uhd.ALL_MBOARDS)
         self.uhd_usrp_sink_0.set_samp_rate(samp_rate)
         self.uhd_usrp_sink_0.set_center_freq(center_freq, 0)
         self.uhd_usrp_sink_0.set_gain(gain, 0)

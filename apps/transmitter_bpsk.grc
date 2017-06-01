@@ -159,7 +159,7 @@
     </param>
     <param>
       <key>value</key>
-      <value>20000000</value>
+      <value>10000000</value>
     </param>
   </block>
   <block>
@@ -295,7 +295,7 @@
     </param>
     <param>
       <key>bw0</key>
-      <value>50000000</value>
+      <value>0</value>
     </param>
     <param>
       <key>center_freq0</key>
@@ -931,7 +931,7 @@
     </param>
     <param>
       <key>clock_rate</key>
-      <value>30.72e6</value>
+      <value>0.0</value>
     </param>
     <param>
       <key>comment</key>

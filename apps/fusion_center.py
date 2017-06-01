@@ -1506,7 +1506,7 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="30.72e6",
+    parser.add_option("", "--samp-rate", type="string", default="40e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
