@@ -220,6 +220,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_bw_calibration",self.set_bw_calibration)
         self.rpc_manager.add_interface("set_gain",self.set_gain)
         self.rpc_manager.add_interface("set_gain_calibration",self.set_gain_calibration)
+        self.rpc_manager.add_interface("set_offset",self.set_offset)
         self.rpc_manager.add_interface("set_antenna",self.set_antenna)
         self.rpc_manager.add_interface("set_selected_position",self.set_selected_position)
         self.rpc_manager.add_interface("set_ref_receiver",self.set_ref_receiver)
@@ -309,7 +310,7 @@ class fusion_center():
                             pos_receiver = receiver.coordinates_gps
                         d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                         d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                        delay_true = (d_receiver-d_ref) * self.samp_rate * self.sample_interpolation / 299700000
+                        delay_true = (d_receiver-d_ref)/ 299700000 * 10**9
                         print("True delay: ",delay_true)
                         print(index_delay,len(self.delay_calibration),len(self.calibration_loop_delays))
                         print(self.calibration_loop_delays)
@@ -352,7 +353,7 @@ class fusion_center():
                         pos_receiver = receiver.coordinates_selfloc
                     d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
                     d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                    delay_true = (d_receiver-d_ref) * self.samp_rate * self.sample_interpolation / 299700000
+                    delay_true = (d_receiver-d_ref) * 10**9 / 299700000
                     print("True delay: ",delay_true)
                     if len(self.delay_auto_calibration) < len(delays):
                         if self.correlation_interpolation:
@@ -492,7 +493,7 @@ class fusion_center():
         if first_time or was_not_registered:
             for serial in self.receivers:
                 # request registration of each receiver in gui
-                gui.rpc_manager.request("register_receiver",[serial, self.receivers[serial].gain, self.receivers[serial].antenna, self.receivers[serial].gain_calibration])
+                gui.rpc_manager.request("register_receiver",[serial, self.receivers[serial].gain, self.receivers[serial].antenna, self.receivers[serial].gain_calibration, self.receivers[serial].offset])
                 gui.rpc_manager.request("sync_position",[serial, self.receivers[serial].coordinates])
                 gui.rpc_manager.request("set_gps_position",[serial, self.receivers[serial].coordinates_gps])
             gui.rpc_manager.request("set_gui_frequency",[self.frequency])
@@ -581,12 +582,13 @@ class fusion_center():
             receiver.gps = gps
             receiver.auto_calibrate = self.auto_calibrate
             receiver.measurement_noise = self.measurement_noise
+            receiver.offset = 0
             self.probe_manager_lock.acquire()
             self.probe_manager.add_socket(serial, receiver.probe_address, 'complex64', receiver.receive_samples)
             self.probe_manager_lock.release()
             for gui in self.guis.values():
                 # request registration in each gui
-                gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna, receiver.gain_calibration])
+                gui.rpc_manager.request("register_receiver",[serial, receiver.gain, receiver.antenna, receiver.gain_calibration, receiver.offset])
             self.set_ref_receiver(serial)
             self.sync_position(serial,coordinates)
             self.update_receivers()
@@ -807,6 +809,11 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_gain_calibration",[gain, serial])
 
+    def set_offset(self, offset, serial):
+        self.receivers[serial].offset = offset
+        for gui in self.guis.values():
+            gui.rpc_manager.request("set_gui_offset",[offset, serial])
+
     def set_antenna(self, antenna, serial):
         self.receivers[serial].antenna = antenna
         for gui in self.guis.values():
@@ -1001,9 +1008,9 @@ class fusion_center():
             for l in range(len(receivers)):
                 for k in range(len(receivers)):
                     # average distance differences
-                    tdoa = sum(self.delay_tensor[j,l,k]) / self.sample_average / self.samp_rate * 299700000.0
+                    tdoa = sum(self.delay_tensor[j,l,k]) / self.sample_average / 10**9 * 299700000.0
                     sum_square_tdoa += tdoa**2
-                    self.D[j,l,k] = tdoa
+                    self.D[j,l,k] = tdoa 
         pos_selfloc = None
         self.stress_list = [self.init_stress]
         self.pos_selfloc, self.stress_list = mds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
@@ -1367,7 +1374,7 @@ class fusion_center():
                 if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
                     window_size = 13
                     #by now ugly hack, rethink later
-                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] 
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1]  / self.samp_rate * 10**9 - rx_l.offset + rx_k.offset
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
                     #print (receivers.keys()[cnt_l], receivers.keys()[cnt_k], self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average])
                     if len(receivers.values()[cnt_l].samples) == 0:
@@ -1463,19 +1470,19 @@ class fusion_center():
                     window_size = 13
                     if receivers[receiver].correlation_interpolation:
                         correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers[receiver].samples, receivers[self.ref_receiver].samples,window_size)
-                        delay.append(delay_acquisition)
+                        delay.append(delay_acquisition  / self.samp_rate * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset)
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full")).tolist())
-                        delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive * self.sample_interpolation)+ 1).tolist()
+                        delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive * self.sample_interpolation)+ 1) / self.samp_rate / self.sample_interpolation * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset).tolist()
                 else:
                     if receivers[receiver].correlation_interpolation:
                         correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration,window_size)
-                        delay.append(delay_acquisition)
+                        delay.append(delay_acquisition / self.samp_rate * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset)
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full")).tolist())
-                        delay = (np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.sample_interpolation) + 1).tolist()
+                        delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.sample_interpolation) + 1) / self.samp_rate / self.sample_interpolation * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset).tolist()
                 correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))
             i += 1
         print("Delay:", delay, "samples")

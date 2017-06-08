@@ -6,10 +6,11 @@ from PyQt4 import QtCore, QtGui
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 
 class receiver_item():
-    def __init__(self, gain, antenna, gain_calibration):
+    def __init__(self, gain, antenna, gain_calibration, offset):
         self.gain = gain
         self.gain_calibration = gain_calibration
         self.antenna = antenna
+        self.offset = 0
         self.selected_position= "manual"
         self.coordinates = [0.0,0.0]
         self.coordinates_gps = [0.0,0.0]
@@ -106,11 +107,12 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
         QtCore.QAbstractTableModel.__init__(self, parent, *args)
 
     def rowCount(self, parent=QtCore.QModelIndex()): return len(self.parent.receivers)
-    def columnCount(self, parent=QtCore.QModelIndex()): return 4
+    def columnCount(self, parent=QtCore.QModelIndex()): return 5
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         if not index.isValid(): return None
-        if not role==QtCore.Qt.DisplayRole: return None
+        if not role==QtCore.Qt.DisplayRole:
+            return None
         if index.column() == 0:
             return self.parent.receivers.keys()[index.row()]
         elif index.column() == 1:
@@ -119,6 +121,8 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
             return self.parent.receivers.values()[index.row()].antenna
         elif index.column() == 3:
             return self.parent.receivers.values()[index.row()].gain_calibration
+        elif index.column() == 4:
+            return self.parent.receivers.values()[index.row()].offset
 
     def setData(self, index, value, role=QtCore.Qt.DisplayRole):
         if index.column() == 1:
@@ -138,6 +142,11 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
             serial = self.data(serial_index)
             self.parent.receivers[serial].gain_calibration = value
             self.parent.set_gain_calibration(value, serial)
+        if index.column() == 4:
+            serial_index = self.index(index.row(),index.column()-4)
+            serial = self.data(serial_index)
+            self.parent.receivers[serial].offset = value
+            self.parent.set_offset(value, serial)
 
     def set_gain(self, gain, serial):
         print "gain:",gain
@@ -149,6 +158,12 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
         print "gain_calibration:",gain
         self.parent.receivers[serial].gain_calibration = gain
         index = self.index(self.parent.receivers.keys().index(serial),3)
+        self.dataChanged.emit(index, index)
+    
+    def set_offset(self, offset, serial):
+        print "offset: ", offset, "ns" 
+        self.parent.receivers[serial].offset = offset
+        index = self.index(self.parent.receivers.keys().index(serial),4)
         self.dataChanged.emit(index, index)
 
     def set_antenna(self, antenna, serial):
@@ -169,6 +184,8 @@ class TableModelReceivers(QtCore.QAbstractTableModel):
                 return "Antenna"
             elif section == 3:
                 return "Gain Calibration"
+            elif section == 4:
+                return "Offset"
         if orientation == QtCore.Qt.Vertical:
             return "RX" + str(section + 1)
 
@@ -240,7 +257,7 @@ class SpinBoxDelegate(QtGui.QItemDelegate):
 
     def createEditor(self, parent, option, index):
         editor = QtGui.QDoubleSpinBox(parent)
-        editor.setMinimum(0)
+        editor.setMinimum(-100)
         editor.setMaximum(100)
         return editor
 

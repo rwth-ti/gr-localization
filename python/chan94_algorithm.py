@@ -19,8 +19,8 @@ def chan_3rx(pos_rx, d, xk_prio):
     y3 = pos_rx[2][1]
     
     center_triangle = ((x1+x2+x3)/3,(y1+y2+y3)/3)
-    r21 = c * d12
-    r31 = c * d13
+    r21 = c * d12 / 10**9
+    r31 = c * d13 / 10**9
     #print "r21:"+str(r21)+"r31:"+str(r31)
     try:
         # Estimated distance difference from receivers to transmiter
@@ -110,7 +110,7 @@ def chan_tdoa(pos, d, Q):
     x_i1 = np.zeros((M-1,1))
     y_i1 = np.zeros((M-1,1))
     for i in range(M-1):
-        r_i1[i] = c * d[i] 
+        r_i1[i] = c * d[i] / 10**9
         x_i1[i] = pos[i+1,0] - pos[0,0]
         y_i1[i] = pos[i+1,1] - pos[0,1]
         
@@ -239,14 +239,14 @@ def localize(receivers, ref_receiver, bbox, xk_prio=np.array([]), delay = []):
         for receiver in receivers:
             if receiver != ref_receiver:
                 if receivers[receiver].correlation_interpolation:
-                    d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+                    d.append(float(estimate_delay_interpolated(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate * 10**9)
                 else:
-                    d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate)
+                    d.append(float(estimate_delay(receivers[receiver].samples, receivers[ref_receiver].samples))/sample_rate * 10**9)
     else:
         j= 0
         for receiver in receivers:
             if receiver != ref_receiver:
-                d.append(delay[j]/sample_rate)
+                d.append(delay[j])
                 j += 1
     if len(pos_rx) == 3:
         return chan_3rx(pos_rx, d, xk_prio)

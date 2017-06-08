@@ -148,6 +148,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("set_gui_samples_to_receive_calibration",self.set_gui_samples_to_receive_calibration)
         self.rpc_manager.add_interface("set_gui_gain",self.set_gui_gain)
         self.rpc_manager.add_interface("set_gui_gain_calibration",self.set_gui_gain_calibration)
+        self.rpc_manager.add_interface("set_gui_offset",self.set_gui_offset)
         self.rpc_manager.add_interface("set_gui_antenna",self.set_gui_antenna)
         self.rpc_manager.add_interface("set_gui_selected_position",self.set_gui_selected_position)
         self.rpc_manager.add_interface("set_gps_position",self.set_gps_position)
@@ -247,6 +248,7 @@ class gui(QtGui.QMainWindow):
         self.gui.tableViewReceivers.setItemDelegateForColumn(1, gui_helpers.SpinBoxDelegate(self.gui.tableViewReceivers))
         self.gui.tableViewReceivers.setItemDelegateForColumn(2, gui_helpers.ComboDelegate(self.gui.tableViewReceivers))
         self.gui.tableViewReceivers.setItemDelegateForColumn(3, gui_helpers.SpinBoxDelegate(self.gui.tableViewReceivers))
+        self.gui.tableViewReceivers.setItemDelegateForColumn(4, gui_helpers.SpinBoxDelegate(self.gui.tableViewReceivers))
         self.set_delegate = False
 
         # create and set model for guis table view
@@ -1001,7 +1003,7 @@ class gui(QtGui.QMainWindow):
                     pos_rx.append(self.receivers[receiver].coordinates_selfloc)
         for i in range(1,len(pos_rx)):
             if pos_tx is None:
-                hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx, self.results["delay"][i-1])
+                hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], None, self.results["delay"][i-1])
             else:
                 hyperbola = self.get_hyperbola([pos_rx[0],pos_rx[i]], pos_tx)
 
@@ -1014,21 +1016,21 @@ class gui(QtGui.QMainWindow):
 
 
     def get_hyperbola(self, pos_rx, pos_tx=None, delay=None):
-        # Redefine receivers position and signals so that the signal arrives first
-        # to the nearest receiver.
+        # Redefine receivers position and signals so that the signal firstly arrives
+        # at the closest receiver.
         pos_rx = np.array(pos_rx)
         if delay is None:
             if pos_tx is not None:
                 pos_tx = np.array(pos_tx)
                 d1 = np.linalg.norm(pos_rx[0]-pos_tx)
                 d2 = np.linalg.norm(pos_rx[1]-pos_tx)
-                # calculate expected delay for this position to use the same methods then for given delay
-                delay = (d2 - d1)*(self.samp_rate * self.sample_interpolation)/ 299700000
+                # calculate expected delay for this position to use the same methods as for given delay
+                delay = (d2-d1)*(self.samp_rate * self.sample_interpolation)/ 299700000
             else:
                 sys.exit("Neither transmitter position nor delay estimate are given!")
         if delay<0:
             pos_rx = np.flipud(pos_rx)
-        
+    
         # Baseline distance between sensors
         B = np.linalg.norm(pos_rx[1]-pos_rx[0])
 
@@ -1180,6 +1182,9 @@ class gui(QtGui.QMainWindow):
 
     def set_gain_calibration(self, gain, serial):
         self.rpc_manager.request("set_gain_calibration",[gain, serial])
+
+    def set_offset(self, offset, serial):
+        self.rpc_manager.request("set_offset",[offset, serial])
 
     def set_antenna(self, antenna, serial):
         self.rpc_manager.request("set_antenna",[antenna, serial])
@@ -1339,6 +1344,9 @@ class gui(QtGui.QMainWindow):
 
     def set_gui_gain_calibration(self, gain, serial):
         self.tmr.set_gain_calibration(gain, serial)
+
+    def set_gui_offset(self, offset, serial):
+        self.tmr.set_offset(offset, serial)
 
     def set_gui_antenna(self, antenna, serial):
         self.tmr.set_antenna(antenna, serial)
@@ -1522,6 +1530,7 @@ class gui(QtGui.QMainWindow):
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 1))
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 2))
                 self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 3))
+                self.gui.tableViewReceivers.openPersistentEditor(self.tmr.index(row, 4))
                 self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 1))
                 self.gui.tableViewReceiversPosition.openPersistentEditor(self.tmrp.index(row, 2))
             self.set_delegate = False
@@ -1575,9 +1584,9 @@ class gui(QtGui.QMainWindow):
         self.new_results = False
         self.new_selfloc = False
 
-    def register_receiver(self, serial, gain, antenna, gain_calibration):
+    def register_receiver(self, serial, gain, antenna, gain_calibration, offset):
         if not self.receivers.has_key(serial):
-            self.receivers[serial] = gui_helpers.receiver_item(gain, antenna, gain_calibration)
+            self.receivers[serial] = gui_helpers.receiver_item(gain, antenna, gain_calibration, offset)
             self.tmr.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.tmrp.rowsInserted.emit(QtCore.QModelIndex(),0,0)
             self.set_delegate = True
@@ -1654,7 +1663,7 @@ class gui(QtGui.QMainWindow):
         marker_max.setLineStyle(Qwt.QwtPlotMarker.VLine)
         marker_max.setLinePen(Qt.QPen(color, 1))
         marker_max.attach(plot)
-        marker_max.setXValue(delay)
+        marker_max.setXValue(delay /10**9 * self.samp_rate)
         
     def plot_delay_history(self, plot, samples, color, label):
         if len(samples) > 0:
