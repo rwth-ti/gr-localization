@@ -1189,10 +1189,11 @@ class fusion_center():
             index_delay = 0
             for i in range(0,len(receivers)):
                 if not self.ref_receiver == receivers.keys()[i]:
-                    delay[index_delay] -= self.delay_calibration[index_delay]
+                    delay[index_delay] += self.delay_calibration[index_delay]
                     if not self.correlation_interpolation:
                         receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
                     index_delay += 1
+            print("Delay_calibration:", delay, "samples")
         
         if self.localizing:
             if not self.filtering_type=="Kalman filter":
