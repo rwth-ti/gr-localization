@@ -1200,7 +1200,7 @@ class fusion_center():
                     if not self.correlation_interpolation:
                         receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
                     index_delay += 1
-            print("Delay_calibration:", delay, "samples")
+            print("Delay_calibration:", delay, "ns")
         
         if self.localizing:
             if not self.filtering_type=="Kalman filter":
@@ -1485,7 +1485,7 @@ class fusion_center():
                         delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.sample_interpolation) + 1) / self.samp_rate / self.sample_interpolation * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset).tolist()
                 correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))
             i += 1
-        print("Delay:", delay, "samples")
+        print("Delay:", delay, "ns")
         return correlation, delay, correlation_labels
 
 class gui_interface():
