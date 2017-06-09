@@ -19,11 +19,13 @@ import time, sched
 import socket
 import serial
 import calendar
-#import octoclock
 sys.path.append("../python")
 import rpc_manager as rpc_manager_local
 from gpsconfig import *
 from tx_bpsk import tx_bpsk
+sys.path.append("../python/octoclock_wrapper")
+#import octoclock
+
 
 ###############################################################################
 # GNU Radio top_block
@@ -91,7 +93,7 @@ class top_block(gr.top_block):
                         channels=range(1),
                     ), False
                 )
-
+        print "passed constructor"
         self.gps = options.gps
 
         if self.gps != "internal":
@@ -108,6 +110,8 @@ class top_block(gr.top_block):
             self.nmea_external = ""
             self.nmea_external_lock = threading.Lock()
             threading.Thread(target = self.poll_lea_m8f).start()
+        elif self.gps == "octoclock":
+            self.clock = octoclock.multi_usrp_clock()
         if self.options.log:
             file_name = "../log/receiver_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             self.file_sink = blocks.file_sink(gr.sizeof_gr_complex*1, file_name, True)
@@ -125,8 +129,11 @@ class top_block(gr.top_block):
             pulse_length=1,
             samp_rate=20000000,
         )
-        self.connect(self.tx_bpsk_0)
+        
+
+
         # connects
+        self.connect(self.tx_bpsk_0)
         #self.connect(self.usrp_source, self.s_to_v, self.zmq_probe)
         self.connect(self.usrp_source, self.zmq_probe)
         self.connect(self.usrp_source, self.tag_debug)
@@ -246,7 +253,7 @@ class top_block(gr.top_block):
         
         
         if time_to_recv is None:
-            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 2.5
+            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 1
 
         time_now = self.usrp_source.get_time_now().get_real_secs()
         if time_to_recv < time_now:
@@ -267,7 +274,6 @@ class top_block(gr.top_block):
             # without autocalibration we don't have to retune           
             if not autocalibrate:
                 if ((time_to_recv - time_now) < acquisition_time):
-
                     time_to_sample = uhd.time_spec(time_to_recv)
                     if not time_to_sample == time_to_sample_last:
                         # ask for samples at a specific time
@@ -346,8 +352,6 @@ class top_block(gr.top_block):
 
     def sync_time_nmea(self):
         print "Begin time sync"
-        if self.gps == "octoclock":
-            clock = octoclock.multi_usrp_clock()
         # get time of last pps from USRP
         last_pps_time = self.usrp_source.get_time_last_pps().get_real_secs()
         print "Last pps time before sync:", last_pps_time
@@ -376,7 +380,8 @@ class top_block(gr.top_block):
                 if last_pps_time_check > last_pps_time:
                     # get pps time from NMEA and set time of next pps
                     if self.gps == "octoclock":
-                        time_nmea = clock.get_time_real_secs()
+                        time_nmea = self.clock.get_time_real_secs()
+                        print "time nmea: ", time_nmea
                     else:
                         time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
                     # set internal time registers in USRP
@@ -415,8 +420,7 @@ class top_block(gr.top_block):
 
     def get_gps_gprmc(self):
         if self.gps == "octoclock":
-            clock = octoclock.multi_usrp_clock()
-            nmea = clock.get_sensor("gps_gprmc")[11:-1]
+            nmea = self.clock.get_sensor("gps_gprmc").split(":")[1].strip()
         elif (self.gps == "ltelite") or (self.gps == "leam8f"):
             while self.nmea_external is "":
                 time.sleep(0.1)
