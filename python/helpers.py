@@ -7,6 +7,7 @@ def build_results_strings(receivers):
     receivers_gps = "["
     receivers_antenna = "["
     receivers_gain = "["
+    receivers_offset = "["
     i = 1
     for receiver in receivers.values():
         if i == 1:
@@ -21,6 +22,7 @@ def build_results_strings(receivers):
             receivers_gps = receivers_gps + "'" + receiver.gps + "'"
             receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
             receivers_gain = receivers_gain + str(receiver.gain)
+            receivers_offset = receivers_offset + str(receiver.offset)
         else:
             if receiver.selected_position == "manual":
                 receivers_position = receivers_position + "," + str(receiver.coordinates)
@@ -32,11 +34,13 @@ def build_results_strings(receivers):
             receivers_gps = receivers_gps + "," + "'" + receiver.gps + "'"
             receivers_antenna = receivers_antenna + "," + "'" + receiver.antenna + "'"
             receivers_gain = receivers_gain + "," + str(receiver.gain)
+            receivers_offset = receivers_offset + "," + str(receiver.offset)
         i = i + 1
     receivers_position = receivers_position + "]"
     selected_positions = selected_positions + "]"
     receivers_gps = receivers_gps + "]"
     receivers_antenna = receivers_antenna + "]"
     receivers_gain = receivers_gain + "]"
-    return receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain
+    receivers_offset = receivers_offset + "]"
+    return receivers_position, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset
     

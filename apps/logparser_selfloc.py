@@ -86,11 +86,12 @@ if __name__ == "__main__":
     receivers_gps = acquisition[11]
     receivers_antenna = acquisition[12]
     receivers_gain = acquisition[13]
-    selfloc_average_length = acquisition[14]
-    num_anchors = acquisition[15]
-    anchor_average = acquisition[16]
-    ref_receiver = acquisition[17]
-    alpha = acquisition[18]
+    receivers_offset = acquisition[14]
+    selfloc_average_length = acquisition[15]
+    num_anchors = acquisition[16]
+    anchor_average = acquisition[17]
+    ref_receiver = acquisition[18]
+    alpha = acquisition[19]
 
     #selfloc results
     transmitter_history = eval(f_results.readline())
@@ -316,6 +317,7 @@ if __name__ == "__main__":
             for receiver_idx in range(len(receivers_samples)):
                 receivers[receiver_idx] = receiver_interface.receiver_interface(None,None,receiver_idx)
                 receivers[receiver_idx].coordinates = receivers_positions[receiver_idx]
+                receivers[receiver_idx].offset = receivers_offset[receiver_idx]
                 receivers[receiver_idx].serial = receiver_idx
                 receivers[receiver_idx].frequency = frequency
                 receivers[receiver_idx].interpolation = interpolation
@@ -345,12 +347,12 @@ if __name__ == "__main__":
         for cnt_j in range(len(receivers_selfloc)/selfloc_average_length):
             for cnt_average in range(selfloc_average_length):
                 curr_rx_set = receivers_selfloc[cnt_j*selfloc_average_length + cnt_average]
-                for cnt_l, rx_l in enumerate(curr_rx_set):
-                    for cnt_k, rx_k in enumerate(curr_rx_set):
+                for cnt_l, rx_l in enumerate(curr_rx_set.values()):
+                    for cnt_k, rx_k in enumerate(curr_rx_set.values()):
                         if cnt_j != cnt_l and cnt_j != cnt_k and cnt_l != cnt_k:
                             window_size = 13
                             #by now ugly hack, rethink later
-                            delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = corr_spline_interpolation(curr_rx_set.values()[cnt_l].samples, curr_rx_set.values()[cnt_k].samples, window_size)[1] 
+                            delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = corr_spline_interpolation(curr_rx_set.values()[cnt_l].samples, curr_rx_set.values()[cnt_k].samples, window_size)[1] / sampling_rate * 10**9 - rx_l.offset + rx_k.offset
                             #print(correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
                         else:
                             delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = 0.0
@@ -360,10 +362,10 @@ if __name__ == "__main__":
             for l in range(len(receivers_positions)):
                 for k in range(len(receivers_positions)):
                     # average distance differences
-                    tdoa = sum(delay_tensor[j,l,k]) / selfloc_average_length / sampling_rate * 299700000.0
+                    tdoa = sum(delay_tensor[j,l,k]) / selfloc_average_length / 10**9 * 299700000.0
                     sum_square_tdoa += tdoa**2
                     D[j,l,k] = tdoa
-
+        pdb.set_trace()
         pos_selfloc = None
         stress = [10]
         pos_selfloc, stress = mds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, pos_selfloc, 500, alpha, stress)
@@ -376,7 +378,7 @@ if __name__ == "__main__":
                 window_size = 13
                 #TODO: include averaging
                 if not ref_receiver == receiver:
-                    delay = corr_spline_interpolation(receivers.values()[receiver].samples, receivers.values()[ref_receiver].samples, window_size)[1]
+                    delay = corr_spline_interpolation(receivers.values()[receiver].samples, receivers.values()[ref_receiver].samples, window_size)[1] - receivers[receiver].offset + receivers[ref_receiver].offset
             anchor_loop_delays.append(delay)
             # no sensor is transmitting
             transmitter_history.append(-1)
@@ -397,10 +399,13 @@ if __name__ == "__main__":
 
         
         header =  "["  + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," \
-        + str(calibration_position) + "," + str(interpolation) + "," \
-        + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," \
-        + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
-        + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," + str(receivers.keys().index(ref_receiver)) + "," + str(alpha) + "]\n" 
+                    + str(calibration_position) + "," + str(interpolation) + "," \
+                    + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," \
+                    + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
+                    + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(receivers_offset) \
+                    + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," \
+                    + str(receivers.keys().index(ref_receiver)) + "," + str(alpha) + "]\n"
+
         results_file_selfloc = "../log/results_post_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         fi = open(results_file_selfloc,'w')
         fi.write("##########################################################################################################################################################################################\n")

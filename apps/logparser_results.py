@@ -25,6 +25,7 @@ import ConfigParser
 from ConfigSectionMap import ConfigSectionMap
 from procrustes import procrustes
 
+c = 299700000.0
 
 # print with approopriate resolution
 np.set_printoptions(precision=20)
@@ -322,6 +323,8 @@ if __name__ == "__main__":
     delays_auto_calibration_list = []
     handles = []
     labels = []
+    # only relevant if ground-truth is given
+    true_delays_history =[]
     for line in f.readlines()[options.skip_acquisitions:]:
         acquisition = eval(eval(line))
         timestamp = acquisition[0]
@@ -338,20 +341,21 @@ if __name__ == "__main__":
         samples_to_receive = acquisition[10]
         lo_offset = acquisition[11]
         bbox = acquisition[12]
-        receivers_positions = acquisition[13]
+        receivers_positions = np.array(acquisition[13])
         selected_positions = acquisition[14]
         receivers_gps = acquisition[15]
         receivers_antenna = acquisition[16]
         receivers_gain = acquisition[17]
-        estimated_positions = acquisition[18]
-        ref_receiver = acquisition[19]
-        if len(acquisition) > 20:
+        receivers_offset = acquisition[18]
+        estimated_positions = acquisition[19]
+        ref_receiver = acquisition[20]
+        if len(acquisition) > 21:
             try:
-                auto_calibrate = acquisition[20]
-                acquisition_time = acquisition[21]
-                kalman_states = acquisition[22]
-                init_settings_kalman = acquisition[23]
-                if len(acquisition) > 23:
+                auto_calibrate = acquisition[21]
+                acquisition_time = acquisition[22]
+                kalman_states = acquisition[23]
+                init_settings_kalman = acquisition[24]
+                if len(acquisition) > 24:
                     try:
                         cov_x_list.append(acquisition[25])
                         cov_y_list.append(acquisition[26])
@@ -456,6 +460,7 @@ if __name__ == "__main__":
     p = parser(bbox,filename,options)
     
     basemap = proj_basemap(bbox)
+    
     if options.ground_truth_log != "":
         #try:
         fg = open(options.ground_truth_log)
@@ -464,13 +469,21 @@ if __name__ == "__main__":
             if message_type == "$GNGGA":
                 gt_lat, gt_long, gt_time, gt_fix= gngga_reader(line)
                 gt_x, gt_y = basemap(gt_long,gt_lat)
+                true_pos_vector = np.array([[gt_x,gt_y]])
+                # calculate true delays:
+                true_delays = []
+                for idx, rx_pos in enumerate(receivers_positions):
+                    if idx != ref_receiver:
+                        # calculate true delays with infinite precision
+                        true_delays.append(1/c*(np.linalg.norm(receivers_positions[idx]-true_pos_vector)-np.linalg.norm(receivers_positions[ref_receiver]-true_pos_vector)))
                 gt_x_list.append(gt_x)
                 gt_y_list.append(gt_y)
                 gt_fix_list.append(gt_fix)
+                true_delays_history.append(true_delays)
             elif message_type == "$GNRMC":
                 timestamp = rmc_to_epoch_time(line)
                 gt_t_list.append(timestamp)
-        
+        true_delays_history = np.array(true_delays_history)
         gt_t_list=np.array(gt_t_list)
         if any(np.diff(gt_t_list) != acquisition_time):
             print "warning: references missing"
@@ -501,7 +514,9 @@ if __name__ == "__main__":
         ydiff_chan = Z_chan[:,1] -gt_y_list
         err_chan = np.square(xdiff_chan) + np.square(ydiff_chan)
         rmse_chan = np.sqrt(np.mean(err_chan))
-        
+        print time_aligned_idx
+        delays_calibrated = delays_calibrated[time_aligned_idx]
+        true_delays_history = true_delays_history[gt_time_aligned_idx]
         err_chan_kalman = np.array([])
         if any(chan_x_kalman):
             if options.procrustes:
@@ -543,6 +558,7 @@ if __name__ == "__main__":
                     plt.savefig(args[0].split("/")[-1].split(".")[0]+ "_procrustes"+ "_histogram_rmse.pdf")
                 else:
                     plt.savefig(args[0].split("/")[-1].split(".")[0] + "_histogram_rmse.pdf")
+            
     
     if options.plot_live:
         i = 1 
@@ -697,11 +713,10 @@ if __name__ == "__main__":
     if options.histogram_delays:
         #delays in ns for comparison:
         print interpolation
-        delays_calibrated_ns = np.true_divide(delays_calibrated,sampling_rate*interpolation*10**-9)
-        d21mean = np.mean(delays_calibrated_ns[:,0])
-        d21variance = np.var(delays_calibrated_ns[:,0])
-        d31mean = np.mean(delays_calibrated_ns[:,1])
-        d31variance = np.var(delays_calibrated_ns[:,1])
+        d21mean = np.mean(delays_calibrated[:,0])
+        d21variance = np.var(delays_calibrated[:,0])
+        d31mean = np.mean(delays_calibrated[:,1])
+        d31variance = np.var(delays_calibrated[:,1])
         labeld21 = r'$\tau_{21}$, $\mu=' + "{0:.5f}".format(d21mean) + '$, $\sigma^2=' + "{0:.5f}".format(d21variance) + '$'
         labeld31 = r'$\tau_{31}$, $\mu=' + "{0:.5f}".format(d31mean) + '$, $\sigma^2=' + "{0:.5f}".format(d31variance) + '$'
         figure_hist = plt.figure()
@@ -713,10 +728,10 @@ if __name__ == "__main__":
         scale_factor = 1
         if interpolation == 1:
             scale_factor = 10 
-        bins = np.arange(np.min(delays_calibrated_ns[:,0])-1,np.max(delays_calibrated_ns[:,0])+1,1/(sampling_rate*10**-9*5*interpolation*scale_factor))
-        ax_hist.hist(delays_calibrated_ns[:,0], bins=bins+offset, histtype='stepfilled', facecolor='green', alpha=0.75, label=labeld21)
-        bins = np.arange(np.min(delays_calibrated_ns[:,1])-1,np.max(delays_calibrated_ns[:,1])+1,1/(sampling_rate*10**-9*5*interpolation*scale_factor))
-        ax_hist.hist(delays_calibrated_ns[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
+        bins = np.arange(np.min(delays_calibrated[:,0])-1,np.max(delays_calibrated[:,0])+1,1/(sampling_rate*10**-9*5*interpolation*scale_factor))
+        ax_hist.hist(delays_calibrated[:,0], bins=bins+offset, histtype='stepfilled', facecolor='green', alpha=0.75, label=labeld21)
+        bins = np.arange(np.min(delays_calibrated[:,1])-1,np.max(delays_calibrated[:,1])+1,1/(sampling_rate*10**-9*5*interpolation*scale_factor))
+        ax_hist.hist(delays_calibrated[:,1], bins=bins+offset, histtype='stepfilled', facecolor='red', alpha=0.75, label=labeld31)
         plt.legend(fontsize = 15)
         plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:
@@ -725,14 +740,25 @@ if __name__ == "__main__":
     if options.delay:
         figure_delay = plt.figure()
         figure_delay.canvas.set_window_title(filename + "_delay")
-        ax_delay = figure_delay.add_subplot(111)
-        ax_delay.set_ylabel(r'$\Delta\tau$[samples]')
+        ax_delay = figure_delay.add_subplot(121)
+        ax_delay.set_ylabel(r'$\Delta\tau$[ns]')
         ax_delay.set_xlabel(r'Acquisitions')
+        ax_true_delay = figure_delay.add_subplot(122)
+        ax_true_delay.set_ylabel(r'$\Delta\tau$[ns]')
+        ax_true_delay.set_xlabel(r'Acquisitions')
+        pdb.set_trace()
+        delays_calibrated = np.true_divide(delays_calibrated,sampling_rate*interpolation)
         # check if measurements done with calibration or not
         if delays_not_calibrated.any():
             ax_delay.plot(delays_not_calibrated)
+        figs = []
+        delays_calibrated = delays_calibrated[20:130]
+        true_delays_history = true_delays_history[20:130]
         if delays_calibrated.any():
-            ax_delay.plot(delays_calibrated)
+            for j in range(len(delays_calibrated.T)):
+                figs.append(ax_delay.plot(delays_calibrated[:,j], label = str(j)))
+                figs.append(ax_true_delay.plot(true_delays_history[:,j], label = str(j)))
+        plt.legend()
         plt.autoscale(enable=True, axis='x', tight=True)
         if options.save:
             p.make_tikz_plot_delays(delays_calibrated, delays_not_calibrated, args[0])

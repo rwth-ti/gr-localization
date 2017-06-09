@@ -640,7 +640,7 @@ class fusion_center():
         self.samples_file = "../log/samples_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         if self.recording_results:
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
-            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
+            print("rx_time,delays(1-2,1-3,1-X...),delays_calibration(1-2,1-3,1-X...),delays_auto_calibration(1-2,1-3,1-X...),sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,receivers_offset,estimated_positions,index_ref_receiver,auto_calibrate,acquisition_time,kalman_states,init_settings_kalman, reference_selection", file=open(self.results_file,"a"))
             print("##########################################################################################################################################################################################", file=open(self.results_file,"a"))
         self.run_loop = True
         self.start_receivers(acquisitions)
@@ -1017,12 +1017,12 @@ class fusion_center():
         print(self.stress_list)
         if self.record_results:
             print(self.recording_results)
-            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
+            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset = helpers.build_results_strings(receivers)
             self.header_selfloc =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
             + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
             + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
-            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n" 
+            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + receivers_offset + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
         self.wait_anchors(receivers)
 
     def wait_anchors(self, receivers):
@@ -1291,7 +1291,7 @@ class fusion_center():
 
         if self.recording_results:
             # build receivers strings for log file
-            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain = helpers.build_results_strings(receivers)
+            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset = helpers.build_results_strings(receivers)
 
             # remove grid from results to log
             for key in estimated_positions.keys():
@@ -1309,7 +1309,7 @@ class fusion_center():
             + str(self.bw)+ "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
             + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
             + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," \
-            + str(estimated_positions) + "," + str(index_ref_receiver) + "," \
+            + receivers_offset + "," + str(estimated_positions) + "," + str(index_ref_receiver) + "," \
             + str(self.auto_calibrate) + "," +str(self.acquisition_time) + "," \
             + str(kalman_states) + "," + str(self.init_settings_kalman) + "," \
             + "'" + str(self.reference_selection) + "'" + "," + str(x_cov) + ","+str(y_cov) +"]"
@@ -1369,8 +1369,8 @@ class fusion_center():
             self.cnt_smpl_log += 1
             self.sample_history[self.cnt_j * self.sample_average + self.cnt_average] = receiver_samples
         #print("tRANSMITTER: ",receivers.keys()[self.cnt_j])
-        for cnt_l, rx_l in enumerate(receivers):
-            for cnt_k, rx_k in enumerate(receivers):
+        for cnt_l, rx_l in enumerate(receivers.values()):
+            for cnt_k, rx_k in enumerate(receivers.values()):
                 if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
                     window_size = 13
                     #by now ugly hack, rethink later
@@ -1470,7 +1470,7 @@ class fusion_center():
                     window_size = 13
                     if receivers[receiver].correlation_interpolation:
                         correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers[receiver].samples, receivers[self.ref_receiver].samples,window_size)
-                        delay.append(delay_acquisition  / self.samp_rate * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset)
+                        delay.append(delay_acquisition / self.samp_rate * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset)
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full")).tolist())
