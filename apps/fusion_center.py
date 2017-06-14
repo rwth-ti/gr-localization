@@ -133,7 +133,8 @@ class fusion_center():
         self.anchor_gt_positions = [None] * self.num_anchors
         self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average) 
         self.completed_anchors = [0] * self.num_anchors
-        self.sample_history = [0] * (4 * self.sample_average + self.num_anchors * self.anchor_average) 
+        self.sample_history = [0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
+        self.delays_calibration_selfloc = []
 
         self.map_type = "Online"
         self.map_file = "../maps/map.png"
@@ -683,6 +684,7 @@ class fusion_center():
     def start_selfloc_loop(self):
         # base structure for obtaining the delays required to perform the differential mds self localization algorithm
         print("selfloc_loop")
+        self.delays_calibration_selfloc = np.array([[0]*len(self.receivers.values())] * len(self.receivers.values()))
         self.delay_history = []
         self.estimated_positions_history = []
         self.sample_history[:len(self.receivers) * self.sample_average] = [0] * (len(self.receivers) * self.sample_average) 
@@ -697,6 +699,14 @@ class fusion_center():
         self.timestamp_history = []
         self.cnt_j = 0
         self.cnt_average = 0
+        if len(self.delay_calibration):
+            # fill delay_calibration with zero at reference index
+            idx_reference = self.receivers.keys().index(self.reference_receiver)
+            self.delay_calibration.insert(idx_reference, 0)
+            for j, receiver_j in enumerate(self.receivers):
+                for i, receiver_i in enumerate(self.receivers):
+                    self.delays_calibration_selfloc[j,i] = self.delay_calibration[j] - self.delay_calibration[i]
+            print(self.delays_calibration_selfloc)
         self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.sample_average))
         self.self_localization = True
         self.run_loop = True
@@ -1374,7 +1384,7 @@ class fusion_center():
                 if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
                     window_size = 13
                     #by now ugly hack, rethink later
-                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1]  / self.samp_rate * 10**9 - rx_l.offset + rx_k.offset
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] / self.samp_rate * 10**9 - rx_l.offset + rx_k.offset + self.delays_calibration_selfloc[cnt_l,cnt_k]
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
                     #print (receivers.keys()[cnt_l], receivers.keys()[cnt_k], self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average])
                     if len(receivers.values()[cnt_l].samples) == 0:
@@ -1514,7 +1524,7 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="40e6",
+    parser.add_option("", "--samp-rate", type="string", default="20e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
