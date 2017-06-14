@@ -110,8 +110,6 @@ class top_block(gr.top_block):
             self.nmea_external = ""
             self.nmea_external_lock = threading.Lock()
             threading.Thread(target = self.poll_lea_m8f).start()
-        elif self.gps == "octoclock":
-            self.clock = octoclock.multi_usrp_clock()
         if self.options.log:
             file_name = "../log/receiver_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
             self.file_sink = blocks.file_sink(gr.sizeof_gr_complex*1, file_name, True)
@@ -352,6 +350,8 @@ class top_block(gr.top_block):
 
     def sync_time_nmea(self):
         print "Begin time sync"
+        if self.gps == "octoclock":
+            clock = octoclock.multi_usrp_clock()
         # get time of last pps from USRP
         last_pps_time = self.usrp_source.get_time_last_pps().get_real_secs()
         print "Last pps time before sync:", last_pps_time
@@ -380,8 +380,9 @@ class top_block(gr.top_block):
                 if last_pps_time_check > last_pps_time:
                     # get pps time from NMEA and set time of next pps
                     if self.gps == "octoclock":
-                        time_nmea = self.clock.get_time_real_secs()
-                        print "time nmea: ", time_nmea
+
+                        time_nmea = clock.get_time_real_secs()
+
                     else:
                         time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
                     # set internal time registers in USRP
@@ -420,7 +421,8 @@ class top_block(gr.top_block):
 
     def get_gps_gprmc(self):
         if self.gps == "octoclock":
-            nmea = self.clock.get_sensor("gps_gprmc").split(":")[1].strip()
+            clock = octoclock.multi_usrp_clock()
+            nmea = clock.get_sensor("gps_gprmc").split(":")[1].strip()
         elif (self.gps == "ltelite") or (self.gps == "leam8f"):
             while self.nmea_external is "":
                 time.sleep(0.1)
@@ -438,34 +440,39 @@ class top_block(gr.top_block):
             latitude = float(coordinates_wgs84_string[0])
             longitude = float(coordinates_wgs84_string[1]) 
         else:
-            nmea = self.get_gps_gprmc()
-            latitude = nmea.split(",")[3:5]
-            # the NMEA sentence may vary for each receiver. This code works for 
-            # the next structure in latitude DDMM.XXXXXX
-            if len(latitude) > 1:
-                if latitude[0] != "":
-                    if latitude[1] == "N":
-                        latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
-                    else:
-                        latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
+            if self.gps == "octoclock":
+                # set to ict rooftop if using octoclock
+                latitude = 50.7793333333
+                longitude = 6.06295555555
+            else:
+                nmea = self.get_gps_gprmc()
+                latitude = nmea.split(",")[3:5]
+                # the NMEA sentence may vary for each receiver. This code works for 
+                # the next structure in latitude DDMM.XXXXXX
+                if len(latitude) > 1:
+                    if latitude[0] != "":
+                        if latitude[1] == "N":
+                            latitude = int(latitude[0][0:2])+(float(latitude[0][2:])/60)
+                        else:
+                            latitude = -int(latitude[0][0:2])-(float(latitude[0][2:])/60)
 
-                    longitude = nmea.split(",")[5:7]
-                    # the NMEA sentence may vary for each receiver. This code works for 
-                    # the next structure in longitude DDDMM.XXXXXX
-                    if longitude[1] == "E":
-                        longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+                        longitude = nmea.split(",")[5:7]
+                        # the NMEA sentence may vary for each receiver. This code works for 
+                        # the next structure in longitude DDDMM.XXXXXX
+                        if longitude[1] == "E":
+                            longitude = int(longitude[0][0:3])+(float(longitude[0][3:])/60)
+                        else:
+                            longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
                     else:
-                        longitude = -int(longitude[0][0:3])-(float(longitude[0][3:])/60)
+                        # set to ict rooftop if coordinates are missing
+                        print "Invalid NMEA-message! Set to default coordinates"
+                        latitude = 50.7793333333
+                        longitude = 6.06295555555
                 else:
                     # set to ict rooftop if coordinates are missing
                     print "Invalid NMEA-message! Set to default coordinates"
                     latitude = 50.7793333333
                     longitude = 6.06295555555
-            else:
-                # set to ict rooftop if coordinates are missing
-                print "Invalid NMEA-message! Set to default coordinates"
-                latitude = 50.7793333333
-                longitude = 6.06295555555
         # basemap requires [long,lat]; we want to put in [lat,long] => swap
         return [longitude, latitude]
 
