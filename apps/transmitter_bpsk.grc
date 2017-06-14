@@ -159,7 +159,7 @@
     </param>
     <param>
       <key>value</key>
-      <value>10000000</value>
+      <value>20000000</value>
     </param>
   </block>
   <block>
@@ -295,7 +295,7 @@
     </param>
     <param>
       <key>bw0</key>
-      <value>0</value>
+      <value>10000000</value>
     </param>
     <param>
       <key>center_freq0</key>
@@ -971,7 +971,7 @@
     </param>
     <param>
       <key>clock_source0</key>
-      <value></value>
+      <value>external</value>
     </param>
     <param>
       <key>sd_spec0</key>
@@ -979,7 +979,7 @@
     </param>
     <param>
       <key>time_source0</key>
-      <value></value>
+      <value>external</value>
     </param>
     <param>
       <key>clock_source1</key>

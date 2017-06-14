@@ -171,9 +171,9 @@ if __name__ == "__main__":
     
     receivers_positions = []
     
-    hacked_position_list = [(6.06274836, 50.77902740),(6.06228259, 50.77913433),(6.06223227, 50.77883295),(6.06253711, 50.77878010)]
-    for pos in hacked_position_list:
-        receivers_positions.append(basemap(pos[0],pos[1]))
+    #hacked_position_list = [(6.06274836, 50.77902740),(6.06228259, 50.77913433),(6.06223227, 50.77883295),(6.06253711, 50.77878010)]
+    #for pos in hacked_position_list:
+    #    receivers_positions.append(basemap(pos[0],pos[1]))
     
     receivers_positions = np.array(receivers_positions)
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
@@ -365,7 +365,6 @@ if __name__ == "__main__":
                     tdoa = sum(delay_tensor[j,l,k]) / selfloc_average_length / 10**9 * 299700000.0
                     sum_square_tdoa += tdoa**2
                     D[j,l,k] = tdoa
-        pdb.set_trace()
         pos_selfloc = None
         stress = [10]
         pos_selfloc, stress = mds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, pos_selfloc, 500, alpha, stress)

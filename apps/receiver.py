@@ -24,7 +24,7 @@ import rpc_manager as rpc_manager_local
 from gpsconfig import *
 from tx_bpsk import tx_bpsk
 sys.path.append("../python/octoclock_wrapper")
-#import octoclock
+import octoclock
 
 
 ###############################################################################
@@ -117,7 +117,7 @@ class top_block(gr.top_block):
             self.file_sink = blocks.file_sink(gr.sizeof_gr_complex*1, file_name, True)
             self.file_sink.set_unbuffered(False)
 
-        # call constructor at fist to secure synchronization 
+        # call constructor at fist to secure synchronization
         self.tx_bpsk_0 = tx_bpsk(
             serial = self.options.serial,
             mcr= self.options.mcr,
@@ -253,7 +253,7 @@ class top_block(gr.top_block):
         
         
         if time_to_recv is None:
-            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 1
+            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 2.5
 
         time_now = self.usrp_source.get_time_now().get_real_secs()
         if time_to_recv < time_now:

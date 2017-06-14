@@ -124,10 +124,10 @@ class fusion_center():
 
         # Anchoring:
         self.num_anchor = 0
-        self.num_anchors = 3
+        self.num_anchors = 50
         self.anchoring = False
         self.anchor_loop = False
-        self.anchor_average = 3
+        self.anchor_average = 50
         self.anchor_loop_delays = []
         self.anchor_positions = [None] * self.num_anchors
         self.anchor_gt_positions = [None] * self.num_anchors
@@ -1524,7 +1524,7 @@ def parse_options():
                       help="Interpolation factor")
     parser.add_option("", "--frequency", type="string", default="2.51e9",
                       help="Frequency")
-    parser.add_option("", "--samp-rate", type="string", default="20e6",
+    parser.add_option("", "--samp-rate", type="string", default="40e6",
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")

@@ -1,7 +1,13 @@
 A-prio: fix OSM!!! (no idea why it does not work --> Johannes)
 - adjust manuels code; clean up own
+- header explanation for selfloc logs
+- plot anchors -> use like all other positions
+- rename receiver --> sensor
+- rename setting_calibration in gui or maybe not?
+- homogenous name convention
 - general code cleanup:
   ->remove dangerous scalar operators if np is used!
-
-self localization:
-- translate Johannes' self localization algorithm to python
+- speed of light parameter instead of hardcoding
+- restart --->> same delays ?
+- calibration for self-localization
+- memory lack/overuse

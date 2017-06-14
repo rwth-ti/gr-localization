@@ -686,6 +686,8 @@ class gui(QtGui.QMainWindow):
 
 
         else:
+            if any(i.find("+".join(str(j).replace(".", ",") for j in bbox)) != -1 for i in os.listdir("../maps/")):
+                self.map_file = "../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png"
             print "Setting offline map", self.map_file
             try:
                 img = Image.open(self.map_file)
@@ -1542,7 +1544,7 @@ class gui(QtGui.QMainWindow):
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -20*self.sample_interpolation,20*self.sample_interpolation)
                 else:
                     self.gui.qwtPlotCorrelation.setAxisScale(Qwt.QwtPlot.xBottom, -self.samples_to_receive * self.sample_interpolation, self.samples_to_receive * self.sample_interpolation)
-                self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str([round(delay,4) for delay in self.results["delay"]]) + " samples")
+                self.gui.qwtPlotCorrelation.setAxisTitle(Qwt.QwtPlot.xBottom, "Delay: " + str([round(delay,4) for delay in self.results["delay"]]) + " ns")
                 # clear the previous points from the plot
                 self.gui.qwtPlotCorrelation.clear()
                 self.plot_correlation_delay(self.gui.qwtPlotCorrelation, self.results["correlation"][0], self.results["delay"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
