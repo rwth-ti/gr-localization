@@ -686,8 +686,6 @@ class gui(QtGui.QMainWindow):
 
 
         else:
-            if any(i.find("+".join(str(j).replace(".", ",") for j in bbox)) != -1 for i in os.listdir("../maps/")):
-                self.map_file = "../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png"
             print "Setting offline map", self.map_file
             try:
                 img = Image.open(self.map_file)
@@ -1030,9 +1028,11 @@ class gui(QtGui.QMainWindow):
                 delay = (d2-d1)*(self.samp_rate * self.sample_interpolation)/ 299700000
             else:
                 sys.exit("Neither transmitter position nor delay estimate are given!")
+        else:
+            delay = delay * self.samp_rate/ 10**9
         if delay<0:
             pos_rx = np.flipud(pos_rx)
-    
+        print delay
         # Baseline distance between sensors
         B = np.linalg.norm(pos_rx[1]-pos_rx[0])
 
