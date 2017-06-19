@@ -120,7 +120,7 @@ class gui(QtGui.QMainWindow):
         self.chats = ""
         # for delay history plots
         self.ymax_dh = 30
-        
+        self.new_anchor = False
         self.num_anchor_position = 0
         self.num_anchors = 3
         # list for checking which anchors have been set and localized
@@ -470,17 +470,11 @@ class gui(QtGui.QMainWindow):
         else:
             self.calibration_setButton.setEnabled(True)
             self.calibration_gpsInputButton.setEnabled(True)
-    #collect completed anchors here?
-    def set_anchor_position(self, position):
+
+    def set_anchor_position(self):
         #FIXME ugly hack
-        time.sleep(0.2)
-        self.pushButtonOK.setEnabled(True)
-        self.comboBoxCurrAnchor.setEnabled(True)
-        print "after qt stuff"
-        self.completed_anchors[self.num_anchor_position] = self.num_anchor_position + 1
-        self.anchor_positions[self.num_anchor_position] = position
-        print "after setting of attributes"
-        self.check_complete()
+        self.new_anchor = True
+
 
     def check_anchor_complete(self):
         self.comboBoxCurrAnchor.clear()
@@ -545,6 +539,7 @@ class gui(QtGui.QMainWindow):
         self.anchor_gpsInputButton.setEnabled(True)
         self.pushButtonOK.setEnabled(True)
         self.pushButtonDMDS.setEnabled(True)
+        print "start_anchoring"
         self.comboBoxCurrAnchor.setEnabled(True)
 
     def start_anchoring_loop(self):
@@ -581,22 +576,21 @@ class gui(QtGui.QMainWindow):
             self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
             self.rpc_manager.request("set_anchor_gt_position", [self.basemap(longitude, latitude),self.num_anchor_position])
             self.completed_anchors_positions[self.num_anchor_position] = self.num_anchor_position + 1
-            self.num_anchor_position += 1
-            if self.num_anchor_position < self.num_anchors:
-                self.comboBoxCurrAnchor.setCurrentIndex(self.num_anchor_position)
+            self.num_anchor_position = (self.num_anchor_position + 1) % self.num_anchors
+            self.comboBoxCurrAnchor.setCurrentIndex(self.num_anchor_position)
+            print "set_anchor_gt_position"
             self.comboBoxCurrAnchor.setEnabled(True)
             self.check_anchor_complete()
-            self.check_complete()
+            self.check_complete_selfloc()
             #except:
             #    print "Position is not defined!"
 
-    def check_complete(self):
+    def check_complete_selfloc(self):
         if all(self.completed_anchors[i] == i + 1 for i in range(self.num_anchors)) and all(
                         self.completed_anchors_positions[i] == i + 1 for i in range(self.num_anchors)):
             self.pushButtonCalculate.setEnabled(True)
             self.pushButtonDMDS.setEnabled(True)
-        print "after check_complete"
-            
+
     def set_trackplot_length(self):
         self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
         #Directly update value
@@ -1509,6 +1503,14 @@ class gui(QtGui.QMainWindow):
             self.new_results = True
 
     def process_results(self):
+        if self.new_anchor:
+            self.pushButtonOK.setEnabled(True)
+            print "process_results"
+            self.comboBoxCurrAnchor.setEnabled(True)
+            # samples for this anchor have been collected
+            self.completed_anchors[self.num_anchor_position] = self.num_anchor_position + 1
+            self.new_anchor = False
+            self.check_complete_selfloc()
         # new reference selected => update plot 
         if "ref_receiver" in self.results:
             if self.ref_receiver != self.results["ref_receiver"]:

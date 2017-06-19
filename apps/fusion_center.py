@@ -952,14 +952,14 @@ class fusion_center():
 
     def start_anchoring(self, start):
         # immediatly interrupt if all positions required are obtained
-        if all(self.completed_anchors[j] == j + 1 for j in range(self.num_anchors)):
+        if all(self.completed_anchors[j] == j + 1 for j in range(self.num_anchors)) and not start:
             self.anchoring = False
             return True
         else:
             if self.anchor_interrupt:
                 return True
             if not self.anchoring:
-                if all(self.completed_anchors[j] == 0 for j in range(self.num_anchors)) or start:
+                if start:
                     for gui in self.guis.values():
                         gui.rpc_manager.request("start_anchoring")
                 return False
@@ -986,7 +986,7 @@ class fusion_center():
     def set_anchor_position(self, position):
         self.anchor_position = position
         for gui in self.guis.values():
-            gui.rpc_manager.request("set_anchor_position", [self.anchor_position])
+            gui.rpc_manager.request("set_anchor_position")
 
     def set_anchor_gt_position(self,pos,num_anchor):
         self.num_anchor_position = num_anchor
@@ -1085,7 +1085,7 @@ class fusion_center():
         d, self.coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
         print(self.coordinates_procrustes)
         reflection = np.linalg.det(tform["rotation"])
-        self.pos_selfloc_procrustes =  np.dot(self.pos_selfloc,tform["rotation"]) + tform["translation"]
+        self.pos_selfloc_procrustes = np.dot(self.pos_selfloc,tform["rotation"]) + tform["translation"]
         print(self.anchor_gt_positions)
         for j, receiver in enumerate(self.receivers.values()):
                 receiver.coordinates_selfloc = self.pos_selfloc_procrustes[j]
@@ -1472,8 +1472,6 @@ class fusion_center():
             time.sleep(self.acquisition_time/4)
             if len(self.receivers) > 0:
                 if all(self.receivers[key].reception_complete for key in self.receivers):
-                    '''receivers = copy.deepcopy(self.receivers) # get rid off
-                        threading.Thread(target = self.process_results, args = (self.receivers,self.delay_auto_calibration,)).start()'''
                     if not self.processing:
                         self.processing = True
                         if not self.self_localization:
