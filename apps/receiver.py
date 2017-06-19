@@ -24,7 +24,7 @@ import rpc_manager as rpc_manager_local
 from gpsconfig import *
 from tx_bpsk import tx_bpsk
 sys.path.append("../python/octoclock_wrapper")
-import octoclock
+#import octoclock
 
 
 ###############################################################################
@@ -214,11 +214,11 @@ class top_block(gr.top_block):
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
-        self.tx_bpsk_0.set_samp_rate(20000000)
+        self.tx_bpsk_0.set_samp_rate(samp_rate)
 
     def set_bw(self,bw):
         self.usrp_source.set_bandwidth(bw,0)
-        self.tx_bpsk_0.set_bandwidth(5000000)
+        self.tx_bpsk_0.set_bandwidth(bw)
 
     def set_gain(self,gain):
         self.usrp_source.set_gain(gain, 0)

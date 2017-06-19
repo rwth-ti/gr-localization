@@ -124,15 +124,18 @@ class fusion_center():
 
         # Anchoring:
         self.num_anchor = 0
-        self.num_anchors = 50
+        self.num_anchors = 3
         self.anchoring = False
         self.anchor_loop = False
-        self.anchor_average = 50
+        self.anchor_average = 3
         self.anchor_loop_delays = []
         self.anchor_positions = [None] * self.num_anchors
         self.anchor_gt_positions = [None] * self.num_anchors
-        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average) 
+        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average)
+        self.anchor_interrupt = False
+        self.delay_means = [0] * self.num_anchors
         self.completed_anchors = [0] * self.num_anchors
+        self.completed_anchors_positions = [0] * self.num_anchors
         self.sample_history = [0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
         self.delays_calibration_selfloc = []
 
@@ -244,7 +247,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_anchor_gt_position",self.set_anchor_gt_position)
         self.rpc_manager.add_interface("start_anchoring_loop",self.start_anchoring_loop)
         self.rpc_manager.add_interface("stop_selfloc", self.stop_selfloc)
-        self.rpc_manager.add_interface("selfloc_done", self.selfloc_done)
+        self.rpc_manager.add_interface("log_selfloc", self.log_selfloc)
         self.rpc_manager.add_interface("new_result_procrustes", self.new_result_procrustes)
         self.rpc_manager.start_watcher()
 
@@ -710,8 +713,12 @@ class fusion_center():
         self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.sample_average))
         self.self_localization = True
         self.run_loop = True
-        self.anchor_interrupt = False
         self.stress_list = []
+        self.anchoring = False
+        # interrupt anchoring if restarted:
+        self.anchor_interrupt = True
+        time.sleep(1)
+        self.anchor_interrupt = False
         # loop gets started in switch_transmitter!
         self.switch_transmitter(self.cnt_j)
         
@@ -943,8 +950,8 @@ class fusion_center():
             self.receivers.values()[self.transmitter].stop_transmitter()
         self.transmitter = -1
 
-    def start_anchoring(self):
-        # immediatly interrupt if all positions required are optained
+    def start_anchoring(self, start):
+        # immediatly interrupt if all positions required are obtained
         if all(self.completed_anchors[j] == j + 1 for j in range(self.num_anchors)):
             self.anchoring = False
             return True
@@ -952,7 +959,7 @@ class fusion_center():
             if self.anchor_interrupt:
                 return True
             if not self.anchoring:
-                if all(self.completed_anchors[j] == 0 for j in range(self.num_anchors)):
+                if all(self.completed_anchors[j] == 0 for j in range(self.num_anchors)) or start:
                     for gui in self.guis.values():
                         gui.rpc_manager.request("start_anchoring")
                 return False
@@ -976,19 +983,20 @@ class fusion_center():
         self.start_receivers(self.anchor_average)
 
     # rename/even necessary?!
-    def set_anchor_position(self,position):
+    def set_anchor_position(self, position):
         self.anchor_position = position
         for gui in self.guis.values():
             gui.rpc_manager.request("set_anchor_position", [self.anchor_position])
 
-    def set_anchor_gt_position(self,pos):
-        self.anchor_gt_positions[self.num_anchor] = np.array(pos)
-        print("in gt_pos: ",self.num_anchor)
-        if self.anchor_positions[self.num_anchor] != None:
-            self.completed_anchors[self.num_anchor] = self.num_anchor + 1
+    def set_anchor_gt_position(self,pos,num_anchor):
+        self.num_anchor_position = num_anchor
+        self.anchor_gt_positions[self.num_anchor_position] = np.array(pos)
+        print("in gt_pos: ",self.num_anchor_position)
+        self.completed_anchors_positions[self.num_anchor_position] = self.num_anchor_position + 1
 
     def stop_selfloc_loop(self):
         self.cnt_j = 0
+        self.cnt_average = 0
         self.self_localization = False
         self.stop_transmitter()
         self.stop_loop()
@@ -998,11 +1006,11 @@ class fusion_center():
 
     def stop_selfloc(self):
         self.cnt_j = 0
+        self.cnt_average = 0
         self.self_localization = False
         self.stop_transmitter()
         self.stop_loop()
-        # continue logging samples!
-        self.processing = False 
+        self.processing = False
         self.recording_samples = False
         self.anchor_loop = False
         for receiver in self.receivers.values():
@@ -1043,20 +1051,37 @@ class fusion_center():
             receiver.coordinates_selfloc = self.pos_selfloc[j]
             receiver.selected_position = "selfloc" 
         anchoring_complete = False
+        start = True
         while anchoring_complete == False:
-            anchoring_complete = self.start_anchoring()
+            anchoring_complete = self.start_anchoring(start)
+            start = False
             time.sleep(0.5)
 
-    def selfloc_done(self):
-        print(self.recording_results, self.recording_samples)
-        if self.recording_results:
+    def log_selfloc(self):
+        print("log_selfloc", self.record_results, self.record_samples)
+        self.samples_file = "../log/samples_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
+        if self.record_results:
             self.log_selfloc_results()
-        if self.recording_samples: 
+        if self.record_samples:
             self.log_samples()
 
     def new_result_procrustes(self):
+        #procrustes
+        if any(self.completed_anchors[j] == 0 for j in range(self.num_anchors)) or any(self.completed_anchors_positions[j] == 0 for j in range(self.num_anchors)):
+            print("Data seems to be incomplete. Collect anchor samples and positions at first")
+            return
         self.anchor_gt_positions = np.array(self.anchor_gt_positions)
+        for j, receiver in enumerate(self.receivers.values()):
+            self.selected_positions_prev.append(receiver.selected_position)
+            receiver.coordinates_selfloc = self.pos_selfloc[j]
+            receiver.selected_position = "selfloc"
+        # calculate chan solution again; necessary if relative solution has been repeated
+        for j in range(len(self.delay_means)):
+            if all(self.delay_means[j] != 0):
+                self.anchor_positions[self.num_anchor] = chan94_algorithm.localize(self.receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2], self.bbox[3])), delay = self.delay_means[j])["coordinates"]
         self.anchor_positions = np.array(self.anchor_positions)
+        print(self.anchor_gt_positions)
+        print(self.anchor_positions)
         d, self.coordinates_procrustes, tform = procrustes(self.anchor_gt_positions, self.anchor_positions, scaling = False)
         print(self.coordinates_procrustes)
         reflection = np.linalg.det(tform["rotation"])
@@ -1112,7 +1137,6 @@ class fusion_center():
             last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
 
         for i in range(1,len(receivers)):
-
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
                 print("Error: target timestamps do not match")
                 for i in range(0,len(receivers)):
@@ -1347,10 +1371,10 @@ class fusion_center():
             if len(self.anchor_loop_delays) == self.anchor_average:
                 self.run_loop = False
                 delay_mean = np.array(self.anchor_loop_delays).mean(0)
+                self.delay_means[self.num_anchor] = delay_mean
                 self.anchor_positions[self.num_anchor] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay_mean)["coordinates"]
                 print("num_anchor", self.num_anchor)
-                if self.anchor_gt_positions[self.num_anchor] != None:
-                    self.completed_anchors[self.num_anchor] = self.num_anchor + 1
+                self.completed_anchors[self.num_anchor] = self.num_anchor + 1
                 self.set_anchor_position(self.anchor_positions[self.num_anchor])
                 self.anchor_loop = False
                 self.anchor_loop_delay_history[self.num_anchor] = self.anchor_loop_delays
@@ -1528,7 +1552,7 @@ def parse_options():
                       help="Sampling rate")
     parser.add_option("", "--lo-offset", type="string", default="0",
                       help="LO offset")
-    parser.add_option("", "--bandwidth", type="string", default="10e6",
+    parser.add_option("", "--bandwidth", type="string", default="20e6",
                       help="Bandwidth")
     parser.add_option("", "--num-samples-calibration", type="string", default="300",
                       help="Number of samples in burst for calibration")

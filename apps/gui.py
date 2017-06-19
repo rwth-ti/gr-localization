@@ -125,6 +125,8 @@ class gui(QtGui.QMainWindow):
         self.num_anchors = 3
         # list for checking which anchors have been set and localized
         self.completed_anchors = [0] * self.num_anchors
+        self.completed_anchors_positions = [0] * self.num_anchors
+        self.anchor_positions = [0] * self.num_anchors
         # ZeroMQ
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_reply_socket(rpc_adr)
@@ -283,7 +285,7 @@ class gui(QtGui.QMainWindow):
         layout.addRow(self.calibration_mBox)
         #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
         self.calibration_dialog.setLayout(layout)
-        
+
 
         # Dialog box for receiver positions
         self.position_dialog = QtGui.QDialog(self)
@@ -296,7 +298,7 @@ class gui(QtGui.QMainWindow):
         self.waitText_pos = QtGui.QLabel("Provide receiver coordinates or select by clicking on the map.")
 
         self.altLabel = QtGui.QLabel("altitude (m)")
-        self.lineEditAltitude_pos = QtGui.QLineEdit() 
+        self.lineEditAltitude_pos = QtGui.QLineEdit()
         layout = QtGui.QFormLayout()
         layout.addRow(self.waitText_pos)
         self.latLabel_pos = QtGui.QLabel("latitude (+=N ; -=S)")
@@ -310,10 +312,10 @@ class gui(QtGui.QMainWindow):
         #self.gpsCheckBox = QtGui.QCheckBox("calibrate with gps coordinates")
         self.position_dialog.setLayout(layout)
 
-        
+
 
         # Dialog box for anchoring
-        
+
         self.anchor_dialog = QtGui.QDialog(self)
         self.anchor_dialog.setWindowTitle("Self-localization")
         layout = QtGui.QFormLayout()
@@ -337,11 +339,11 @@ class gui(QtGui.QMainWindow):
         layout_hor.addWidget(self.curr_anchor_text)
         layout_hor.addWidget(self.comboBoxCurrAnchor)
         layoutAnchoring.addRow(layout_hor)
-        
+
         self.waitText2 = QtGui.QLabel("Place anchor and press 'Start'")
         self.pushButtonOK = QtGui.QPushButton("Start")
         self.connect(self.pushButtonOK, QtCore.SIGNAL("clicked()"), self.start_anchoring_loop)
-        
+
         layoutAnchoring.addRow(self.waitText2, self.pushButtonOK)
         self.latLabel_anc = QtGui.QLabel("Latitude (+=N ; -=S)")
         self.lineEditLatitude_anc = QtGui.QLineEdit()
@@ -355,21 +357,26 @@ class gui(QtGui.QMainWindow):
         #self.anchor_cancelButton = self.anchor_mBox.addButton("Cancel", QtGui.QDialogButtonBox.RejectRole)
         self.anchor_mBox.clicked.connect(self.set_anchor_gt_position)
         layoutAnchoring.addRow(self.anchor_mBox)
-        
-        self.groupBoxAnchoring.setLayout(layoutAnchoring)
         self.anchor_cancelButton = QtGui.QPushButton("Cancel")
         self.anchor_doneButton = QtGui.QPushButton("Done")
+        self.pushButtonCalculate = QtGui.QPushButton("Calculate")
+        self.pushButtonLog = QtGui.QPushButton("Save")
         self.anchor_doneButton.setEnabled(False)
+        self.pushButtonLog.setEnabled(False)
+        self.pushButtonCalculate.setEnabled(False)
+        self.groupBoxAnchoring.setLayout(layoutAnchoring)
         layout.addRow(self.groupBoxAnchoring)
         layout_hor = QtGui.QHBoxLayout()
         layout_hor.addItem(QtGui.QSpacerItem(40,20, QtGui.QSizePolicy.Expanding,QtGui.QSizePolicy.Minimum))
         layout_hor.addWidget(self.anchor_cancelButton)
         layout_hor.addWidget(self.anchor_doneButton)
+        layout_hor.addWidget(self.pushButtonCalculate)
+        layout_hor.addWidget(self.pushButtonLog)
         layout.addRow(layout_hor)
         self.anchor_dialog.setLayout(layout)
-        
+
         self.comboBoxCurrAnchor.setAutoFillBackground(True)
-        
+
 
         #Signals
         self.signal_error_set_map.connect(self.error_set_map)
@@ -433,6 +440,8 @@ class gui(QtGui.QMainWindow):
         self.connect(self.shortcut_exit, QtCore.SIGNAL("activated()"), self.gui.close)
         self.connect(self.anchor_cancelButton, QtCore.SIGNAL("clicked()"), self.cancel_all_selfloc)
         self.connect(self.anchor_doneButton, QtCore.SIGNAL("clicked()"), self.selfloc_done)
+        self.connect(self.pushButtonLog, QtCore.SIGNAL("clicked()"), self.log_selfloc)
+        self.connect(self.pushButtonCalculate, QtCore.SIGNAL("clicked()"), self.calc_abs_solution)
         self.connect(self.comboBoxCurrAnchor, QtCore.SIGNAL("activated(int)"), self.set_current_anchor)
         # Grid based signals
         self.connect(self.gui.spinGridResolution, QtCore.SIGNAL("valueChanged(double)"), self.set_TDOA_grid_based_resolution)
@@ -461,11 +470,17 @@ class gui(QtGui.QMainWindow):
         else:
             self.calibration_setButton.setEnabled(True)
             self.calibration_gpsInputButton.setEnabled(True)
-
+    #collect completed anchors here?
     def set_anchor_position(self, position):
-        self.anchor_setButton.setEnabled(True)
-        self.anchor_gpsInputButton.setEnabled(True)
-        self.anchor_positions.append(position)
+        #FIXME ugly hack
+        time.sleep(0.2)
+        self.pushButtonOK.setEnabled(True)
+        self.comboBoxCurrAnchor.setEnabled(True)
+        print "after qt stuff"
+        self.completed_anchors[self.num_anchor_position] = self.num_anchor_position + 1
+        self.anchor_positions[self.num_anchor_position] = position
+        print "after setting of attributes"
+        self.check_complete()
 
     def check_anchor_complete(self):
         self.comboBoxCurrAnchor.clear()
@@ -473,7 +488,7 @@ class gui(QtGui.QMainWindow):
         for j in range(self.num_anchors):
             item = QtGui.QStandardItem(str(j+1))
             #FIXME Background
-            if j+1 in self.completed_anchors:
+            if j+1 in self.completed_anchors_positions:
                 item.setForeground(QtGui.QColor('green'))
             else:
                 item.setForeground(QtGui.QColor('red'))
@@ -489,7 +504,15 @@ class gui(QtGui.QMainWindow):
 
     def selfloc_done(self):
         self.anchor_dialog.accept()
-        self.rpc_manager.request("selfloc_done")
+        self.log_selfloc()
+
+    def calc_abs_solution(self):
+        self.pushButtonLog.setEnabled(True)
+        self.anchor_doneButton.setEnabled(True)
+        self.rpc_manager.request("new_result_procrustes")
+
+    def log_selfloc(self):
+        self.rpc_manager.request("log_selfloc")
 
     def calibration_status(self, status):
         if status:
@@ -516,9 +539,12 @@ class gui(QtGui.QMainWindow):
                 print "Position is not defined!"
 
     def start_anchoring(self):
+        time.sleep(0.2)
         self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
-        self.anchor_positions = []
+        self.anchor_setButton.setEnabled(True)
+        self.anchor_gpsInputButton.setEnabled(True)
         self.pushButtonOK.setEnabled(True)
+        self.pushButtonDMDS.setEnabled(True)
         self.comboBoxCurrAnchor.setEnabled(True)
 
     def start_anchoring_loop(self):
@@ -526,48 +552,50 @@ class gui(QtGui.QMainWindow):
         self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
         self.completed_anchors[self.num_anchor_position] = 0
         self.rpc_manager.request("start_anchoring_loop",[self.num_anchor_position])
-        self.anchor_setButton.setEnabled(False)
-        self.anchor_gpsInputButton.setEnabled(False)
         self.comboBoxCurrAnchor.setEnabled(False)
 
 
     def cancel_all_selfloc(self):
         self.rpc_manager.request("stop_selfloc")
         #reset all buttons to prevent deadlock
+        time.sleep(0.2)
         self.pushButtonDMDS.setEnabled(True)
         self.pushButtonOK.setEnabled(True)
         self.anchor_setButton.setEnabled(True)
         self.anchor_gpsInputButton.setEnabled(True)
         self.comboBoxCurrAnchor.setEnabled(True)
+        self.pushButtonCalculate.setEnabled(False)
+        self.pushButtonLog.setEnabled(False)
         self.anchor_dialog.reject()
 
     def set_anchor_gt_position(self, button):
-        if button.text() == "Get coordinates from map" :
+        if button.text() == "Get coordinates from map":
             if hasattr(self, "zp"):
                 self.setting_calibration = True
                 self.zp.enabled = False
-        elif button.text() == "Set anchor position" :
+        elif button.text() == "Set anchor position":
             # calibrate with gps coordinates from line inputs
-            try:
-                latitude = float(self.lineEditLatitude_anc.text())
-                longitude = float(self.lineEditLongitude_anc.text())
-                self.pushButtonOK.setEnabled(True)
-                self.anchor_setButton.setEnabled(False)
-                self.anchor_gpsInputButton.setEnabled(False)
-                self.completed_anchors[self.num_anchor_position] = self.num_anchor_position + 1
-                self.num_anchor_position += 1
-                if self.num_anchor_position < self.num_anchors:
-                    self.comboBoxCurrAnchor.setCurrentIndex(self.num_anchor_position)
-                self.comboBoxCurrAnchor.setEnabled(True)
-                self.check_anchor_complete()
-                self.rpc_manager.request("set_anchor_gt_position",[self.basemap(longitude,latitude)])
-                if all(self.completed_anchors[i] == i +1 for i in range(self.num_anchors)):
-                    self.rpc_manager.request("new_result_procrustes")
-                    self.anchor_doneButton.setEnabled(True)
-                    self.pushButtonDMDS.setEnabled(True)
-            
-            except:
-                print "Position is not defined!"
+            #try:
+            latitude = float(self.lineEditLatitude_anc.text())
+            longitude = float(self.lineEditLongitude_anc.text())
+            self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
+            self.rpc_manager.request("set_anchor_gt_position", [self.basemap(longitude, latitude),self.num_anchor_position])
+            self.completed_anchors_positions[self.num_anchor_position] = self.num_anchor_position + 1
+            self.num_anchor_position += 1
+            if self.num_anchor_position < self.num_anchors:
+                self.comboBoxCurrAnchor.setCurrentIndex(self.num_anchor_position)
+            self.comboBoxCurrAnchor.setEnabled(True)
+            self.check_anchor_complete()
+            self.check_complete()
+            #except:
+            #    print "Position is not defined!"
+
+    def check_complete(self):
+        if all(self.completed_anchors[i] == i + 1 for i in range(self.num_anchors)) and all(
+                        self.completed_anchors_positions[i] == i + 1 for i in range(self.num_anchors)):
+            self.pushButtonCalculate.setEnabled(True)
+            self.pushButtonDMDS.setEnabled(True)
+        print "after check_complete"
             
     def set_trackplot_length(self):
         self.trackplot_length = self.gui.spinBoxTrackPlotLength.value()
@@ -665,7 +693,6 @@ class gui(QtGui.QMainWindow):
         # check if OSM is available at first 
 
         if self.map_type == "Online" and check_OSM():
-
             print "Setting online map", bbox
             print "+".join(str(j).replace(".",",") for j in bbox)
             # search for existing map for this bounding box
@@ -1032,7 +1059,6 @@ class gui(QtGui.QMainWindow):
             delay = delay * self.samp_rate/ 10**9
         if delay<0:
             pos_rx = np.flipud(pos_rx)
-        print delay
         # Baseline distance between sensors
         B = np.linalg.norm(pos_rx[1]-pos_rx[0])
 
@@ -1119,6 +1145,8 @@ class gui(QtGui.QMainWindow):
     
     def start_selfloc_loop(self):
         self.pushButtonDMDS.setEnabled(False)
+        self.pushButtonOK.setEnabled(False)
+        self.comboBoxCurrAnchor.setEnabled(False)
         self.rpc_manager.request("start_selfloc_loop")
 
     def stop_transmitter(self):
@@ -1560,7 +1588,7 @@ class gui(QtGui.QMainWindow):
                 self.reset_receiver_combo_boxes()
             self.gui.qwtPlotDelayHistory.clear()
             if len(self.results["delay_history"]) > 0:
-                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0],Qt.Qt.blue, self.results["correlation_labels"][0])
+                self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][0], Qt.Qt.blue, self.results["correlation_labels"][0])
                 print "Delay:",self.results["delay"]
                 delay_history_max = self.results["delay_history"][0][-1]
                 delay_history_min = self.results["delay_history"][0][-1]
@@ -1572,7 +1600,7 @@ class gui(QtGui.QMainWindow):
                         self.plot_delay_history(self.gui.qwtPlotDelayHistory, self.results["delay_history"][2],Qt.Qt.green, self.results["correlation_labels"][2])
                         delay_history_max = max( delay_history_max, np.max(self.results["delay_history"][2][-1]) )
                         delay_history_min = min( delay_history_min, np.min(self.results["delay_history"][2][-1]) )
-                self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-5, delay_history_max+5)                        
+                self.gui.qwtPlotDelayHistory.setAxisScale(Qwt.QwtPlot.yLeft, delay_history_min-20, delay_history_max+20)
                 self.gui.qwtPlotDelayHistory.replot()
 
             if len(self.results["receivers"]) > 0:
