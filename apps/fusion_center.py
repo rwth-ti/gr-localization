@@ -973,7 +973,6 @@ class fusion_center():
         #acquire delay/position similar to calibration_loop_delays/calibration_loop
         self.anchor_loop_delays = []
         self.completed_anchors[self.num_anchor] = 0
-        self.anchor_gt_positions[self.num_anchor] = None
         self.anchor_positions[self.num_anchor] = None
         self.cnt_anc_average = 0
         self.anchoring = True
@@ -1076,9 +1075,10 @@ class fusion_center():
             receiver.coordinates_selfloc = self.pos_selfloc[j]
             receiver.selected_position = "selfloc"
         # calculate chan solution again; necessary if relative solution has been repeated
+        print(self.delay_means)
         for j in range(len(self.delay_means)):
             if all(self.delay_means[j] != 0):
-                self.anchor_positions[self.num_anchor] = chan94_algorithm.localize(self.receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2], self.bbox[3])), delay = self.delay_means[j])["coordinates"]
+                self.anchor_positions[j] = chan94_algorithm.localize(self.receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2], self.bbox[3])), delay = self.delay_means[j])["coordinates"]
         self.anchor_positions = np.array(self.anchor_positions)
         print(self.anchor_gt_positions)
         print(self.anchor_positions)

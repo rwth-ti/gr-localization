@@ -1,7 +1,7 @@
 #!/bin/sh
 
 killall python
-gnome-terminal --tab -e "bash -c \"./fusion_center.py --num-samples 300; exec bash\"" --title "Fusion center" 
+gnome-terminal --tab -e "bash -c \"./fusion_center.py --samp-rate 100e6 --num-samples 300; exec bash\"" --title "Fusion center" 
 gnome-terminal --tab -e "bash -c \"./receiver_emu.py -i 1 --coordinates-m 118.59,105.15 --coordinates-wgs84 50.77913433,6.06228259 --movement-file ../movements/selfloc_average.csv; exec bash\"" --title "Receiver 1" 
 sleep 1s 
 gnome-terminal --tab -e "bash -c \"./receiver_emu.py -i 2 --coordinates-m 115.07,71.62 --coordinates-wgs84 50.77883295,6.06223227 --movement-file ../movements/selfloc_average.csv; exec bash\"" --title "Receiver 2"
