@@ -169,7 +169,7 @@ if __name__ == "__main__":
     y = y1 - y0
     f_results.close()
     
-    receivers_positions = []
+    #receivers_positions = []
     
     #hacked_position_list = [(6.06274836, 50.77902740),(6.06228259, 50.77913433),(6.06223227, 50.77883295),(6.06253711, 50.77878010)]
     #for pos in hacked_position_list:

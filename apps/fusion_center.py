@@ -1032,14 +1032,14 @@ class fusion_center():
         self.stress_list = [self.init_stress]
         self.pos_selfloc, self.stress_list = mds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
         print(self.stress_list)
-        if self.record_results:
-            print(self.recording_results)
-            receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset = helpers.build_results_strings(receivers)
-            self.header_selfloc =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
-            + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
-            + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
-            + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
-            + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + receivers_offset + "," + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
+        receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset = helpers.build_results_strings(receivers)
+        self.header_selfloc =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+                                + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
+                                + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
+                                + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
+                                + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + receivers_offset + "," \
+                                + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," \
+                                + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
         self.wait_anchors(receivers)
 
     def wait_anchors(self, receivers):
@@ -1059,10 +1059,8 @@ class fusion_center():
     def log_selfloc(self):
         print("log_selfloc", self.record_results, self.record_samples)
         self.samples_file = "../log/samples_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
-        if self.record_results:
-            self.log_selfloc_results()
-        if self.record_samples:
-            self.log_samples()
+        self.log_selfloc_results()
+        self.log_samples()
 
     def new_result_procrustes(self):
         #procrustes
@@ -1156,7 +1154,7 @@ class fusion_center():
         # all timestamps correct -> continue processing
         
         # log samples before interpolation to get logs of capable size and faster logging. Interpolation can be redone in parser. 
-        if self.recording_samples:
+        if self.recording_samples or self.anchor_loop:
             self.cnt_smpl_log +=1
             print("cnt_smpl: ",self.cnt_smpl_log)
             
@@ -1399,9 +1397,8 @@ class fusion_center():
         receiver_samples = []
         for receiver in receivers.values():
             receiver_samples.append(receiver.samples.tolist())
-        if self.recording_samples:
-            self.cnt_smpl_log += 1
-            self.sample_history[self.cnt_j * self.sample_average + self.cnt_average] = receiver_samples
+        self.cnt_smpl_log += 1
+        self.sample_history[self.cnt_j * self.sample_average + self.cnt_average] = receiver_samples
         #print("tRANSMITTER: ",receivers.keys()[self.cnt_j])
         for cnt_l, rx_l in enumerate(receivers.values()):
             for cnt_k, rx_k in enumerate(receivers.values()):
