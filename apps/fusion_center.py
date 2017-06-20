@@ -131,8 +131,8 @@ class fusion_center():
         self.anchor_loop_delays = []
         self.anchor_positions = [None] * self.num_anchors
         self.anchor_gt_positions = [None] * self.num_anchors
-        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average)
         self.anchor_interrupt = False
+        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average)
         self.delay_means = [0] * self.num_anchors
         self.completed_anchors = [0] * self.num_anchors
         self.completed_anchors_positions = [0] * self.num_anchors
@@ -416,11 +416,13 @@ class fusion_center():
 
     def set_sample_average(self, sample_average):
         self.sample_average = sample_average
+        self.init_all_selfloc()
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_sample_average",[sample_average])
 
     def set_anchor_average(self, anchor_average):
         self.anchor_average = anchor_average
+        self.init_all_selfloc()
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_anchor_average",[anchor_average])
 
@@ -435,8 +437,17 @@ class fusion_center():
 
     def set_num_anchors(self, num_anchors):
         self.num_anchors = num_anchors
+        self.init_all_selfloc()
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_num_anchors",[num_anchors])
+
+    def init_all_selfloc(self):
+        self.delay_tensor = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers), self.sample_average))
+        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average)
+        self.sample_history = [0] * (len(self.receivers) * self.sample_average + self.num_anchors * self.anchor_average)
+        self.delay_means = [0] * self.num_anchors
+        self.completed_anchors = [0] * self.num_anchors
+        self.completed_anchors_positions = [0] * self.num_anchors
 
     def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
         if len(self.calibration_loop_delays) > 0:
@@ -690,7 +701,8 @@ class fusion_center():
         self.delays_calibration_selfloc = np.array([[0]*len(self.receivers.values())] * len(self.receivers.values()))
         self.delay_history = []
         self.estimated_positions_history = []
-        self.sample_history[:len(self.receivers) * self.sample_average] = [0] * (len(self.receivers) * self.sample_average) 
+        self.sample_history[:len(self.receivers) * self.sample_average] = [0] * (len(self.receivers) * self.sample_average)
+        self.delay_tensor = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers), self.sample_average))
         self.stop_transmitter()
         self.recording_results = self.record_results
         self.recording_samples = self.record_samples
@@ -710,7 +722,6 @@ class fusion_center():
                 for i, receiver_i in enumerate(self.receivers):
                     self.delays_calibration_selfloc[j,i] = self.delay_calibration[j] - self.delay_calibration[i]
             print(self.delays_calibration_selfloc)
-        self.delay_tensor = np.ndarray(shape=(len(self.receivers),len(self.receivers),len(self.receivers),self.sample_average))
         self.self_localization = True
         self.run_loop = True
         self.stress_list = []
