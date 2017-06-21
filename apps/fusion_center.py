@@ -297,6 +297,8 @@ class fusion_center():
     def calibrate(self, coordinates, delays=None):
         # calculate offset calibration
         if self.results is not None and delays is None:
+            for receiver in self.receivers.values():
+                receiver.offset = 0
             if len(self.calibration_loop_delays) > 0:
                 ref_receiver = self.receivers[self.ref_receiver]
                 if ref_receiver.selected_position == "manual":
@@ -338,13 +340,12 @@ class fusion_center():
             # fill delay_calibration with zero at reference index
             idx_reference = self.receivers.keys().index(self.ref_receiver)
             self.delay_calibration.insert(idx_reference, 0)
-            self.delays_calibration_selfloc = np.array(
-            [[0.0] * len(self.receivers.values())] * len(self.receivers.values()))
-            for j, receiver_j in enumerate(self.receivers):
-                for i, receiver_i in enumerate(self.receivers):
-                    self.delays_calibration_selfloc[j,i] = self.delay_calibration[j] - self.delay_calibration[i]
-                    print(self.delays_calibration_selfloc[j,i])
-            print(self.delays_calibration_selfloc)
+            self.receivers[self.ref_receiver].offset = 0
+            for j, receiver in enumerate(self.receivers.values()):
+                receiver.offset = self.delay_calibration[j]
+                for gui in self.guis.values():
+                    gui.rpc_manager.request("set_gui_offset",[receiver.offset, self.receivers.keys()[j]])
+            del self.delay_calibration[idx_reference]
             for gui in self.guis.values():
                 gui.rpc_manager.request("calibration_status",[True])
         # calculate autocalibration
@@ -461,6 +462,9 @@ class fusion_center():
         self.completed_anchors_positions = [0.0] * self.num_anchors
 
     def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
+        # remove calibration or manually set offsets that may interfere with calibration
+        for receiver in self.receivers.values():
+            receiver.offset = 0
         if len(self.calibration_loop_delays) > 0:
             self.remove_calibration()
             return False
@@ -476,6 +480,10 @@ class fusion_center():
                 return True
 
     def remove_calibration(self):
+        for j, receiver in enumerate(self.receivers.values()):
+            receiver.offset = 0
+            for gui in self.guis.values():
+                gui.rpc_manager.request("set_gui_offset", [receiver.offset, self.receivers.keys()[j]])
         self.delay_calibration = []
         self.delay_auto_calibration = []
         self.calibrating = False
@@ -1240,7 +1248,7 @@ class fusion_center():
                     if not self.correlation_interpolation:
                         receivers.values()[i].samples = np.roll(receivers.values()[i].samples,delay_auto_calibration[index_delay_auto])
                     index_delay_auto += 1
-
+        '''
         if len(self.delay_calibration) > 0:
             index_delay = 0
             for i in range(0,len(receivers)):
@@ -1250,7 +1258,7 @@ class fusion_center():
                         receivers.values()[i].samples = np.roll(receivers.values()[i].samples,self.delay_calibration[index_delay])
                     index_delay += 1
             print("Delay_calibration:", delay, "ns")
-        
+        '''
         if self.localizing:
             if not self.filtering_type=="Kalman filter":
                 estimated_positions["chan"] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay = delay)
@@ -1421,7 +1429,7 @@ class fusion_center():
                 if self.cnt_j != cnt_l and self.cnt_j != cnt_k and cnt_l != cnt_k:
                     window_size = 13
                     #by now ugly hack, rethink later
-                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] / self.samp_rate * 10**9 - rx_l.offset + rx_k.offset + self.delays_calibration_selfloc[cnt_l,cnt_k]
+                    self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = corr_spline_interpolation(receivers.values()[cnt_l].samples, receivers.values()[cnt_k].samples, window_size)[1] / self.samp_rate * 10**9 + rx_l.offset - rx_k.offset
                     #print(self.correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
                     #print (receivers.keys()[cnt_l], receivers.keys()[cnt_k], self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average])
                     if len(receivers.values()[cnt_l].samples) == 0:
@@ -1515,19 +1523,19 @@ class fusion_center():
                     window_size = 13
                     if receivers[receiver].correlation_interpolation:
                         correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers[receiver].samples, receivers[self.ref_receiver].samples,window_size)
-                        delay.append(delay_acquisition / self.samp_rate * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset)
+                        delay.append(delay_acquisition / self.samp_rate * 10**9 + receivers[receiver].offset - receivers[self.ref_receiver].offset)
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples, receivers[self.ref_receiver].samples, "full")).tolist())
-                        delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive * self.sample_interpolation)+ 1) / self.samp_rate / self.sample_interpolation * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset).tolist()
+                        delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive * self.sample_interpolation)+ 1) / self.samp_rate / self.sample_interpolation * 10**9 + receivers[receiver].offset - receivers[self.ref_receiver].offset).tolist()
                 else:
                     if receivers[receiver].correlation_interpolation:
                         correlation_acquisition, delay_acquisition  = corr_spline_interpolation(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration,window_size)
-                        delay.append(delay_acquisition / self.samp_rate * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset)
+                        delay.append(delay_acquisition / self.samp_rate * 10**9 + receivers[receiver].offset - receivers[self.ref_receiver].offset)
                         correlation.append(correlation_acquisition)
                     else:
                         correlation.append(np.absolute(np.correlate(receivers[receiver].samples_calibration, receivers[self.ref_receiver].samples_calibration, "full")).tolist())
-                        delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.sample_interpolation) + 1) / self.samp_rate / self.sample_interpolation * 10**9 - receivers[receiver].offset + receivers[self.ref_receiver].offset).tolist()
+                        delay = ((np.argmax(correlation, axis=1) - (self.samples_to_receive_calibration * self.sample_interpolation) + 1) / self.samp_rate / self.sample_interpolation * 10**9 + receivers[receiver].offset - receivers[self.ref_receiver].offset).tolist()
                 correlation_labels.append("Rx" + str(i) + ",Rx" + str(receivers.keys().index(self.ref_receiver)+1))
             i += 1
         print("Delay:", delay, "ns")
