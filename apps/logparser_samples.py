@@ -40,20 +40,20 @@ if __name__ == "__main__":
     line_number = 1
     for line in f:
         if line_number == options.acquisition:
-            acquisition = eval(eval(line))
-            receivers  = acquisition[0]
-            interpolation = acquisition[1]
-            ref_receiver = acquisition[2]
+            receivers = eval(eval(line))
+            interpolation = 1
+            ref_receiver = 1
         line_number+=1
     f.close()
     idx=0
+
     for receiver in receivers:          
         x = np.linspace(0,len(receiver),len(receiver))
         f = interpolate.interp1d(x, receiver)
         x_interpolated = np.linspace(0,len(receiver),len(receiver) * interpolation)
         receiver = f(x_interpolated)
         if idx != ref_receiver:
-            correlation = np.absolute(np.correlate(receiver, receivers[ref_receiver], "full", False))
+            correlation = np.absolute(np.correlate(receiver, receivers[ref_receiver], "full"))
         idx += 1
     filename = args[0].split("/")[-1].split(".")[0]
 
