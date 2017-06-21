@@ -84,7 +84,7 @@ class gui(QtGui.QMainWindow):
         self.queue_tx_coordinates_kalman = deque()
         self.results = {}
         self.new_results = False
-        self.trackplot_length = 180
+        self.trackplot_length = 10
 
         self.auto_calibrate = False
         self.receivers = {}

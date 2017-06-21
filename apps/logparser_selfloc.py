@@ -287,9 +287,8 @@ if __name__ == "__main__":
         plt_23 = axis_delays.plot(delay_23,label = "Delay 23" )
         plt_24 = axis_delays.plot(delay_24,label = "Delay 24" )
         plt_34 = axis_delays.plot(delay_34,label = "Delay 34" )
-        pdb.set_trace()
         axis_delays.set_xlabel("Acquisitions")
-        axis_delays.set_ylabel("Delay(samples)")
+        axis_delays.set_ylabel("Delay(ns)")
         axis_delays.legend()
         # concatenate D and anchor_delay_history! for delays
 
