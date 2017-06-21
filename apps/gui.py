@@ -472,7 +472,6 @@ class gui(QtGui.QMainWindow):
             self.calibration_gpsInputButton.setEnabled(True)
 
     def set_anchor_position(self):
-        #FIXME ugly hack
         self.new_anchor = True
 
 
@@ -556,6 +555,7 @@ class gui(QtGui.QMainWindow):
         time.sleep(0.2)
         self.pushButtonDMDS.setEnabled(True)
         self.pushButtonOK.setEnabled(True)
+        self.anchor_doneButton.setEnabled(False)
         self.anchor_setButton.setEnabled(True)
         self.anchor_gpsInputButton.setEnabled(True)
         self.comboBoxCurrAnchor.setEnabled(True)
@@ -1131,7 +1131,8 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.request("switch_transmitter")
 
     def start_selfloc(self):
-        self.anchor_dialog.show()        
+        self.anchor_dialog.show()
+        self.rpc_manager.request("init_all_selfloc")
         self.pushButtonOK.setEnabled(False)
         self.anchor_setButton.setEnabled(False)
         self.anchor_gpsInputButton.setEnabled(False)

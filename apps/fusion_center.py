@@ -132,11 +132,11 @@ class fusion_center():
         self.anchor_positions = [None] * self.num_anchors
         self.anchor_gt_positions = [None] * self.num_anchors
         self.anchor_interrupt = False
-        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average)
-        self.delay_means = [0] * self.num_anchors
-        self.completed_anchors = [0] * self.num_anchors
-        self.completed_anchors_positions = [0] * self.num_anchors
-        self.sample_history = [0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
+        self.anchor_loop_delay_history = [0.0] * (self.num_anchors * self.anchor_average)
+        self.delay_means = [0.0] * self.num_anchors
+        self.completed_anchors = [0.0] * self.num_anchors
+        self.completed_anchors_positions = [0.0] * self.num_anchors
+        self.sample_history = [0.0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
         self.delays_calibration_selfloc = []
 
         self.map_type = "Online"
@@ -249,6 +249,7 @@ class fusion_center():
         self.rpc_manager.add_interface("stop_selfloc", self.stop_selfloc)
         self.rpc_manager.add_interface("log_selfloc", self.log_selfloc)
         self.rpc_manager.add_interface("new_result_procrustes", self.new_result_procrustes)
+        self.rpc_manager.add_interface("init_all_selfloc", self.init_all_selfloc)
         self.rpc_manager.start_watcher()
 
         self.probe_manager_lock = threading.Lock()
@@ -334,6 +335,16 @@ class fusion_center():
                         index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
             self.calibrating = False
+            # fill delay_calibration with zero at reference index
+            idx_reference = self.receivers.keys().index(self.ref_receiver)
+            self.delay_calibration.insert(idx_reference, 0)
+            self.delays_calibration_selfloc = np.array(
+            [[0.0] * len(self.receivers.values())] * len(self.receivers.values()))
+            for j, receiver_j in enumerate(self.receivers):
+                for i, receiver_i in enumerate(self.receivers):
+                    self.delays_calibration_selfloc[j,i] = self.delay_calibration[j] - self.delay_calibration[i]
+                    print(self.delays_calibration_selfloc[j,i])
+            print(self.delays_calibration_selfloc)
             for gui in self.guis.values():
                 gui.rpc_manager.request("calibration_status",[True])
         # calculate autocalibration
@@ -443,11 +454,11 @@ class fusion_center():
 
     def init_all_selfloc(self):
         self.delay_tensor = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers), self.sample_average))
-        self.anchor_loop_delay_history = [0] * (self.num_anchors * self.anchor_average)
-        self.sample_history = [0] * (len(self.receivers) * self.sample_average + self.num_anchors * self.anchor_average)
-        self.delay_means = [0] * self.num_anchors
-        self.completed_anchors = [0] * self.num_anchors
-        self.completed_anchors_positions = [0] * self.num_anchors
+        self.anchor_loop_delay_history = [0.0] * (self.num_anchors * self.anchor_average)
+        self.sample_history = [0.0] * (len(self.receivers) * self.sample_average + self.num_anchors * self.anchor_average)
+        self.delay_means = [0.0] * self.num_anchors
+        self.completed_anchors = [0.0] * self.num_anchors
+        self.completed_anchors_positions = [0.0] * self.num_anchors
 
     def calibration_loop(self, freq, lo_offset, samples_to_receive, acquisitions):
         if len(self.calibration_loop_delays) > 0:
@@ -698,10 +709,9 @@ class fusion_center():
     def start_selfloc_loop(self):
         # base structure for obtaining the delays required to perform the differential mds self localization algorithm
         print("selfloc_loop")
-        self.delays_calibration_selfloc = np.array([[0]*len(self.receivers.values())] * len(self.receivers.values()))
         self.delay_history = []
         self.estimated_positions_history = []
-        self.sample_history[:len(self.receivers) * self.sample_average] = [0] * (len(self.receivers) * self.sample_average)
+        self.sample_history[:len(self.receivers) * self.sample_average] = [0.0] * (len(self.receivers) * self.sample_average)
         self.delay_tensor = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers), self.sample_average))
         self.stop_transmitter()
         self.recording_results = self.record_results
@@ -714,18 +724,11 @@ class fusion_center():
         self.timestamp_history = []
         self.cnt_j = 0
         self.cnt_average = 0
-        if len(self.delay_calibration):
-            # fill delay_calibration with zero at reference index
-            idx_reference = self.receivers.keys().index(self.reference_receiver)
-            self.delay_calibration.insert(idx_reference, 0)
-            for j, receiver_j in enumerate(self.receivers):
-                for i, receiver_i in enumerate(self.receivers):
-                    self.delays_calibration_selfloc[j,i] = self.delay_calibration[j] - self.delay_calibration[i]
-            print(self.delays_calibration_selfloc)
         self.self_localization = True
         self.run_loop = True
         self.stress_list = []
         self.anchoring = False
+        self.anchor_loop = False
         # interrupt anchoring if restarted:
         self.anchor_interrupt = True
         time.sleep(1)
@@ -968,6 +971,8 @@ class fusion_center():
             return True
         else:
             if self.anchor_interrupt:
+                self.anchoring = False
+                self.anchor_loop = False
                 return True
             if not self.anchoring:
                 if start:
@@ -1008,6 +1013,7 @@ class fusion_center():
         self.cnt_j = 0
         self.cnt_average = 0
         self.self_localization = False
+        self.anchoring = False
         self.stop_transmitter()
         self.stop_loop()
         # continue logging samples! 
@@ -1173,7 +1179,7 @@ class fusion_center():
             for receiver in receivers.values():
                 receiver_samples.append(receiver.samples.tolist())
             if self.anchor_loop:
-                self.sample_history[len(self.receivers)* self.sample_average + self.num_anchor * self.anchor_average + self.cnt_anc_average] = receiver_samples
+                self.sample_history[len(self.receivers) * self.sample_average + self.num_anchor * self.anchor_average + self.cnt_anc_average] = receiver_samples
             else:
                 f_s = open(self.samples_file,"a")
                 pprint.pprint("[" + str(receiver_samples) +","+ str(receiver.interpolation)+","+ str(receivers.keys().index(self.ref_receiver))+ "]",f_s,width=9000)
@@ -1404,7 +1410,6 @@ class fusion_center():
         # transmitter=rx_j
         # add possibility to log!
         # "nested loop in class"
-        # just take samples from sensors that are not transmitting. Should not be disturbing if other sensor receives if the samples are not processed.
         receiver_samples = []
         for receiver in receivers.values():
             receiver_samples.append(receiver.samples.tolist())
