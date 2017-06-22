@@ -1155,27 +1155,27 @@ class fusion_center():
         H = np.array([])
         x_cov=0
         y_cov=0
-        last_time_target = receivers.values()[0].tags["rx_time"]
+        timestamp_list = [receivers.values()[j].tags["rx_time"] for j in range(len(self.receivers))]
+        last_time_target = np.max(timestamp_list)
         if self.auto_calibrate:
-            last_time_calibration = receivers.values()[0].tags_calibration["rx_time"]
-
-        for i in range(1,len(receivers)):
+            timestamp_list_calibration = [receivers.values()[j].tags_calibration["rx_time"] for j in range(len(self.receivers))]
+            last_time_calibration = np.max(timestamp_list_calibration)
+        timestamp_mismatch = False
+        for i in range(len(receivers)):
             if not (last_time_target == receivers.values()[i].tags["rx_time"]):
-                print("Error: target timestamps do not match")
-                for i in range(0,len(receivers)):
-                    print (i,receivers.values()[i].serial,receivers.values()[i].tags)
-                for receiver in self.receivers.values():
-                    receiver.reset_receiver()
-                self.processing = False
-                return
+                receivers.values()[i].reset_receiver()
+                timestamp_mismatch = True
+            # FIXME maybe unnecessary/obsolete?
             if self.auto_calibrate:
                 if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
-                    print("Error: calibration timestamps do not match")
-                    for receiver in self.receivers.values():
-                        receiver.reset_receiver()
-                    self.processing = False
-                    return
-        
+                    receivers.values()[i].reset_receiver()
+                    timestamp_mismatch = True
+        if timestamp_mismatch == True:
+            print("Warning: target timestamps do not match; skip samples")
+            for k in range(len(receivers)):
+                print(k, receivers.values()[k].serial, receivers.values()[k].tags)
+            self.processing = False
+            return
         # all timestamps correct -> continue processing
         
         # log samples before interpolation to get logs of capable size and faster logging. Interpolation can be redone in parser. 
