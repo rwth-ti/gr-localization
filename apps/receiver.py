@@ -54,7 +54,7 @@ class top_block(gr.top_block):
         probe_adr = "tcp://*:" + str(probe_port)
 
         # blocks
-        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 300, True)
+        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 100, True)
         self.tag_debug = blocks.tag_debug(gr.sizeof_gr_complex*1, "", ""); self.tag_debug.set_display(True)
 
         if self.options.serial != "":
