@@ -67,7 +67,7 @@ class top_block(gr.top_block):
         else:
             self.track_coordinates = np.array([])
         # blocks
-        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 100, True)
+        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 10, True)
         self.mod_block = ModulatorBlock(self.seed, self.samp_rate, self.noise_amp, self.modulation, self.delay, self.samples_to_receive, self.freq, self.id_rx)
         self.seed += 1
 

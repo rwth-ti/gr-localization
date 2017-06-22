@@ -54,7 +54,7 @@ class top_block(gr.top_block):
         probe_adr = "tcp://*:" + str(probe_port)
 
         # blocks
-        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 100, True)
+        self.zmq_probe = zeromq.pub_sink(gr.sizeof_gr_complex, 1, probe_adr, 10, True)
         self.tag_debug = blocks.tag_debug(gr.sizeof_gr_complex*1, "", ""); self.tag_debug.set_display(True)
 
         if self.options.serial != "":
@@ -251,7 +251,7 @@ class top_block(gr.top_block):
         
         
         if time_to_recv is None:
-            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 2.5
+            time_to_recv = np.ceil(self.usrp_source.get_time_last_pps().get_real_secs()) + 1.5
 
         time_now = self.usrp_source.get_time_now().get_real_secs()
         if time_to_recv < time_now:
