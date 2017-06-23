@@ -121,6 +121,7 @@ class gui(QtGui.QMainWindow):
         # for delay history plots
         self.ymax_dh = 30
         self.new_anchor = False
+        self.unlock_anchor = False
         self.num_anchor_position = 0
         self.num_anchors = 3
         # list for checking which anchors have been set and localized
@@ -363,7 +364,6 @@ class gui(QtGui.QMainWindow):
         self.pushButtonCalculate = QtGui.QPushButton("Calculate")
         self.pushButtonLog = QtGui.QPushButton("Save")
         self.anchor_doneButton.setEnabled(False)
-        self.pushButtonLog.setEnabled(False)
         self.pushButtonCalculate.setEnabled(False)
         self.groupBoxAnchoring.setLayout(layoutAnchoring)
         layout.addRow(self.groupBoxAnchoring)
@@ -501,7 +501,6 @@ class gui(QtGui.QMainWindow):
         self.log_selfloc()
 
     def calc_abs_solution(self):
-        self.pushButtonLog.setEnabled(True)
         self.anchor_doneButton.setEnabled(True)
         self.rpc_manager.request("new_result_procrustes")
 
@@ -536,14 +535,7 @@ class gui(QtGui.QMainWindow):
         self.mds_complete = True
 
     def start_anchoring(self):
-        self.mds_complete = True
-        time.sleep(0.2)
-        self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
-        self.anchor_gpsInputButton.setEnabled(True)
-        self.pushButtonOK.setEnabled(True)
-        self.pushButtonDMDS.setEnabled(True)
-        print "start_anchoring"
-        self.comboBoxCurrAnchor.setEnabled(True)
+        self.unlock_anchor = True
 
     def start_anchoring_loop(self):
         self.pushButtonOK.setEnabled(False)
@@ -567,7 +559,6 @@ class gui(QtGui.QMainWindow):
         self.anchor_gpsInputButton.setEnabled(True)
         self.comboBoxCurrAnchor.setEnabled(True)
         self.pushButtonCalculate.setEnabled(False)
-        self.pushButtonLog.setEnabled(False)
         self.anchor_dialog.reject()
 
     def set_anchor_gt_position(self, button):
@@ -1515,7 +1506,16 @@ class gui(QtGui.QMainWindow):
             self.completed_anchors[self.num_anchor_position] = self.num_anchor_position + 1
             self.new_anchor = False
             self.check_complete_selfloc()
-        # new reference selected => update plot 
+        if self.unlock_anchor:
+            self.mds_complete = True
+            self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
+            self.anchor_gpsInputButton.setEnabled(True)
+            self.pushButtonOK.setEnabled(True)
+            self.pushButtonDMDS.setEnabled(True)
+            self.unlock_anchor = False
+            print "start_anchoring"
+            self.comboBoxCurrAnchor.setEnabled(True)
+        # new reference selected => update plot
         if "ref_receiver" in self.results:
             if self.ref_receiver != self.results["ref_receiver"]:
                 self.pending_receivers_to_plot = True

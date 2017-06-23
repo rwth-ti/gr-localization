@@ -104,12 +104,12 @@ class fusion_center():
         self.flush = False
         
         # Parameters for self-localization:
-        self.pos_selfloc = []
+        self.coordinates_procrustes = np.array(4 * [0.0])
         self.alpha = 0.3
         self.init_stress = 10.0
         self.max_it = 100
         self.stress_list = []
-        self.coordinates_procrustes = []
+        self.coordinates_procrustes = np.array(4*[0.0])
         self.selected_positions_prev = []
         self.self_localization = False
         self.transmitter = -1 # No sensor is transmitting
@@ -118,12 +118,15 @@ class fusion_center():
         self.transmitter_history = []
         self.timestamp_history = []
         #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
-        self.delay_tensor = [[[[]]]]
+        self.delay_tensor = np.ndarray(shape=(4, 4, 4, self.sample_average))
+        self.D = np.ndarray(shape=(4, 4, 4))
         self.cnt_j = 0
         self.cnt_average = 0
         self.tx_gain = 89 #in db
         self.cnt_selfloc = 0
         self.cnt_selfloc_anc = 0
+        self.pos_selfloc = np.array([0.0] * 4)
+        self.pos_selfloc_procrustes = np.array([0.0] * 4)
         # Anchoring:
         self.num_anchor = 0
         self.num_anchors = 3
@@ -131,10 +134,10 @@ class fusion_center():
         self.anchor_loop = False
         self.anchor_average = 3
         self.anchor_loop_delays = []
-        self.anchor_positions = [None] * self.num_anchors
-        self.anchor_gt_positions = [None] * self.num_anchors
+        self.anchor_positions = np.ndarray(shape = (self.num_anchors,2))
+        self.anchor_gt_positions = np.ndarray(shape = (self.num_anchors,2))
         self.anchor_interrupt = False
-        self.anchor_loop_delay_history = [0.0] * (self.num_anchors * self.anchor_average)
+        self.anchor_loop_delay_history = [0.0] * (self.num_anchors)
         self.delay_means = [0.0] * self.num_anchors
         self.completed_anchors = [0.0] * self.num_anchors
         self.completed_anchors_positions = [0.0] * self.num_anchors
@@ -457,7 +460,7 @@ class fusion_center():
 
     def init_all_selfloc(self):
         self.delay_tensor = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers), self.sample_average))
-        self.anchor_loop_delay_history = [0.0] * (self.num_anchors * self.anchor_average)
+        self.anchor_loop_delay_history = [0.0] * (self.num_anchors)
         self.sample_history = [0.0] * (len(self.receivers) * self.sample_average + self.num_anchors * self.anchor_average)
         self.delay_means = [0.0] * self.num_anchors
         self.completed_anchors = [0.0] * self.num_anchors
@@ -1069,14 +1072,6 @@ class fusion_center():
         self.stress_list = [self.init_stress]
         self.pos_selfloc, self.stress_list = mds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
         print(self.stress_list)
-        receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset = helpers.build_results_strings(receivers)
-        self.header_selfloc =  "["  + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
-                                + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
-                                + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
-                                + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
-                                + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + receivers_offset + "," \
-                                + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," \
-                                + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
         for gui in self.guis.values():
             gui.rpc_manager.request("mds_done")
         # maybe omit
@@ -1139,6 +1134,14 @@ class fusion_center():
         fi.write("##########################################################################################################################################################################################\n")
         fi.write("rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
         fi.write("##########################################################################################################################################################################################\n")
+        receivers_positions, selected_positions, receivers_gps, receivers_antenna, receivers_gain, receivers_offset = helpers.build_results_strings(self.receivers)
+        self.header_selfloc = "[" + str(self.samp_rate) + "," + str(self.frequency) + "," + str(self.frequency_calibration) + "," \
+                              + str(self.coordinates_calibration) + "," + str(self.sample_interpolation) + "," \
+                              + str(self.bw) + "," + str(self.samples_to_receive) + "," + str(self.lo_offset) + "," \
+                              + str(self.bbox) + "," + receivers_positions + "," + selected_positions + "," \
+                              + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + receivers_offset + "," \
+                              + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," \
+                              + str(self.receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
         fi.write(self.header_selfloc)
         fi.write(str(self.transmitter_history) + "\n")
         fi.write(str(self.timestamp_history) + "\n")
