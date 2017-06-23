@@ -24,7 +24,7 @@ import rpc_manager as rpc_manager_local
 from gpsconfig import *
 from tx_bpsk import tx_bpsk
 sys.path.append("../python/octoclock_wrapper")
-#import octoclock
+import octoclock
 
 
 ###############################################################################
@@ -211,6 +211,8 @@ class top_block(gr.top_block):
 
     def set_run_loop(self, run_loop):
         self.run_loop = run_loop
+        if self.run_loop == False:
+            print "False now"
 
     def set_samp_rate(self,samp_rate):
         self.usrp_source.set_samp_rate(samp_rate)
@@ -380,9 +382,7 @@ class top_block(gr.top_block):
                 if last_pps_time_check > last_pps_time:
                     # get pps time from NMEA and set time of next pps
                     if self.gps == "octoclock":
-
                         time_nmea = clock.get_time_real_secs()
-
                     else:
                         time_nmea = [int(s) for s in self.usrp_source.get_mboard_sensor("gps_time",0).to_pp_string().split() if s.isdigit()][0]
                     # set internal time registers in USRP
@@ -400,7 +400,8 @@ class top_block(gr.top_block):
         time.sleep(1)
         print "After 1s: ", self.usrp_source.get_time_last_pps().get_real_secs()
         print "NMEA time sync complete!"
-        self.rpc_manager.request("sync_success",[self.ip_addr, self.options.ntp_server])
+        if self.options.ntp_server:
+            self.rpc_manager.request("sync_ntp",[self.ip_addr])
 
     def poll_lte_lite(self):
         while True:

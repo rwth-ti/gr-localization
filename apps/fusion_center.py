@@ -244,7 +244,7 @@ class fusion_center():
         self.rpc_manager.add_interface("set_TDOA_grid_based_num_samples",self.set_TDOA_grid_based_num_samples)
         self.rpc_manager.add_interface("set_record_results",self.set_record_results)
         self.rpc_manager.add_interface("set_record_samples",self.set_record_samples)
-        self.rpc_manager.add_interface("sync_success",self.sync_ntp)
+        self.rpc_manager.add_interface("sync_ntp",self.sync_ntp)
         self.rpc_manager.add_interface("set_bbox",self.set_bbox)
         self.rpc_manager.add_interface("set_acquisition_time",self.set_acquisition_time)
         self.rpc_manager.add_interface("set_grid_based_active",self.set_grid_based_active)
@@ -930,12 +930,11 @@ class fusion_center():
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_record_samples",[record_samples])
 
-    def sync_ntp(self, ip_address, is_ntp_server):
-        if is_ntp_server:
-            print("Synchronize time to receiver NTP server ",ip_address)
-            os.system("sudo ntpdate -u " + ip_address)
-            self.ntp_sync = True
-            print("NTP synchronization done")
+    def sync_ntp(self, ip_address):
+        print("Synchronize time to receiver NTP server ",ip_address)
+        os.system("sudo ntpdate -u " + ip_address)
+        self.ntp_sync = True
+        print("NTP synchronization done")
 
     def set_bbox(self, bbox):
         self.bbox = bbox
@@ -1414,14 +1413,14 @@ class fusion_center():
             self.calibration_loop_delays.append(delay)
             print(len(self.calibration_loop_delays))
             if len(self.calibration_loop_delays) == self.calibration_average:
+                self.flush = True
+                self.run_loop = False
                 for receiver in receivers.values():
                     receiver.samples = np.array([])
                     receiver.samples_calibration = np.array([])
                     receiver.first_packet = True
                     receiver.reception_complete = False
                 self.processing = False
-                self.flush = True
-                self.run_loop = False
                 self.stop_loop()
                 for gui in self.guis.values():
                     gui.rpc_manager.request("calibration_loop",[False])
