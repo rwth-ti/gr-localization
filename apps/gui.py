@@ -108,7 +108,7 @@ class gui(QtGui.QMainWindow):
         self.transmitter = None
         self.transmitter_prev = None
         self.new_selfloc = False
-
+        self.mds_complete = False
 
         self.grid_based_active = False
 
@@ -191,6 +191,7 @@ class gui(QtGui.QMainWindow):
         self.rpc_manager.add_interface("calibration_status",self.calibration_status)
         self.rpc_manager.add_interface("start_anchoring", self.start_anchoring)
         self.rpc_manager.add_interface("set_anchor_position", self.set_anchor_position)
+        self.rpc_manager.add_interface("mds_done", self.mds_done)
         self.rpc_manager.start_watcher()
 
         # Find out ip address
@@ -531,10 +532,13 @@ class gui(QtGui.QMainWindow):
             except:
                 print "Position is not defined!"
 
+    def mds_done(self):
+        self.mds_complete = True
+
     def start_anchoring(self):
+        self.mds_complete = True
         time.sleep(0.2)
         self.num_anchor_position = int(self.comboBoxCurrAnchor.currentText()) - 1
-        self.anchor_setButton.setEnabled(True)
         self.anchor_gpsInputButton.setEnabled(True)
         self.pushButtonOK.setEnabled(True)
         self.pushButtonDMDS.setEnabled(True)
@@ -550,13 +554,16 @@ class gui(QtGui.QMainWindow):
 
 
     def cancel_all_selfloc(self):
+        # reset Buttons and Flags!
+        self.mds_complete = False
+        self.completed_anchors = [0] * self.num_anchors
+        self.completed_anchors_positions = [0] * self.num_anchors
         self.rpc_manager.request("stop_selfloc")
         #reset all buttons to prevent deadlock
         time.sleep(0.2)
         self.pushButtonDMDS.setEnabled(True)
         self.pushButtonOK.setEnabled(True)
         self.anchor_doneButton.setEnabled(False)
-        self.anchor_setButton.setEnabled(True)
         self.anchor_gpsInputButton.setEnabled(True)
         self.comboBoxCurrAnchor.setEnabled(True)
         self.pushButtonCalculate.setEnabled(False)
@@ -587,7 +594,7 @@ class gui(QtGui.QMainWindow):
 
     def check_complete_selfloc(self):
         if all(self.completed_anchors[i] == i + 1 for i in range(self.num_anchors)) and all(
-                        self.completed_anchors_positions[i] == i + 1 for i in range(self.num_anchors)):
+                        self.completed_anchors_positions[i] == i + 1 for i in range(self.num_anchors)) and self.mds_complete:
             self.pushButtonCalculate.setEnabled(True)
             self.pushButtonDMDS.setEnabled(True)
 
@@ -1133,11 +1140,7 @@ class gui(QtGui.QMainWindow):
     def start_selfloc(self):
         self.anchor_dialog.show()
         self.rpc_manager.request("init_all_selfloc")
-        self.pushButtonOK.setEnabled(False)
-        self.anchor_setButton.setEnabled(False)
-        self.anchor_gpsInputButton.setEnabled(False)
-        self.comboBoxCurrAnchor.setEnabled(False)
-    
+
     def start_selfloc_loop(self):
         self.pushButtonDMDS.setEnabled(False)
         self.pushButtonOK.setEnabled(False)

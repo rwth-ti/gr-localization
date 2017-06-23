@@ -1065,6 +1065,9 @@ class fusion_center():
                                 + receivers_gps + "," + receivers_antenna + "," + receivers_gain + "," + receivers_offset + "," \
                                 + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," \
                                 + str(receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
+        for gui in self.guis.values():
+            gui.rpc_manager.request("mds_done")
+        # maybe omit
         self.wait_anchors(receivers)
 
     def wait_anchors(self, receivers):
@@ -1395,7 +1398,6 @@ class fusion_center():
                 self.run_loop = False
                 delay_mean = np.array(self.anchor_loop_delays).mean(0)
                 self.delay_means[self.num_anchor] = delay_mean
-                self.anchor_positions[self.num_anchor] = chan94_algorithm.localize(receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2],self.bbox[3])), delay_mean)["coordinates"]
                 print("num_anchor", self.num_anchor)
                 self.completed_anchors[self.num_anchor] = self.num_anchor + 1
                 self.set_anchor_position(self.anchor_positions[self.num_anchor])
