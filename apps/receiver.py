@@ -24,7 +24,7 @@ import rpc_manager as rpc_manager_local
 from gpsconfig import *
 from tx_bpsk import tx_bpsk
 sys.path.append("../python/octoclock_wrapper")
-import octoclock
+#import octoclock
 
 
 ###############################################################################

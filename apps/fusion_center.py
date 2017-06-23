@@ -132,7 +132,7 @@ class fusion_center():
         self.num_anchors = 3
         self.anchoring = False
         self.anchor_loop = False
-        self.anchor_average = 3
+        self.anchor_average = 15
         self.anchor_loop_delays = []
         self.anchor_positions = np.ndarray(shape = (self.num_anchors,2))
         self.anchor_gt_positions = np.ndarray(shape = (self.num_anchors,2))
@@ -459,6 +459,11 @@ class fusion_center():
             gui.rpc_manager.request("set_gui_num_anchors",[num_anchors])
 
     def init_all_selfloc(self):
+        self.anchor_positions = np.ndarray(shape=(self.num_anchors, 2))
+        self.anchor_gt_positions = np.ndarray(shape=(self.num_anchors, 2))
+        self.pos_selfloc = np.array([0.0] * len(self.receivers))
+        self.pos_selfloc_procrustes = np.array([0.0] * len(self.receivers))
+        self.D = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers)))
         self.delay_tensor = np.ndarray(shape=(len(self.receivers), len(self.receivers), len(self.receivers), self.sample_average))
         self.anchor_loop_delay_history = [0.0] * (self.num_anchors)
         self.sample_history = [0.0] * (len(self.receivers) * self.sample_average + self.num_anchors * self.anchor_average)
@@ -1665,7 +1670,7 @@ def parse_options():
                       help="Activate reference calibration station")
     parser.add_option("", "--acquisition-time", type="float", default="0.5",
                       help="Seconds between acquisitions")
-    parser.add_option("", "--selfloc-average-length", type="string", default="3",
+    parser.add_option("", "--selfloc-average-length", type="string", default="15",
                       help="Average length for self localization")
                       
     (options, args) = parser.parse_args()
