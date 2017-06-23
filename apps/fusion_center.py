@@ -101,6 +101,7 @@ class fusion_center():
         self.localizing = False
         self.ntp_sync = False
         self.calibrating = False
+        self.flush = False
         
         # Parameters for self-localization:
         self.pos_selfloc = []
@@ -121,7 +122,8 @@ class fusion_center():
         self.cnt_j = 0
         self.cnt_average = 0
         self.tx_gain = 89 #in db
-
+        self.cnt_selfloc = 0
+        self.cnt_selfloc_anc = 0
         # Anchoring:
         self.num_anchor = 0
         self.num_anchors = 3
@@ -473,7 +475,7 @@ class fusion_center():
                 self.delay_calibration = []
                 self.calibrating = True
                 self.run_loop = True
-                self.start_receivers(acquisitions)
+                self.start_receivers()
                 for gui in self.guis.values():
                     gui.rpc_manager.request("calibration_status",[False])
                     gui.rpc_manager.request("calibration_loop",[True])
@@ -629,6 +631,8 @@ class fusion_center():
             print(serial, "registered")
 
     def start_receivers(self, acquisitions=0):
+        # receivers actively started --> leave flush state
+        self.flush = False
         # reception 1 second in the future at full second
         if not self.processing:
             time_to_receive = np.ceil(time.time()) + 1
@@ -743,20 +747,17 @@ class fusion_center():
         self.anchor_interrupt = False
         # loop gets started in switch_transmitter!
         self.switch_transmitter(self.cnt_j)
-        
 
-                
+
     def stop_loop(self):
-        self.run_loop = False
         self.anchor_loop = False
         self.recording_results = False
         self.recording_samples = False
         self.self_localization = False
         self.estimated_positions_history = []
         self.localizing = False
+        self.run_loop = False
         self.processing = False
-
-        
         for receiver in self.receivers.values():
             threading.Thread(target = receiver.set_run_loop, args = [self.run_loop]).start()
 
@@ -957,15 +958,20 @@ class fusion_center():
             self.transmitter_debug = 0
         self.switch_transmitter(self.transmitter_debug)
         
-    def switch_transmitter(self, idx_new): 
-        #cmmnt: maybe some wait required here
+    def switch_transmitter(self, idx_new):
+        self.run_loop = False
+        self.localizing = False
+        self.processing = False
+        for receiver in self.receivers.values():
+            threading.Thread(target=receiver.set_run_loop, args=[self.run_loop]).start()
         if self.transmitter != -1:
             self.receivers.values()[self.transmitter].stop_transmitter()
+            time.sleep(1)
         self.receivers.values()[idx_new].start_transmitter()
+        time.sleep(5)
         self.transmitter = idx_new
         self.run_loop = True
-        time.sleep(5)
-        self.start_receivers(self.sample_average)
+        self.start_receivers()
 
     def stop_transmitter(self):
         if self.transmitter != -1:
@@ -1003,10 +1009,16 @@ class fusion_center():
         self.anchor_loop = True
         self.recording_results = False
         self.run_loop = True
-        self.start_receivers(self.anchor_average)
+        self.start_receivers()
 
     # rename/even necessary?!
     def set_anchor_position(self, position):
+        self.run_loop = False
+        self.localizing = False
+        self.processing = False
+        for receiver in self.receivers.values():
+            threading.Thread(target=receiver.set_run_loop, args=[self.run_loop]).start()
+        time.sleep(1)
         self.anchor_position = position
         for gui in self.guis.values():
             gui.rpc_manager.request("set_anchor_position")
@@ -1149,19 +1161,14 @@ class fusion_center():
         f_s = open(self.samples_file,"a")
         for entry in self.sample_history:
             pprint.pprint(str(entry) + "\n",f_s,width=9000)
-        f_s.close() 
+        f_s.close()
 
-    def process_results(self, receivers, delay_auto_calibration):
-        # check if timestamps are equal for all the receivers
-        times_target = []
-        times_calibration = []
-        H = np.array([])
-        x_cov=0
-        y_cov=0
-        timestamp_list = [receivers.values()[j].tags["rx_time"] for j in range(len(self.receivers))]
+    def check_timestamp_mismatch(self, receivers):
+        timestamp_list = [receivers.values()[j].tags["rx_time"] for j in range(len(receivers))]
         last_time_target = np.max(timestamp_list)
         if self.auto_calibrate:
-            timestamp_list_calibration = [receivers.values()[j].tags_calibration["rx_time"] for j in range(len(self.receivers))]
+            timestamp_list_calibration = [receivers.values()[j].tags_calibration["rx_time"] for j in
+                                          range(len(receivers))]
             last_time_calibration = np.max(timestamp_list_calibration)
         timestamp_mismatch = False
         for i in range(len(receivers)):
@@ -1173,12 +1180,33 @@ class fusion_center():
                 if not (last_time_calibration == receivers.values()[i].tags_calibration["rx_time"]):
                     receivers.values()[i].reset_receiver()
                     timestamp_mismatch = True
-        if timestamp_mismatch == True:
+        return timestamp_mismatch
+
+    def process_results(self, receivers, delay_auto_calibration):
+        # do not process anything in flush state!
+        if self.flush:
+            for receiver in receivers.values():
+                receiver.samples = np.array([])
+                receiver.samples_calibration = np.array([])
+                receiver.first_packet = True
+                receiver.reception_complete = False
+            self.processing = False
+            return
+        # check if timestamps are equal for all the receivers
+        times_target = []
+        times_calibration = []
+
+        H = np.array([])
+        x_cov=0
+        y_cov=0
+        if self.check_timestamp_mismatch(receivers) == True:
             print("Warning: target timestamps do not match; skip samples")
             for k in range(len(receivers)):
                 print(k, receivers.values()[k].serial, receivers.values()[k].tags)
             self.processing = False
             return
+        print(self.cnt_selfloc_anc)
+        self.cnt_selfloc_anc += 1
         # all timestamps correct -> continue processing
         
         # log samples before interpolation to get logs of capable size and faster logging. Interpolation can be redone in parser. 
@@ -1383,10 +1411,18 @@ class fusion_center():
             self.calibration_loop_delays.append(delay)
             print(len(self.calibration_loop_delays))
             if len(self.calibration_loop_delays) == self.calibration_average:
+                for receiver in receivers.values():
+                    receiver.samples = np.array([])
+                    receiver.samples_calibration = np.array([])
+                    receiver.first_packet = True
+                    receiver.reception_complete = False
+                self.processing = False
+                self.flush = True
                 self.run_loop = False
+                self.stop_loop()
                 for gui in self.guis.values():
                     gui.rpc_manager.request("calibration_loop",[False])
-
+                return
         # may cause trouble with logging ?
         if self.anchor_loop:
             self.anchor_loop_delays.append(delay)
@@ -1395,19 +1431,26 @@ class fusion_center():
             self.transmitter_history.append(-1)
             self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
             if len(self.anchor_loop_delays) == self.anchor_average:
+                self.flush = True
                 self.run_loop = False
                 delay_mean = np.array(self.anchor_loop_delays).mean(0)
                 self.delay_means[self.num_anchor] = delay_mean
                 print("num_anchor", self.num_anchor)
                 self.completed_anchors[self.num_anchor] = self.num_anchor + 1
-                self.set_anchor_position(self.anchor_positions[self.num_anchor])
                 self.anchor_loop = False
                 self.anchor_loop_delay_history[self.num_anchor] = self.anchor_loop_delays
+                print(self.anchor_loop_delays)
                 self.anchor_loop_delays = []
-                self.stop_loop()
                 self.recording_samples = self.record_samples
                 self.recording_results = self.record_results
-
+                for receiver in receivers.values():
+                    receiver.samples = np.array([])
+                    receiver.samples_calibration = np.array([])
+                    receiver.first_packet = True
+                    receiver.reception_complete = False
+                self.processing = False
+                self.set_anchor_position(self.anchor_positions[self.num_anchor])
+                return
         # set flags to enable new reception
         for receiver in receivers.values():
             receiver.samples = np.array([])
@@ -1417,9 +1460,32 @@ class fusion_center():
         self.processing = False
 
     def process_selfloc(self, receivers, delay_auto_calibration):
-        # transmitter=rx_j
+
+        #do not process anything in flush state!
+        if self.flush:
+            self.processing = False
+            for idx, receiver in enumerate(receivers.values()):
+                if idx != self.transmitter:
+                    receiver.samples = np.array([])
+                    receiver.samples_calibration = np.array([])
+                    receiver.first_packet = True
+                    receiver.reception_complete = False
+            return
+        # transmitter = rx_j
         # add possibility to log!
         # "nested loop in class"
+        rx_checkdict = {}
+        for j in range(len(self.receivers)):
+            if j != self.cnt_j:
+                rx_checkdict[receivers.keys()[j]] = receivers.values()[j]
+        if self.check_timestamp_mismatch(rx_checkdict) == True:
+            print("Warning: target timestamps do not match; skip samples")
+            for k in range(len(receivers)):
+                print(k, receivers.values()[k].serial, receivers.values()[k].tags)
+            self.processing = False
+            return
+        print(self.cnt_selfloc)
+        self.cnt_selfloc += 1
         receiver_samples = []
         for receiver in receivers.values():
             receiver_samples.append(receiver.samples.tolist())
@@ -1464,18 +1530,19 @@ class fusion_center():
             self.delay_history = []
             self.cnt_j += 1
             if self.cnt_j == len(receivers):
-                for receiver in receivers.values():
-                    receiver.samples = np.array([])
-                    receiver.samples_calibration = np.array([])
-                    receiver.first_packet = True
-                    receiver.reception_complete = False
+                for idx, receiver in enumerate(receivers.values()):
+                    if idx != self.transmitter:
+                        receiver.samples = np.array([])
+                        receiver.samples_calibration = np.array([])
+                        receiver.first_packet = True
+                        receiver.reception_complete = False
                 self.processing = False
-
                 # Recording of delays finished
+                self.flush = True
                 self.stop_selfloc_loop()
                 self.evaluate_selfloc(receivers)
                 self.processing = False
-                return        
+                return
         for idx, receiver in enumerate(receivers.values()):
             if idx != self.transmitter:
                 receiver.samples = np.array([])
@@ -1486,6 +1553,7 @@ class fusion_center():
         
         if self.cnt_average == self.sample_average:
             self.cnt_average = 0
+            self.flush = True
             self.switch_transmitter(self.cnt_j)
         # by now, unclear where to set this again(point when tx needs to be turned off again) self.transmitter = -1
 
