@@ -1057,7 +1057,7 @@ class gui(QtGui.QMainWindow):
             else:
                 sys.exit("Neither transmitter position nor delay estimate are given!")
         else:
-            delay = delay * self.samp_rate/ 10**9
+            delay = delay * self.samp_rate / 10**9
         if delay<0:
             pos_rx = np.flipud(pos_rx)
         # Baseline distance between sensors

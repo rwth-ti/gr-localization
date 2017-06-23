@@ -257,8 +257,8 @@ class SpinBoxDelegate(QtGui.QItemDelegate):
 
     def createEditor(self, parent, option, index):
         editor = QtGui.QDoubleSpinBox(parent)
-        editor.setMinimum(-100)
-        editor.setMaximum(100)
+        editor.setMinimum(-999)
+        editor.setMaximum(999)
         return editor
 
     def setEditorData(self, spinBox, index):
