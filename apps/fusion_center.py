@@ -1087,7 +1087,6 @@ class fusion_center():
         for j, receiver in enumerate(receivers.values()):
             self.selected_positions_prev.append(receiver.selected_position)
             receiver.coordinates_selfloc = self.pos_selfloc[j]
-            receiver.selected_position = "selfloc" 
         anchoring_complete = False
         start = True
         while anchoring_complete == False:
