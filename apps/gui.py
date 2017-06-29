@@ -517,19 +517,19 @@ class gui(QtGui.QMainWindow):
         if button.text() == "Cancel":
             self.rpc_manager.request("remove_calibration")
             self.calibration_dialog.reject()
-        elif button.text() == "Get coordinates from map" :
+        elif button.text() == "Get coordinates from map":
             if hasattr(self, "zp"):
                 self.setting_calibration = True
                 self.zp.enabled = False
-        elif button.text() == "Set calibration" :
+        elif button.text() == "Set calibration":
             # calibrate with gps coordinates from line inputs
-            try:
+            if self.lineEditLatitude_cal.text().isEmpty() or self.lineEditLongitude_cal.text().isEmpty():
+                print "Position is not defined!"
+            else:
                 latitude = float(self.lineEditLatitude_cal.text())
                 longitude = float(self.lineEditLongitude_cal.text())
-                self.rpc_manager.request("calibrate",[self.basemap(longitude,latitude)])
+                self.rpc_manager.request("calibrate", [self.basemap(longitude, latitude)])
                 self.calibration_dialog.accept()
-            except:
-                print "Position is not defined!"
 
     def mds_done(self):
         self.mds_complete = True

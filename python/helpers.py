@@ -14,8 +14,6 @@ def build_results_strings(receivers):
             #TODO: general solution!!!
             if receiver.selected_position == "manual":
                 receivers_position = receivers_position + str(receiver.coordinates)
-            elif receiver.selected_position == "selfloc":
-                receivers_position = receivers_position + str(receiver.coordinates_selfloc)
             else:
                 receivers_position = receivers_position + str(receiver.coordinates_gps)
             selected_positions = selected_positions + "'" + receiver.selected_position + "'"
@@ -26,8 +24,6 @@ def build_results_strings(receivers):
         else:
             if receiver.selected_position == "manual":
                 receivers_position = receivers_position + "," + str(receiver.coordinates)
-            elif receiver.selected_position == "selfloc":
-                receivers_position = receivers_position + "," + str(receiver.coordinates_selfloc)
             else:
                 receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
             selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
