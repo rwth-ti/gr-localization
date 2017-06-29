@@ -5,6 +5,7 @@ import numpy as np
 from scipy import interpolate, signal
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from matplotlib import patches
 import numpy as np
 import sys, warnings, os
@@ -273,18 +274,9 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_map.pdf", dpi=150)
 
     if options.history:
-        #make delay plots here
-        #maybe useful for debugging, but too much effort?
         figure_history = plt.figure()
         figure_history.canvas.set_window_title(args[0].split("/")[-1].split(".")[0] + "_DMDS-history")
-        axis_history = figure_history.add_subplot(221)
-        axis_history.set_ylabel("Acquisitions")
-        axis_history.set_ylabel("Transmitter")
-        
-        axis_history.plot(transmitter_history)
-        axis_delays = figure_history.add_subplot(222)
-
-        #delay_vector = np.ndarray(shape=(4,4,4*selfloc_average_length))
+        ax1 = figure_history.add_subplot(111)
 
         delay_12 = []
         delay_13 = []
@@ -299,17 +291,30 @@ if __name__ == "__main__":
             delay_23.extend(delay_tensor[cnt_j,1,2,:].tolist())
             delay_24.extend(delay_tensor[cnt_j,1,3,:].tolist())
             delay_34.extend(delay_tensor[cnt_j,2,3,:].tolist())
-        
-        plt_12 = axis_delays.plot(delay_12,label = "Delay 12" )
-        plt_13 = axis_delays.plot(delay_13,label = "Delay 13" )
-        plt_14 = axis_delays.plot(delay_14,label = "Delay 14" )
-        plt_23 = axis_delays.plot(delay_23,label = "Delay 23" )
-        plt_24 = axis_delays.plot(delay_24,label = "Delay 24" )
-        plt_34 = axis_delays.plot(delay_34,label = "Delay 34" )
-        axis_delays.set_xlabel("Acquisitions")
-        axis_delays.set_ylabel("Delay(ns)")
-        axis_delays.legend()
-        # concatenate D and anchor_delay_history! for delays
+
+        plt_12 = ax1.plot(delay_12,label = r'$\tau_{12}$' )
+        plt_13 = ax1.plot(delay_13,label = r'$\tau_{13}$' )
+        plt_14 = ax1.plot(delay_14,label = r'$\tau_{14}$' )
+        plt_23 = ax1.plot(delay_23,label = r'$\tau_{23}$' )
+        plt_24 = ax1.plot(delay_24,label = r'$\tau_{24}$' )
+        plt_34 = ax1.plot(delay_34,label = r'$\tau_{34}$' )
+        ax1.set_xlabel(r'Acquisitions')
+        ax1.set_ylabel(r'TDOA [ns]')
+        ax1.legend()
+        ax2 = ax1.twiny()
+        # dummy plot
+        ax2.plot(transmitter_history,visible=False)
+        ax2.set_xlabel("Transmitter")
+        ax2.set_xticklabels([])
+        ax2.locator_params(nbins=4)
+        ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=2))
+        for tick in ax2.xaxis.get_minor_ticks():
+            tick.tick2line.set_markersize(0)
+        ax2.xaxis.set_minor_formatter(ticker.FixedFormatter(('Sensor 1','Sensor 2','Sensor 3','Sensor 4')))
+        if options.save:
+            #p.figure_map.tight_layout()
+            plt.savefig(args[0].split("/")[-1].split(".")[0] + "_history.pdf", dpi=150)
+        ax2.grid()
 
     if options.stress:
         figure_stress = plt.figure()
