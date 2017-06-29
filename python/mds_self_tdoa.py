@@ -18,18 +18,20 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
     num_sensors = len(D[0,0,:].tolist())
     if prev_coordinates == None:
         pos_conf = np.max(roi) * np.random.uniform(low=0.0,high=1.0,size=(num_sensors,2))
+        #pos_conf = np.array([(150, 50), (100, 60), (70, 110), (200, 85)])
     else: 
         pos_conf = prev_coordinates
-    
+    print pos_conf
     stress = stress_last[-1]
-    sigma = 0
-    fail_count = 0
+    sigma = 0.4
+    it = 0
+    stress_min = stress_last[0]
+    best_result = []
     while True:
-        fail_count += 1
         stress_ratio = 1.5
-        it = 0 
+        stress = stress_last[0]
         # check if converged
-        while abs(stress_ratio) > 0.001 and stress > 2*sigma + 0.001 and it < max_it:
+        while abs(stress_ratio) > 0.0001 and stress > sigma + 0.001 and it < max_it:
             # calculate configuration TDOAs and derive new locations
             pos_it_conf = pos_conf
             sum_tdoa_diff = 0
@@ -47,8 +49,7 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
                             mov_vec = pos_it_conf[idx_node_j] - pos_it_conf[idx_node_k]
                             # normalize
                             mov_vec = np.true_divide(mov_vec, np.linalg.norm(mov_vec))
-                            pos_conf[idx_node_j] = pos_conf[idx_node_j] + np.dot(alpha/((num_sensors-1)*(num_sensors-2))*tdoa_diff,mov_vec)
-                            #pdb.set_trace()
+                            pos_conf[idx_node_j] = pos_conf[idx_node_j] + np.dot(alpha/((num_sensors-1)*(num_sensors-2)) * tdoa_diff,mov_vec)
             it += 1
             # calculate STRESS criterion
             if max_it != 1:
@@ -60,8 +61,16 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
             pos_conf = pos_conf - center_conf
             print "stress", stress
             print "stress ratio", stress_ratio
-           
-        if stress < (2*sigma + 1.5) or (max_it == 1 and abs(stress_ratio) > 0.001) or stress > 20:
+            print it
+            if stress > 12:
+                break
+            if stress < stress_min:
+                stress_min = stress
+                best_result = pos_conf
+        if (stress < sigma + 0.001) and (0 < stress_ratio < 0.0001):
+            best_result = pos_conf
+            break
+        if it == max_it:
             break
         else:
             pos_conf = np.max(roi) * np.random.uniform(low=0.0,high=1.0,size=(num_sensors,2))
@@ -70,7 +79,8 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
         #     pos_conf(1,:) = pos_sensors(1,:)
         #     pos_conf(2,:) = pos_sensors(2,:)
     stress_last.append(stress)
-    return pos_conf, stress_last
+    print stress_min
+    return best_result, stress_last
 
 
 def geometric_tdoa(a,b,c):
