@@ -321,11 +321,12 @@ if __name__ == "__main__":
         figure_stress.canvas.set_window_title(args[0].split("/")[-1].split(".")[0] + "_stress")
         axis_stress = figure_stress.add_subplot(111)
         axis_stress.plot(stress_list)
-        axis_stress.set_ylabel(r'stress')
+        axis_stress.set_ylabel(r'Stress')
         axis_stress.set_xlabel(r'Iterations')
         if options.save:
             #p.figure_map.tight_layout()
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_stress.pdf", dpi=150)
+        axis_stress.grid()
 
     plt.show()
 
