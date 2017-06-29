@@ -311,10 +311,10 @@ if __name__ == "__main__":
         for tick in ax2.xaxis.get_minor_ticks():
             tick.tick2line.set_markersize(0)
         ax2.xaxis.set_minor_formatter(ticker.FixedFormatter(('Sensor 1','Sensor 2','Sensor 3','Sensor 4')))
+        ax2.grid()
         if options.save:
             #p.figure_map.tight_layout()
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_history.pdf", dpi=150)
-        ax2.grid()
 
     if options.stress:
         figure_stress = plt.figure()
@@ -323,10 +323,10 @@ if __name__ == "__main__":
         axis_stress.plot(stress_list)
         axis_stress.set_ylabel(r'Stress')
         axis_stress.set_xlabel(r'Iterations')
+        axis_stress.grid()
         if options.save:
             #p.figure_map.tight_layout()
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_stress.pdf", dpi=150)
-        axis_stress.grid()
 
     plt.show()
 
