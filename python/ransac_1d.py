@@ -85,8 +85,8 @@ class ransac_1d:
     return bestfit
     }}}
     """
-        n = self.n_rel * len(data)
-        d = self.d_rel * len(data)
+        n = int(self.n_rel * len(data))
+        d = int(self.d_rel * len(data))
         iterations = 0
         bestfit = None
         besterr = np.inf
