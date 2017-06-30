@@ -315,7 +315,7 @@ if __name__ == "__main__":
         ax1.legend()
         ax2 = ax1.twiny()
         # dummy plot
-        ax2.plot(transmitter_history,visible=False)
+        ax2.plot(delay_12,visible=False)
         ax2.set_xlabel("Transmitter")
         ax2.set_xticklabels([])
         ax2.locator_params(nbins=4)
