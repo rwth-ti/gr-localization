@@ -23,15 +23,18 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
         pos_conf = prev_coordinates
     print pos_conf
     stress = stress_last[-1]
-    sigma = 0.4
+    sigma = 0.0
     it = 0
+    stress_threshold = sigma + 0.001
+    stress_diff_threshold = 0.0001
+
     stress_min = stress_last[0]
-    best_result = []
+    best_result = pos_conf
     while True:
-        stress_ratio = 1.5
+        stress_diff = 1.5
         stress = stress_last[0]
         # check if converged
-        while abs(stress_ratio) > 0.0001 and stress > sigma + 0.001 and it < max_it:
+        while (stress > stress_threshold or abs(stress_diff) > stress_diff_threshold) and it < max_it and stress < 20:
             # calculate configuration TDOAs and derive new locations
             pos_it_conf = pos_conf
             sum_tdoa_diff = 0
@@ -55,21 +58,16 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, alpha, stress_las
             if max_it != 1:
                 stress_last.append(stress)
             stress = np.sqrt(sum_tdoa_diff/sum_square_tdoa)
-            stress_ratio = stress_last[-1] - stress
+            stress_diff = stress_last[-1] - stress
             # center points
             center_conf = np.mean(pos_conf, axis = 0)
             pos_conf = pos_conf - center_conf
             print "stress", stress
-            print "stress ratio", stress_ratio
+            print "stress ratio", stress_diff
             print it
-            if stress > 12:
-                break
             if stress < stress_min:
                 stress_min = stress
                 best_result = pos_conf
-        if (stress < sigma + 0.001) and (0 < stress_ratio < 0.0001):
-            best_result = pos_conf
-            break
         if it == max_it:
             break
         else:

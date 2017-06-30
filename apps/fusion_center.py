@@ -27,7 +27,7 @@ import chan94_algorithm, kalman
 import grid_based_algorithm
 import dop
 from interpolation import corr_spline_interpolation
-import mds_self_tdoa
+import dmds_self_tdoa
 from procrustes import procrustes
 import helpers
 
@@ -1074,7 +1074,7 @@ class fusion_center():
                     self.D[j,l,k] = tdoa 
         pos_selfloc = None
         self.stress_list = [self.init_stress]
-        self.pos_selfloc, self.stress_list = mds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
+        self.pos_selfloc, self.stress_list = dmds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
         print(self.stress_list)
         for gui in self.guis.values():
             gui.rpc_manager.request("mds_done")

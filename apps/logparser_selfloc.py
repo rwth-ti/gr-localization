@@ -25,7 +25,7 @@ from interpolation import corr_spline_interpolation
 from ConfigSectionMap import ConfigSectionMap
 from chan94_algorithm import estimate_delay_interpolated
 from procrustes import procrustes
-import mds_self_tdoa
+import dmds_self_tdoa
 import helpers
 import ransac_1d
 
@@ -120,11 +120,6 @@ if __name__ == "__main__":
         for i in range(len(receivers_positions)-1):
             delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:,i]))
         delay_means.append(delay_mean)
-    sum_square_tdoa = 0
-    for j in range(len(receivers_positions)):
-        for l in range(len(receivers_positions)):
-            for k in range(len(receivers_positions)):
-                sum_square_tdoa += D[j, l, k]**2
 
     print "+".join(str(j).replace(".",",") for j in bbox)
     if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
@@ -215,8 +210,8 @@ if __name__ == "__main__":
         basemap.imshow(img, interpolation='lanczos', origin='upper')
         i = 1
         if options.crop_ict:
-            ax.axis([88,172,57,114])
-            basemap.drawmapscale(lon=6.06201, lat=50.77874, lon0=6.06201, lat0=50.77874, length=20,  units='m',barstyle='fancy',fontsize = 30, yoffset=1.2)
+            ax.axis([85,230,48,140])
+            basemap.drawmapscale(lon=6.06201, lat=50.77870, lon0=6.06201, lat0=50.77870, length=20,  units='m',barstyle='fancy',fontsize = 30, yoffset=1.2)
         else:
             basemap.drawmapscale(lon=bbox[0]-0.1*(bbox[0]-bbox[2]), lat=bbox[1]-0.07*(bbox[1]-bbox[3]), lon0=bbox[0]-0.1*(bbox[0]-bbox[2]), lat0=bbox[1]-0.07*(bbox[1]-bbox[3]), length=int(0.1 * np.linalg.norm(np.array(basemap(bbox[0],bbox[1])) - np.array(basemap(bbox[2],bbox[1])))),  units='m',barstyle='fancy',fontsize = 18)            
         """
@@ -233,7 +228,7 @@ if __name__ == "__main__":
         
         for rx in receivers_positions:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=400, alpha=0.9, label = "Receiver ground-truth position")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=400, alpha=0.9, label = "Sensor ground-truth")
             else:
                 ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=400, alpha=0.9)
             # set annotation RXx
@@ -241,12 +236,12 @@ if __name__ == "__main__":
             # index of logged reference receiver starts at 0 not at 1
             rx = (rx[0] + 5, rx[1] - 1)
             #if i != (ref_receiver+1): #and options.reference_selection == "Manual":
-            ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='w', alpha=0.9))
+            ax.annotate(text, rx,fontweight='bold', fontsize = 24,bbox=dict(facecolor='w', alpha=0.9))
             i += 1
         i = 1
         for rx in pos_selfloc_procrustes:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=400, alpha=0.9, label = "Final result receivers, RMSE: "+ "${0:.3f}".format(rmse_positions)+"m$")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=400, alpha=0.9, label = "Result sensors, RMSE: "+ "${0:.3f}".format(rmse_positions)+"m$")
             else:
                 ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=400, alpha=0.9)
             # set annotation RXx
@@ -254,12 +249,12 @@ if __name__ == "__main__":
             # index of logged reference receiver starts at 0 not at 1
             rx = (rx[0] + 5, rx[1] - 1)
             #if i != (ref_receiver+1): #and options.reference_selection == "Manual":
-            ax.annotate(text, rx,fontweight='bold', fontsize = 30,bbox=dict(facecolor='r', alpha=0.9))
+            ax.annotate(text, rx,fontweight='bold', fontsize = 24,bbox=dict(facecolor='r', alpha=0.9))
             i += 1
         i = 1
         for rx in anchor_gt_positions:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=400, alpha=0.9, label = "Anchor ground-truth position")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=400, alpha=0.9, label = "Anchor ground-truth")
             else:
                 ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=400, alpha=0.9)
             # set annotation RXx
@@ -270,7 +265,7 @@ if __name__ == "__main__":
         i = 1
         for rx in anchor_positions_procrustes:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=400, alpha=0.9, label = "Result for anchors, RMSE: "+ "${0:.3f}".format(rmse_anchors)+"m$")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=400, alpha=0.9, label = "Result anchors, RMSE: "+ "${0:.3f}".format(rmse_anchors)+"m$")
             else:
                 ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=400, alpha=0.9)
             # set annotation RXx
@@ -402,6 +397,11 @@ if __name__ == "__main__":
                         #tdoa = np.mean(delay_tensor[j,l,k])/ 10**9 * 299700000.0
                         sum_square_tdoa += tdoa**2
                         D[j,l,k] = tdoa
+            #sum_square_tdoa = 0
+            #for j in range(len(receivers_positions)):
+            #    for l in range(len(receivers_positions)):
+            #        for k in range(len(receivers_positions)):
+            #            sum_square_tdoa += D_true[j, l, k]**2
 
             anchor_loop_delays = []
             anchor_loop_delay_history = []
@@ -415,8 +415,8 @@ if __name__ == "__main__":
                     window_size = 13
                     if not ref_receiver == receiver:
                         delay.append(corr_spline_interpolation(receivers.values()[receiver].samples,
-                                                          receivers.values()[ref_receiver].samples, window_size)[1] / sampling_rate * 10**9 + \
-                                receivers[receiver].offset - receivers[ref_receiver].offset)
+                                     receivers.values()[ref_receiver].samples, window_size)[1] / sampling_rate * 10**9 + \
+                                     receivers[receiver].offset - receivers[ref_receiver].offset)
                 anchor_loop_delays.append(delay)
                 # no sensor is transmitting
                 transmitter_history.append(-1)
@@ -428,7 +428,7 @@ if __name__ == "__main__":
                     anchor_loop_delays = []
         pos_selfloc = None
         stress = [10]
-        pos_selfloc, stress = mds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, None, 5000, alpha, stress)
+        pos_selfloc, stress = dmds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, None, 5000, alpha, stress)
 
         # for chan algorithm:
         receivers_dummy = {}
