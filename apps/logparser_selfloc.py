@@ -41,7 +41,7 @@ c = 299700000.0
 
 def parse_options():
     """ Options parser. """
-    parser = OptionParser(usage="%prog: [options] file")
+    parser = OptionParser(usage="%prog: [options] results_file [samples_file]")
     parser.add_option("-g", "--geographical", action="store_true", default=True,
                       help="Geographical Map")
     parser.add_option("-m", "--map", action="store_true", default=False,
@@ -61,7 +61,7 @@ def parse_options():
     parser.add_option("", "--check-anchoring", action="store_true", default=False,
                       help="debug")
     (options, args) = parser.parse_args()
-    if len(args) == 0 or (len(args) == 1 and options.replay) or len(args) >2:
+    if len(args) == 0 or len(args) >2:
         parser.error('Invalid number of inputs!')
     return options, args
 
@@ -112,7 +112,19 @@ if __name__ == "__main__":
     #print tform
     stress_list = eval(f_results.readline())
 
+    ransac_tdoa = ransac_1d.ransac_1d(ransac_1d.ConstantLeastSquaresModel(), 0.3, 0.1, 1000, 5)
 
+    delay_means = []
+    for entry in anchor_loop_delay_history:
+        delay_mean = []
+        for i in range(len(receivers_positions)-1):
+            delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:,i]))
+        delay_means.append(delay_mean)
+    sum_square_tdoa = 0
+    for j in range(len(receivers_positions)):
+        for l in range(len(receivers_positions)):
+            for k in range(len(receivers_positions)):
+                sum_square_tdoa += D[j, l, k]**2
 
     print "+".join(str(j).replace(".",",") for j in bbox)
     if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
@@ -337,83 +349,112 @@ if __name__ == "__main__":
         # first set of samples: delays for algorithm. length: average_length*num_sensors
         # second set: delays for anchoring. length: average_length* num_anchors
         # mabe build in check?
-        f_samples = open(args[1],"r")
-        for line_number, line in enumerate(f_samples.readlines()):
-            receivers_samples = eval(eval(line))
-            receivers = dict()
-            # FIXME
-            if line_number < selfloc_average_length * len(receivers_positions):
-                for cnt_tx in range(1, len(receivers_positions) + 1):
-                    if selfloc_average_length * (cnt_tx - 1) <= line_number < selfloc_average_length * cnt_tx:
-                        receivers_samples.insert(cnt_tx - 1, [])
-            for receiver_idx in range(len(receivers_positions)):
-                receivers[receiver_idx] = receiver_interface.receiver_interface(None,None,receiver_idx)
-                receivers[receiver_idx].coordinates = receivers_positions[receiver_idx]
-                receivers[receiver_idx].offset = receivers_offset[receiver_idx]
-                receivers[receiver_idx].serial = receiver_idx
-                receivers[receiver_idx].frequency = frequency
-                receivers[receiver_idx].interpolation = interpolation
-                receivers[receiver_idx].samp_rate = sampling_rate
-                receivers[receiver_idx].samples_to_receive = samples_to_receive
-                receivers[receiver_idx].samples = receivers_samples[receiver_idx]
-                receivers[receiver_idx].correlation_interpolation = True
-                receivers[receiver_idx].measurement_noise = 10
-                receivers[receiver_idx].selected_position = "selfloc"
-            receivers_steps.append(receivers)
+        if len(args) == 2:
+            f_samples = open(args[1],"r")
+            for line_number, line in enumerate(f_samples.readlines()):
+                receivers_samples = eval(eval(line))
+                receivers = dict()
+                # FIXME
+                if line_number < selfloc_average_length * len(receivers_positions):
+                    for cnt_tx in range(1, len(receivers_positions) + 1):
+                        if selfloc_average_length * (cnt_tx - 1) <= line_number < selfloc_average_length * cnt_tx:
+                            receivers_samples.insert(cnt_tx - 1, [])
+                for receiver_idx in range(len(receivers_positions)):
+                    receivers[receiver_idx] = receiver_interface.receiver_interface(None,None,receiver_idx)
+                    receivers[receiver_idx].coordinates = receivers_positions[receiver_idx]
+                    receivers[receiver_idx].offset = receivers_offset[receiver_idx]
+                    receivers[receiver_idx].serial = receiver_idx
+                    receivers[receiver_idx].frequency = frequency
+                    receivers[receiver_idx].interpolation = interpolation
+                    receivers[receiver_idx].samp_rate = sampling_rate
+                    receivers[receiver_idx].samples_to_receive = samples_to_receive
+                    receivers[receiver_idx].samples = receivers_samples[receiver_idx]
+                    receivers[receiver_idx].correlation_interpolation = True
+                    receivers[receiver_idx].measurement_noise = 10
+                    receivers[receiver_idx].selected_position = "selfloc"
+                receivers_steps.append(receivers)
 
-        f_samples.close()
-        receivers_selfloc = receivers_steps[:len(receivers_positions)*selfloc_average_length]
-        receivers_anchoring = receivers_steps[len(receivers_positions)*selfloc_average_length:]
-        if len(receivers_anchoring) != anchor_average * num_anchors:
-            print "Alert: samples missing!"
-            pdb.set_trace()
-        for cnt_j in range(len(receivers_selfloc)/selfloc_average_length):
-            for cnt_average in range(selfloc_average_length):
-                curr_rx_set = receivers_selfloc[cnt_j*selfloc_average_length + cnt_average]
-                for cnt_l, rx_l in enumerate(curr_rx_set.values()):
-                    for cnt_k, rx_k in enumerate(curr_rx_set.values()):
-                        if cnt_j != cnt_l and cnt_j != cnt_k and cnt_l != cnt_k:
-                            window_size = 13
-                            #by now ugly hack, rethink later
-                            delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = corr_spline_interpolation(curr_rx_set.values()[cnt_l].samples, curr_rx_set.values()[cnt_k].samples, window_size)[1] / sampling_rate * 10**9 + rx_l.offset - rx_k.offset
-                            #print(correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
-                        else:
-                            delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = 0.0
-        D = np.ndarray(shape=(len(receivers_positions),len(receivers_positions),len(receivers_positions)))
-        sum_square_tdoa = 0
-        ransac_tdoa = ransac_1d.ransac_1d(ransac_1d.ConstantLeastSquaresModel(), 0.3, 0.1, 1000, 5)
-        for j in range(len(receivers_positions)):
-            for l in range(len(receivers_positions)):
-                for k in range(len(receivers_positions)):
-                    # average distance differences
-                    print j,k,l
-                    tdoa = ransac_tdoa.ransac_fit(delay_tensor[j,l,k])/ 10**9 * 299700000.0
-                    #tdoa = np.mean(delay_tensor[j,l,k])/ 10**9 * 299700000.0
-                    sum_square_tdoa += tdoa**2
-                    D[j,l,k] = tdoa
+            f_samples.close()
+            receivers_selfloc = receivers_steps[:len(receivers_positions)*selfloc_average_length]
+            receivers_anchoring = receivers_steps[len(receivers_positions)*selfloc_average_length:]
+            if len(receivers_anchoring) != anchor_average * num_anchors:
+                print "Alert: samples missing!"
+                pdb.set_trace()
+            for cnt_j in range(len(receivers_selfloc)/selfloc_average_length):
+                for cnt_average in range(selfloc_average_length):
+                    curr_rx_set = receivers_selfloc[cnt_j*selfloc_average_length + cnt_average]
+                    for cnt_l, rx_l in enumerate(curr_rx_set.values()):
+                        for cnt_k, rx_k in enumerate(curr_rx_set.values()):
+                            if cnt_j != cnt_l and cnt_j != cnt_k and cnt_l != cnt_k:
+                                window_size = 13
+                                #by now ugly hack, rethink later
+                                delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = corr_spline_interpolation(curr_rx_set.values()[cnt_l].samples, curr_rx_set.values()[cnt_k].samples, window_size)[1] / sampling_rate * 10**9 + rx_l.offset - rx_k.offset
+                                #print(correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
+                            else:
+                                delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = 0.0
+            D = np.ndarray(shape=(len(receivers_positions),len(receivers_positions),len(receivers_positions)))
+            sum_square_tdoa = 0
+            for j in range(len(receivers_positions)):
+                for l in range(len(receivers_positions)):
+                    for k in range(len(receivers_positions)):
+                        # average distance differences
+                        tdoa = ransac_tdoa.ransac_fit(delay_tensor[j,l,k])/ 10**9 * 299700000.0
+                        #tdoa = np.mean(delay_tensor[j,l,k])/ 10**9 * 299700000.0
+                        sum_square_tdoa += tdoa**2
+                        D[j,l,k] = tdoa
+
+            anchor_loop_delays = []
+            anchor_loop_delay_history = []
+            delay_means = []
+            for receivers in receivers_anchoring:
+                #
+                # pdb.set_trace()
+                # del receivers[0]
+                delay = []
+                for receiver in receivers:
+                    window_size = 13
+                    if not ref_receiver == receiver:
+                        delay.append(corr_spline_interpolation(receivers.values()[receiver].samples,
+                                                          receivers.values()[ref_receiver].samples, window_size)[1] / sampling_rate * 10**9 + \
+                                receivers[receiver].offset - receivers[ref_receiver].offset)
+                anchor_loop_delays.append(delay)
+                # no sensor is transmitting
+                transmitter_history.append(-1)
+                if len(anchor_loop_delays) == anchor_average:
+                    #delay_mean = ransac_tdoa.ransac_fit(np.array(anchor_loop_delays))
+                    # delay_mean = np.mean(np.array(anchor_loop_delays))
+                    #delay_means.append(delay_mean)
+                    anchor_loop_delay_history.append(anchor_loop_delays)
+                    anchor_loop_delays = []
         pos_selfloc = None
         stress = [10]
         pos_selfloc, stress = mds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, None, 5000, alpha, stress)
-        pdb.set_trace()
-        anchor_loop_delays = []
-        anchor_loop_delay_history = []
-        anchor_positions = []
-        for receivers in receivers_anchoring:
-            for receiver in receivers:
-                receivers.values()[receiver].coordinates_selfloc = pos_selfloc[receiver]
-                window_size = 13
-                if not ref_receiver == receiver:
-                    delay = corr_spline_interpolation(receivers.values()[receiver].samples, receivers.values()[ref_receiver].samples, window_size)[1] + receivers[receiver].offset - receivers[ref_receiver].offset
-            anchor_loop_delays.append(delay)
-            # no sensor is transmitting
-            transmitter_history.append(-1)
-            if len(anchor_loop_delays) == anchor_average:
-                delay_mean = ransac_tdoa.ransac_fit(np.array(anchor_loop_delays))
-                #delay_mean = np.mean(np.array(anchor_loop_delays))
-                anchor_positions.append(chan94_algorithm.localize(receivers, ref_receiver, np.round(basemap(bbox[2],bbox[3])), delay_mean)["coordinates"])
-                anchor_loop_delay_history.append(anchor_loop_delays)
-                anchor_loop_delays = []
 
+        # for chan algorithm:
+        receivers_dummy = {}
+        for receiver_idx in range(len(receivers_positions)):
+            receivers_dummy[receiver_idx] = receiver_interface.receiver_interface(None, None, receiver_idx)
+            receivers_dummy[receiver_idx].coordinates = receivers_positions[receiver_idx]
+            receivers_dummy[receiver_idx].offset = receivers_offset[receiver_idx]
+            receivers_dummy[receiver_idx].serial = receiver_idx
+            receivers_dummy[receiver_idx].frequency = frequency
+            receivers_dummy[receiver_idx].interpolation = interpolation
+            receivers_dummy[receiver_idx].samp_rate = sampling_rate
+            receivers_dummy[receiver_idx].samples_to_receive = samples_to_receive
+            receivers_dummy[receiver_idx].samples = [0.0]
+            receivers_dummy[receiver_idx].correlation_interpolation = True
+            receivers_dummy[receiver_idx].measurement_noise = 10
+            receivers_dummy[receiver_idx].selected_position = "selfloc"
+            receivers_dummy[receiver_idx].coordinates_selfloc = pos_selfloc[receiver_idx]
+
+        delay_means = []
+        for entry in anchor_loop_delay_history:
+            delay_mean = []
+            for i in range(len(receivers_positions) - 1):
+                delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:, i]))
+            delay_means.append(delay_mean)
+        for j, delay_mean in enumerate(delay_means):
+            anchor_positions[j] = chan94_algorithm.localize(receivers_dummy, ref_receiver, np.round(basemap(bbox[2], bbox[3])), delay=delay_mean)["coordinates"]
         anchor_gt_positions = np.array(anchor_gt_positions)
         anchor_positions = np.array(anchor_positions)
         d, coordinates_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling = False)
@@ -430,7 +471,7 @@ if __name__ == "__main__":
                     + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
                     + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(receivers_offset) \
                     + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," \
-                    + str(receivers.keys().index(ref_receiver)) + "," + str(alpha) + "]\n"
+                    + str(receivers_dummy.keys().index(ref_receiver)) + "," + str(alpha) + "]\n"
 
         results_file_selfloc = "../log/results_post_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         fi = open(results_file_selfloc,'w')
