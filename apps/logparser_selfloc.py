@@ -228,9 +228,9 @@ if __name__ == "__main__":
         
         for rx in receivers_positions:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=400, alpha=0.9, label = "Sensor ground-truth")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=250, alpha=0.9, label = "Sensor ground-truth")
             else:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=400, alpha=0.9)
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c='w', s=250, alpha=0.9)
             # set annotation RXx
             text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
@@ -241,9 +241,9 @@ if __name__ == "__main__":
         i = 1
         for rx in pos_selfloc_procrustes:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=400, alpha=0.9, label = "Result sensors, RMSE: "+ "${0:.3f}".format(rmse_positions)+"m$")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=250, alpha=0.9, label = "Result sensors, RMSE: "+ "${0:.3f}".format(rmse_positions)+"m$")
             else:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=400, alpha=0.9)
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="r", s=250, alpha=0.9)
             # set annotation RXx
             text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
@@ -254,9 +254,9 @@ if __name__ == "__main__":
         i = 1
         for rx in anchor_gt_positions:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=400, alpha=0.9, label = "Anchor ground-truth")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=250, alpha=0.9, label = "Anchor ground-truth")
             else:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=400, alpha=0.9)
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="g", s=250, alpha=0.9)
             # set annotation RXx
             text = "ANC" + str(i)
             # index of logged reference receiver starts at 0 not at 1
@@ -265,9 +265,9 @@ if __name__ == "__main__":
         i = 1
         for rx in anchor_positions_procrustes:
             if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=400, alpha=0.9, label = "Result anchors, RMSE: "+ "${0:.3f}".format(rmse_anchors)+"m$")
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=250, alpha=0.9, label = "Result anchors, RMSE: "+ "${0:.3f}".format(rmse_anchors)+"m$")
             else:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=400, alpha=0.9)
+                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=250, alpha=0.9)
             # set annotation RXx
             text = "ANC" + str(i)
             # index of logged reference receiver starts at 0 not at 1
