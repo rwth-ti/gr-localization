@@ -344,6 +344,7 @@ if __name__ == "__main__":
         # first set of samples: delays for algorithm. length: average_length*num_sensors
         # second set: delays for anchoring. length: average_length* num_anchors
         # mabe build in check?
+        # samples log given
         if len(args) == 2:
             f_samples = open(args[1],"r")
             for line_number, line in enumerate(f_samples.readlines()):
@@ -397,11 +398,6 @@ if __name__ == "__main__":
                         #tdoa = np.mean(delay_tensor[j,l,k])/ 10**9 * 299700000.0
                         sum_square_tdoa += tdoa**2
                         D[j,l,k] = tdoa
-            #sum_square_tdoa = 0
-            #for j in range(len(receivers_positions)):
-            #    for l in range(len(receivers_positions)):
-            #        for k in range(len(receivers_positions)):
-            #            sum_square_tdoa += D_true[j, l, k]**2
 
             anchor_loop_delays = []
             anchor_loop_delay_history = []
@@ -426,9 +422,14 @@ if __name__ == "__main__":
                     #delay_means.append(delay_mean)
                     anchor_loop_delay_history.append(anchor_loop_delays)
                     anchor_loop_delays = []
+        sum_square_tdoa = 0
+        for j in range(len(receivers_positions)):
+            for l in range(len(receivers_positions)):
+                for k in range(len(receivers_positions)):
+                    sum_square_tdoa += D[j, l, k] ** 2
         pos_selfloc = None
         stress = [10]
-        pos_selfloc, stress = dmds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, None, 5000, alpha, stress)
+        pos_selfloc, stress = dmds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, None, 5000)
 
         # for chan algorithm:
         receivers_dummy = {}
