@@ -211,7 +211,7 @@ if __name__ == "__main__":
         i = 1
         if options.crop_ict:
             ax.axis([85,230,48,140])
-            basemap.drawmapscale(lon=6.06201, lat=50.77870, lon0=6.06201, lat0=50.77870, length=20,  units='m',barstyle='fancy',fontsize = 30, yoffset=1.2)
+            basemap.drawmapscale(lon=6.06201, lat=50.77870, lon0=6.06201, lat0=50.77870, length=20,  units='m',barstyle='fancy',fontsize = 24, yoffset=1.2)
         else:
             basemap.drawmapscale(lon=bbox[0]-0.1*(bbox[0]-bbox[2]), lat=bbox[1]-0.07*(bbox[1]-bbox[3]), lon0=bbox[0]-0.1*(bbox[0]-bbox[2]), lat0=bbox[1]-0.07*(bbox[1]-bbox[3]), length=int(0.1 * np.linalg.norm(np.array(basemap(bbox[0],bbox[1])) - np.array(basemap(bbox[2],bbox[1])))),  units='m',barstyle='fancy',fontsize = 18)            
         """
@@ -281,7 +281,7 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_map.pdf", dpi=150)
 
     if options.history:
-        figure_history = plt.figure()
+        figure_history = plt.figure(figsize=(7,5))
         figure_history.canvas.set_window_title(args[0].split("/")[-1].split(".")[0] + "_DMDS-history")
         ax1 = figure_history.add_subplot(111)
 
@@ -324,15 +324,16 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_history.pdf", dpi=150)
 
     if options.stress:
-        figure_stress = plt.figure()
+        figure_stress = plt.figure(figsize=(7,5))
         figure_stress.canvas.set_window_title(args[0].split("/")[-1].split(".")[0] + "_stress")
         axis_stress = figure_stress.add_subplot(111)
-        axis_stress.plot(stress_list)
+        # Remove first value from plot (algorithm initialization)
+        axis_stress.plot(stress_list[1:],'-x')
         axis_stress.set_ylabel(r'Stress')
         axis_stress.set_xlabel(r'Iterations')
         axis_stress.grid()
         if options.save:
-            #p.figure_map.tight_layout()
+            #figure_stress.tight_layout()
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_stress.pdf", dpi=150)
 
     plt.show()
