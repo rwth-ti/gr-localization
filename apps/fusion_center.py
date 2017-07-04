@@ -30,6 +30,7 @@ from interpolation import corr_spline_interpolation
 import dmds_self_tdoa
 from procrustes import procrustes
 import helpers
+import ransac_1d
 
 class fusion_center():
     def __init__(self, options):
@@ -107,7 +108,7 @@ class fusion_center():
         self.coordinates_procrustes = np.array(4 * [0.0])
         self.alpha = 0.3
         self.init_stress = 10.0
-        self.max_it = 100
+        self.max_it = 2000
         self.stress_list = []
         self.coordinates_procrustes = np.array(4*[0.0])
         self.selected_positions_prev = []
@@ -154,15 +155,14 @@ class fusion_center():
         self.Pk_1_grid = np.array([])
         self.init_settings_kalman["model"] = self.motion_model
         self.init_settings_kalman["delta_t"] = self.acquisition_time
-        self.init_settings_kalman["noise_factor"] = self.target_dynamic 
+        self.init_settings_kalman["noise_factor"] = self.target_dynamic
         self.init_settings_kalman["filter_receivers"] = False
         self.init_settings_kalman["noise_var_x"] = self.measurement_noise
         self.init_settings_kalman["noise_var_y"] = self.measurement_noise
         self.init_settings_kalman["max_acceleration"] = self.max_acc
 
-
-       
-
+        # averaging:
+        self.ransac_tdoa = ransac_1d.ransac_1d(ransac_1d.ConstantLeastSquaresModel(), 0.3, 0.1, 1000, 5)
         # ICT + surroundings
         #self.bbox = 6.0580,50.7775,6.0690,50.7810
         self.bbox = 6.0606,50.77819,6.06481,50.77967
@@ -329,16 +329,17 @@ class fusion_center():
                         # int correct?!
                         if len(self.delay_calibration) < len(self.calibration_loop_delays[-1]):
                             if self.correlation_interpolation:
-                                # More than integer accuracy 
-                                self.delay_calibration.append(delay_true - np.array(self.calibration_loop_delays).mean(0)[index_delay])
+                                # More than integer accuracy
+                                print(np.array(self.calibration_loop_delays)[:, index_delay])
+                                self.delay_calibration.append(delay_true - self.ransac_tdoa.ransac_fit(np.array(self.calibration_loop_delays)[:, index_delay]))
                             else:
-                                self.delay_calibration.append(int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay]))
+                                self.delay_calibration.append(int(np.floor(delay_true) - self.ransac_tdoa.ransac_fit(np.array(self.calibration_loop_delays)[:, index_delay])))
                         else:
                             if self.correlation_interpolation:
-                                # More than integer accuracy 
-                                self.delay_calibration[index_delay] = delay_true - np.array(self.calibration_loop_delays).mean(0)[index_delay]
+                                # More than integer accuracy
+                                self.delay_calibration[index_delay] = delay_true - self.ransac_tdoa.ransac_fit(np.array(self.calibration_loop_delays)[:, index_delay])
                             else:
-                                self.delay_calibration[index_delay] = int(np.floor(delay_true)-np.array(self.calibration_loop_delays).mean(0)[index_delay])
+                                self.delay_calibration[index_delay] = int(np.floor(delay_true) - self.ransac_tdoa.ransac_fit(np.array(self.calibration_loop_delays)[:, index_delay]))
                         index_delay += 1
             print ("Delay calibration: ", self.delay_calibration)
             self.calibrating = False
@@ -360,7 +361,7 @@ class fusion_center():
                 pos_ref = ref_receiver.coordinates
             elif ref_receiver.selected_position == "GPS" :
                 pos_ref = ref_receiver.coordinates_gps
-            else: 
+            else:
                 pos_ref = ref_receiver.coordinates_selfloc
             index_delay_auto = 0
             for i in range(0,len(self.receivers)):
@@ -393,12 +394,12 @@ class fusion_center():
         self.location_average_length = location_average_length
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_location_average_length",[location_average_length])
-            
+
     def set_max_acc(self, max_acc):
         self.max_acc = max_acc
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_max_acc",[max_acc])
-            
+
     def set_target_dynamic(self, target_dynamic):
         self.target_dynamic = target_dynamic
         for gui in self.guis.values():
@@ -418,7 +419,7 @@ class fusion_center():
         self.max_it = max_it
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_max_it",[max_it])
-            
+
     def set_measurement_noise(self, measurement_noise):
         self.measurement_noise = measurement_noise
         for receiver in self.receivers.values():
@@ -667,7 +668,7 @@ class fusion_center():
 
     def start_correlation(self, freq, lo_offset, samples_to_receive):
         self.start_receivers()
-        
+
 
     def start_correlation_loop(self, freq, lo_offset, samples_to_receive, acquisitions = 0):
         self.delay_history = []
@@ -676,7 +677,7 @@ class fusion_center():
         if self.filtering_type == "Kalman filter" :
             self.init_settings_kalman["model"] = self.motion_model
             self.init_settings_kalman["delta_t"] = self.acquisition_time
-            self.init_settings_kalman["noise_factor"] = self.target_dynamic 
+            self.init_settings_kalman["noise_factor"] = self.target_dynamic
             self.init_settings_kalman["filter_receivers"] = False
             self.init_settings_kalman["noise_var_x"] = self.measurement_noise
             self.init_settings_kalman["noise_var_y"] = self.measurement_noise
@@ -876,17 +877,17 @@ class fusion_center():
         self.ref_receiver = ref_receiver
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_ref_receiver",[ref_receiver])
-            
+
     def set_reference_selection(self, reference_selection):
         self.reference_selection = reference_selection
         for gui in self.guis.values():
-            gui.rpc_manager.request("set_gui_reference_selection",[reference_selection])        
-    
+            gui.rpc_manager.request("set_gui_reference_selection",[reference_selection])
+
     def set_filtering_type(self, filtering_type):
         self.filtering_type = filtering_type
         for gui in self.guis.values():
             gui.rpc_manager.request("set_gui_filtering_type",[filtering_type])
-            
+
     def set_motion_model(self, motion_model):
         self.motion_model = motion_model
         for gui in self.guis.values():
@@ -964,7 +965,7 @@ class fusion_center():
         if self.transmitter_debug == len(self.receivers):
             self.transmitter_debug = 0
         self.switch_transmitter(self.transmitter_debug)
-        
+
     def switch_transmitter(self, idx_new):
         self.run_loop = False
         self.localizing = False
@@ -1002,7 +1003,7 @@ class fusion_center():
                 return False
             else:
                 return False
-            
+
     def start_anchoring_loop(self, num_anchor):
         self.num_anchor = num_anchor
         print("num_anchor: ", num_anchor)
@@ -1043,7 +1044,7 @@ class fusion_center():
         self.anchoring = False
         self.stop_transmitter()
         self.stop_loop()
-        # continue logging samples! 
+        # continue logging samples!
         self.recording_samples = self.record_samples
         print("delay tensor recordings complete")
 
@@ -1069,12 +1070,13 @@ class fusion_center():
             for l in range(len(receivers)):
                 for k in range(len(receivers)):
                     # average distance differences
-                    tdoa = sum(self.delay_tensor[j,l,k]) / self.sample_average / 10**9 * 299700000.0
+                    conversion_factor = 10**-9 * 299700000.0
+                    tdoa = self.ransac_tdoa.ransac_fit(self.delay_tensor[j,l,k]) * conversion_factor
                     sum_square_tdoa += tdoa**2
-                    self.D[j,l,k] = tdoa 
+                    self.D[j,l,k] = tdoa
         pos_selfloc = None
         self.stress_list = [self.init_stress]
-        self.pos_selfloc, self.stress_list = dmds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it, self.alpha, self.stress_list)
+        self.pos_selfloc, self.stress_list = dmds_self_tdoa.selfloc(self.D,self.basemap(self.bbox[2],self.bbox[3]), sum_square_tdoa, pos_selfloc, self.max_it)
         print(self.stress_list)
         for gui in self.guis.values():
             gui.rpc_manager.request("mds_done")
@@ -1111,9 +1113,8 @@ class fusion_center():
             receiver.coordinates_selfloc = self.pos_selfloc[j]
             receiver.selected_position = "selfloc"
         # calculate chan solution again; necessary if relative solution has been repeated
-        print(self.delay_means)
         for j in range(len(self.delay_means)):
-            if all(self.delay_means[j] != 0):
+            if self.delay_means[j] != 0:
                 self.anchor_positions[j] = chan94_algorithm.localize(self.receivers, self.ref_receiver, np.round(self.basemap(self.bbox[2], self.bbox[3])), delay = self.delay_means[j])["coordinates"]
         self.anchor_positions = np.array(self.anchor_positions)
         print(self.anchor_gt_positions)
@@ -1130,7 +1131,7 @@ class fusion_center():
             gui.rpc_manager.request("sync_position_selfloc",[self.pos_selfloc_procrustes[:,0],self.pos_selfloc_procrustes[:,1]])
             gui.rpc_manager.request("plot_anchor_positions",[self.coordinates_procrustes.tolist(), self.anchor_gt_positions.tolist()])
         time.sleep(0.05)
-           
+
     def log_selfloc_results(self):
         results_file_selfloc = "../log/results_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
         fi = open(results_file_selfloc,'w')
@@ -1439,7 +1440,9 @@ class fusion_center():
             if len(self.anchor_loop_delays) == self.anchor_average:
                 self.flush = True
                 self.run_loop = False
-                delay_mean = np.array(self.anchor_loop_delays).mean(0)
+                delay_mean = []
+                for i in range(len(receivers)-1):
+                    delay_mean.append(self.ransac_tdoa.ransac_fit(np.array(self.anchor_loop_delays)[:, i]))
                 self.delay_means[self.num_anchor] = delay_mean
                 print("num_anchor", self.num_anchor)
                 self.completed_anchors[self.num_anchor] = self.num_anchor + 1

@@ -112,7 +112,7 @@ class ransac_1d:
 
             iterations+=1
         if bestfit is None:
-            print("did not meet fit acceptance criteria. return mean")
+            print("Did not meet fit acceptance criteria. Return mean")
             return data.mean()
         else:
             return bestfit
