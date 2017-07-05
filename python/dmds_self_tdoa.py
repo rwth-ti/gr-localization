@@ -4,7 +4,6 @@
 # this version with known beacons and sensors can not transmit
 
 import numpy as np
-import pdb
 # interface:
 # delta_jkl: tensor of delays tau: dict(1,2,3) of tdoas collected for beacon localization  coords_gt: 3x2 matrix
 def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, sigma = 0.1):
@@ -99,7 +98,6 @@ def dmds_grad_descend_anchoring(D, tdoas, roi, pos_anchors, sum_square_tdoa, ref
 
     n = len(D[0, 0, :].tolist())
     m = len(D_anchor[0, 0, :].tolist())
-    pdb.set_trace()
     do_sum = sum_square_tdoa
     dob_sum = np.sum(np.sum(np.sum(np.square(D))))
     it = 0
