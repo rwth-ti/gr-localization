@@ -86,10 +86,136 @@ def selfloc(D, roi, sum_square_tdoa, prev_coordinates, max_it, sigma = 0.1):
     print stress_min
     return best_result, stress_last
 
+def dmds_grad_descend_anchoring(D, tdoas, roi, pos_anchors, sum_square_tdoa, ref_receiver, max_it, sigma = 11):
+    D_anchor = tdoa_mat_to_tensor(tdoas.copy(), ref_receiver)
+    sensor_pos = np.array([[131.27979622,  59.88438222],
+                           [121.42813683, 102.70505203],
+                           [153.97361311,  93.98137588],
+                           [115.85778132,  72.92402161]])
+    x_b = pos_anchors[:, 0]
+    y_b = pos_anchors[:, 1]
+    D_anchor_true = ddoa_matrix_beacons(sensor_pos[:,0], sensor_pos[:,1], x_b, y_b)
+    D_anchor_diff = D_anchor - D_anchor_true
+
+    n = len(D[0, 0, :].tolist())
+    m = len(D_anchor[0, 0, :].tolist())
+    pdb.set_trace()
+    do_sum = sum_square_tdoa
+    dob_sum = np.sum(np.sum(np.sum(np.square(D))))
+    it = 0
+    alpha = 0.1
+    beta = 0.9
+    stress_list = []
+    stress = 100
+    threshold_stress_diff = 0.0001
+    while it < max_it:
+        pos_conf = np.max(roi) * np.random.uniform(low=0.0,high=1.0,size=(n,2))
+        xo = pos_conf[:, 0]
+        yo = pos_conf[:, 1] # Candidate
+        while it < max_it:
+            D_est = ddoa_matrix(xo, yo)
+            D_anchor_est = ddoa_matrix_beacons(xo, yo, x_b, y_b)
+            stress_last = stress
+            stress = np.sqrt((1 - beta) * np.sum(np.sum(np.sum(np.square(D - D_est)))) + beta * np.sum(np.sum(np.sum(np.square(D_anchor - D_anchor_est)))))
+            stress_list.append(stress)
+            stress_diff = stress - stress_last
+            grad = stress_gradient_anchoring(xo,yo,x_b,y_b,D,D_anchor,beta)
+            #pdb.set_trace()
+            xo = xo - alpha * 1.0 / ((n - 1) * (n - 2)) * grad[:, 0]
+            yo = yo - alpha * 1.0 / ((n - 1) * (n - 2)) * grad[:, 1]
+            # check stopping criteria
+            if abs(stress_diff) < threshold_stress_diff and stress > sigma:
+                break
+            it += 1
+            print "stress: ", stress
+            print "stress_diff: ", stress_diff
+        # if solution is good stop iterating
+    print it
+    return np.array([xo,yo]).T, stress_list
+
+
+def tdoa_mat_to_tensor(tdoas, ref_receiver):
+    #kind of ugly
+    #TODO check if ns or distances in robertos algorithm!
+    tdoa_tensor = np.ndarray(shape =(len(tdoas), len(tdoas[:,1])+1,len(tdoas[:,1])+1))
+    conversion_factor = 0.2997
+    tdoas = np.insert(tdoas,ref_receiver,0,axis=1)
+    for cnt_j in range(len(tdoas)):
+        for cnt_l in range(len(tdoas[:, 0])+1):
+            for cnt_k in range(len(tdoas[:, 0])+1):
+                if cnt_l == cnt_k:
+                    tdoa_tensor[cnt_j, cnt_l, cnt_k] = 0.0
+                else:
+                    tdoa_tensor[cnt_j, cnt_l, cnt_k] = (tdoas[cnt_j, cnt_l] - tdoas[cnt_j, cnt_k]) * conversion_factor
+    return tdoa_tensor
+
+def ddoa_matrix_beacons(xo, yo, x_b, y_b):
+    receivers_positions = np.array([xo, yo]).T
+    anchor_positions = np.array([x_b, y_b]).T
+    D_true = np.ndarray(shape=(len(anchor_positions), len(receivers_positions), len(receivers_positions)))
+    for cnt_j in range(len(anchor_positions)):
+        for cnt_l, rx_l in enumerate(receivers_positions):
+            for cnt_k, rx_k in enumerate(receivers_positions):
+                if cnt_l != cnt_k:
+                    D_true[cnt_j, cnt_l, cnt_k] = (
+                    np.linalg.norm(receivers_positions[cnt_l] - anchor_positions[cnt_j]) - np.linalg.norm(
+                        receivers_positions[cnt_k] - anchor_positions[cnt_j]))
+                else:
+                    D_true[cnt_j, cnt_l, cnt_k] = 0.0
+
+    return D_true
+
+def ddoa_matrix(xo,yo):
+    receivers_positions = np.array([xo,yo]).T
+    D_true = np.ndarray(shape=(len(receivers_positions), len(receivers_positions), len(receivers_positions)))
+    for cnt_j in range(len(receivers_positions)):
+        for cnt_l, rx_l in enumerate(receivers_positions):
+            for cnt_k, rx_k in enumerate(receivers_positions):
+                if cnt_j != cnt_l and cnt_j != cnt_k and cnt_l != cnt_k:
+                    D_true[cnt_j, cnt_l, cnt_k] = (np.linalg.norm(receivers_positions[cnt_l]-receivers_positions[cnt_j]) - np.linalg.norm(receivers_positions[cnt_k]-receivers_positions[cnt_j]))
+                else:
+                    D_true[cnt_j, cnt_l, cnt_k] = 0.0
+    return D_true
+
+
+def stress_gradient_anchoring(x, y, x_b, y_b, do, dbo, beta):
+    h = 0.001
+    n = len(x)
+    grad = np.ndarray(shape=(n, 2))
+    for i in range(n):
+        component = np.zeros(n)
+        component[i] = 1
+        x_1 = x - component * h
+        d_1 = ddoa_matrix(x_1, y)
+        d_b = ddoa_matrix_beacons(x_1, y, x_b, y_b)
+        S_1 = np.sum(np.sum(np.sum(np.square(do - d_1))))
+        S_b = np.sum(np.sum(np.sum(np.square(dbo - d_b))))
+        S_ = (1 - beta) * S_1 + beta * S_b
+        x1 = x + component * h
+        d1 = ddoa_matrix(x1, y)
+        db = ddoa_matrix_beacons(x1, y, x_b, y_b)
+        S1 = np.sum(np.sum(np.sum(np.square(do - d1))))
+        Sb = np.sum(np.sum(np.sum(np.square(dbo - db))))
+        S = (1 - beta) * S1 + beta * Sb
+        grad[i, 0] = (S - S_) / (2 * h)
+
+        y_1 = y - component * h
+        d_1 = ddoa_matrix(x, y_1)
+        d_b = ddoa_matrix_beacons(x, y_1, x_b, y_b)
+        S_1 = np.sum(np.sum(np.sum(np.square(do - d_1))))
+        Sb = np.sum(np.sum(np.sum(np.square(dbo - d_b))))
+        S_ = (1 - beta) * S_1 + beta * S_b
+        y1 = y + component * h
+        d1 = ddoa_matrix(x, y1)
+        db = ddoa_matrix_beacons(x, y1, x_b, y_b)
+        S1 = np.sum(np.sum(np.sum(np.square(do - d1))))
+        Sb = np.sum(np.sum(np.sum(np.square(dbo - db))))
+        S = (1 - beta) * S1 + beta * Sb
+        grad[i, 1] = (S - S_) / (2 * h)
+    return grad
 
 def geometric_tdoa(a,b,c):
     d_ab = np.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
     d_ac = np.sqrt((a[0]-c[0])**2+(a[1]-c[1])**2)
     tdoa = d_ab - d_ac
     return tdoa
-    

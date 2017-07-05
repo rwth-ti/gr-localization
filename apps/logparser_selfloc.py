@@ -60,6 +60,8 @@ def parse_options():
                       help="Plot stress function")
     parser.add_option("", "--check-anchoring", action="store_true", default=False,
                       help="debug")
+    parser.add_option("", "--grad-desc", action="store_true", default=False,
+                      help="Weighted gradient descend algorithm")
     (options, args) = parser.parse_args()
     if len(args) == 0 or len(args) >2:
         parser.error('Invalid number of inputs!')
@@ -97,7 +99,7 @@ if __name__ == "__main__":
     ref_receiver = acquisition[18]
     alpha = acquisition[19]
 
-    #selfloc results
+    # selfloc results
     transmitter_history = eval(f_results.readline())
     timestamp_history = eval(f_results.readline())
     delay_tensor = np.array(eval(f_results.readline()))
@@ -187,10 +189,10 @@ if __name__ == "__main__":
     #    receivers_positions.append(basemap(pos[0],pos[1]))
     
     #receivers_positions = np.array(receivers_positions)
-    #FIXME hack
     D_true = np.ndarray(shape = (len(receivers_positions),len(receivers_positions),len(receivers_positions)))
     #receivers_positions = [(131.2797962158893, 59.88438221876277), (121.4281368314987, 102.70505203219363),(153.97361311259738, 93.98137587687233), (115.85778131733423, 72.92402160679922)]
     receivers_positions = np.array(receivers_positions)
+    sum_square_tdoa_true = 0
     for cnt_j in range(len(receivers_positions)):
         for cnt_l, rx_l in enumerate(receivers_positions):
             for cnt_k, rx_k in enumerate(receivers_positions):
@@ -198,11 +200,187 @@ if __name__ == "__main__":
                     D_true[cnt_j, cnt_l, cnt_k] = (np.linalg.norm(receivers_positions[cnt_l]-receivers_positions[cnt_j])-np.linalg.norm(receivers_positions[cnt_k]-receivers_positions[cnt_j]))
                 else:
                     D_true[cnt_j, cnt_l, cnt_k] = 0.0
+                sum_square_tdoa_true += D_true[cnt_j, cnt_l, cnt_k]**2
     difference_D = D - D_true
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
     if options.check_anchoring:
         d, pos_selfloc_procrustes, tform = procrustes(receivers_positions, pos_selfloc, scaling=False)
-    
+
+    if options.replay:
+        # first set of samples: delays for algorithm. length: average_length*num_sensors
+        # second set: delays for anchoring. length: average_length* num_anchors
+        # mabe build in check?
+        # samples log given
+        if len(args) == 2:
+            f_samples = open(args[1], "r")
+            for line_number, line in enumerate(f_samples.readlines()):
+                receivers_samples = eval(eval(line))
+                receivers = dict()
+                # FIXME
+                if line_number < selfloc_average_length * len(receivers_positions):
+                    for cnt_tx in range(1, len(receivers_positions) + 1):
+                        if selfloc_average_length * (cnt_tx - 1) <= line_number < selfloc_average_length * cnt_tx:
+                            receivers_samples.insert(cnt_tx - 1, [])
+                for receiver_idx in range(len(receivers_positions)):
+                    receivers[receiver_idx] = receiver_interface.receiver_interface(None, None, receiver_idx)
+                    receivers[receiver_idx].coordinates = receivers_positions[receiver_idx]
+                    receivers[receiver_idx].offset = receivers_offset[receiver_idx]
+                    receivers[receiver_idx].serial = receiver_idx
+                    receivers[receiver_idx].frequency = frequency
+                    receivers[receiver_idx].interpolation = interpolation
+                    receivers[receiver_idx].samp_rate = sampling_rate
+                    receivers[receiver_idx].samples_to_receive = samples_to_receive
+                    receivers[receiver_idx].samples = receivers_samples[receiver_idx]
+                    receivers[receiver_idx].correlation_interpolation = True
+                    receivers[receiver_idx].measurement_noise = 10
+                    receivers[receiver_idx].selected_position = "selfloc"
+                receivers_steps.append(receivers)
+
+            f_samples.close()
+            receivers_selfloc = receivers_steps[:len(receivers_positions) * selfloc_average_length]
+            receivers_anchoring = receivers_steps[len(receivers_positions) * selfloc_average_length:]
+            if len(receivers_anchoring) != anchor_average * num_anchors:
+                print "Alert: samples missing!"
+                pdb.set_trace()
+            for cnt_j in range(len(receivers_selfloc) / selfloc_average_length):
+                for cnt_average in range(selfloc_average_length):
+                    curr_rx_set = receivers_selfloc[cnt_j * selfloc_average_length + cnt_average]
+                    for cnt_l, rx_l in enumerate(curr_rx_set.values()):
+                        for cnt_k, rx_k in enumerate(curr_rx_set.values()):
+                            if cnt_j != cnt_l and cnt_j != cnt_k and cnt_l != cnt_k:
+                                window_size = 13
+                                # by now ugly hack, rethink later
+                                delay_tensor[cnt_j, cnt_l, cnt_k, cnt_average] = \
+                                corr_spline_interpolation(curr_rx_set.values()[cnt_l].samples,
+                                                          curr_rx_set.values()[cnt_k].samples, window_size)[
+                                    1] / sampling_rate * 10 ** 9 + rx_l.offset - rx_k.offset
+                                # print(correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
+                            else:
+                                delay_tensor[cnt_j, cnt_l, cnt_k, cnt_average] = 0.0
+            D = np.ndarray(shape=(len(receivers_positions), len(receivers_positions), len(receivers_positions)))
+            sum_square_tdoa = 0
+            for j in range(len(receivers_positions)):
+                for l in range(len(receivers_positions)):
+                    for k in range(len(receivers_positions)):
+                        # average distance differences
+                        tdoa = ransac_tdoa.ransac_fit(delay_tensor[j, l, k]) / 10 ** 9 * 299700000.0
+                        # tdoa = np.mean(delay_tensor[j,l,k])/ 10**9 * 299700000.0
+                        sum_square_tdoa += tdoa ** 2
+                        D[j, l, k] = tdoa
+
+            anchor_loop_delays = []
+            anchor_loop_delay_history = []
+            delay_means = []
+            for receivers in receivers_anchoring:
+                #
+                # pdb.set_trace()
+                # del receivers[0]
+                delay = []
+                for receiver in receivers:
+                    window_size = 13
+                    if not ref_receiver == receiver:
+                        delay.append(corr_spline_interpolation(receivers.values()[receiver].samples,
+                                                               receivers.values()[ref_receiver].samples, window_size)[
+                                         1] / sampling_rate * 10 ** 9 + \
+                                     receivers[receiver].offset - receivers[ref_receiver].offset)
+                anchor_loop_delays.append(delay)
+                # no sensor is transmitting
+                transmitter_history.append(-1)
+                if len(anchor_loop_delays) == anchor_average:
+                    # delay_mean = ransac_tdoa.ransac_fit(np.array(anchor_loop_delays))
+                    # delay_mean = np.mean(np.array(anchor_loop_delays))
+                    # delay_means.append(delay_mean)
+                    anchor_loop_delay_history.append(anchor_loop_delays)
+                    anchor_loop_delays = []
+        sum_square_tdoa = 0
+        for j in range(len(receivers_positions)):
+            for l in range(len(receivers_positions)):
+                for k in range(len(receivers_positions)):
+                    sum_square_tdoa += D[j, l, k] ** 2
+        pos_selfloc = None
+        stress = [10]
+        print receivers_positions
+        if options.grad_desc:
+            pos_selfloc_procrustes, stress = dmds_self_tdoa.dmds_grad_descend_anchoring(D, np.array(delay_means),
+                                                                             basemap(bbox[2], bbox[3]),
+                                                                             np.array(anchor_gt_positions), sum_square_tdoa,
+                                                                             ref_receiver, 5000)
+            pos_selfloc = pos_selfloc_procrustes
+        else:
+            pos_selfloc, stress = dmds_self_tdoa.selfloc(D, basemap(bbox[2], bbox[3]), sum_square_tdoa, None, 5000)
+
+            # for chan algorithm:
+            #pdb.set_trace()
+        receivers_dummy = {}
+        for receiver_idx in range(len(receivers_positions)):
+            receivers_dummy[receiver_idx] = receiver_interface.receiver_interface(None, None, receiver_idx)
+            receivers_dummy[receiver_idx].coordinates = receivers_positions[receiver_idx]
+            receivers_dummy[receiver_idx].offset = receivers_offset[receiver_idx]
+            receivers_dummy[receiver_idx].serial = receiver_idx
+            receivers_dummy[receiver_idx].frequency = frequency
+            receivers_dummy[receiver_idx].interpolation = interpolation
+            receivers_dummy[receiver_idx].samp_rate = sampling_rate
+            receivers_dummy[receiver_idx].samples_to_receive = samples_to_receive
+            receivers_dummy[receiver_idx].samples = [0.0]
+            receivers_dummy[receiver_idx].correlation_interpolation = True
+            receivers_dummy[receiver_idx].measurement_noise = 10
+            receivers_dummy[receiver_idx].selected_position = "selfloc"
+            receivers_dummy[receiver_idx].coordinates_selfloc = pos_selfloc[receiver_idx]
+        if not options.grad_desc:
+            delay_means = []
+            for entry in anchor_loop_delay_history:
+                delay_mean = []
+                for i in range(len(receivers_positions) - 1):
+                    delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:, i]))
+                delay_means.append(delay_mean)
+            for j, delay_mean in enumerate(delay_means):
+                anchor_positions[j] = \
+                chan94_algorithm.localize(receivers_dummy, ref_receiver, np.round(basemap(bbox[2], bbox[3])),
+                                          delay=delay_mean)["coordinates"]
+            anchor_gt_positions = np.array(anchor_gt_positions)
+            anchor_positions = np.array(anchor_positions)
+            d, anchor_positions_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling=False)
+            print anchor_gt_positions
+            print(anchor_positions_procrustes)
+            reflection = np.linalg.det(tform["rotation"])
+            pos_selfloc_procrustes = np.dot(pos_selfloc, tform["rotation"]) + tform["translation"]
+
+        header = "[" + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," \
+                 + str(calibration_position) + "," + str(interpolation) + "," \
+                 + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," \
+                 + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
+                 + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(
+            receivers_offset) \
+                 + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," \
+                 + str(receivers_dummy.keys().index(ref_receiver)) + "," + str(alpha) + "]\n"
+
+        results_file_selfloc = "../log/results_post_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
+        fi = open(results_file_selfloc, 'w')
+        fi.write(
+            "##########################################################################################################################################################################################\n")
+        fi.write(
+            "rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
+        fi.write(
+            "##########################################################################################################################################################################################\n")
+        fi.write(header)
+        fi.write(str(transmitter_history) + "\n")
+        fi.write(str(timestamp_history) + "\n")
+        fi.write(str(delay_tensor.tolist()) + "\n")
+        fi.write(str(D.tolist()) + "\n")
+        fi.write(str(anchor_loop_delay_history) + "\n")
+        fi.write(str(anchor_positions.tolist()) + "\n")
+        fi.write(str(anchor_positions_procrustes.tolist()) + "\n")
+        fi.write(str(anchor_gt_positions.tolist()) + "\n")
+        fi.write(str(pos_selfloc.tolist()) + "\n")
+        fi.write(str(pos_selfloc_procrustes.tolist()) + "\n")
+        # fi.write(str(tform.keys()) + "\n")
+        # tform["rotation"] = tform["rotation"].tolist()
+        # tform["translation"] = tform["translation"].tolist()
+        # fi.write(str(tform.values()) + "\n")
+        fi.write(str(stress) + "\n")
+        fi.close()
+        print "selfloc test results written to: \n" + results_file_selfloc
+
     if options.map:
         figure_map = plt.figure(figsize=(20,10))
         ax = figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
@@ -218,9 +396,10 @@ if __name__ == "__main__":
         ax.set_xticks(np.linspace(80,180,int(10)))
         ax.set_yticks(np.linspace(30,130,int(10)))
         """
-        x_diff_anchors = anchor_positions_procrustes[:,0] - anchor_gt_positions[:,0]
-        y_diff_anchors = anchor_positions_procrustes[:,1] - anchor_gt_positions[:,1]
-        rmse_anchors = np.sqrt(np.mean(np.square(x_diff_anchors) + np.square(y_diff_anchors)))
+        if not options.grad_desc:
+            x_diff_anchors = anchor_positions_procrustes[:,0] - anchor_gt_positions[:,0]
+            y_diff_anchors = anchor_positions_procrustes[:,1] - anchor_gt_positions[:,1]
+            rmse_anchors = np.sqrt(np.mean(np.square(x_diff_anchors) + np.square(y_diff_anchors)))
 
         x_diff_positions = pos_selfloc_procrustes[:,0] - receivers_positions[:,0]
         y_diff_positions = pos_selfloc_procrustes[:,1] - receivers_positions[:,1]
@@ -263,16 +442,17 @@ if __name__ == "__main__":
             rx = (rx[0] + 5, rx[1] - 1)
             i += 1
         i = 1
-        for rx in anchor_positions_procrustes:
-            if i == 1:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=250, alpha=0.9, label = "Result anchors, RMSE: "+ "${0:.3f}".format(rmse_anchors)+"m$")
-            else:
-                ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=250, alpha=0.9)
-            # set annotation RXx
-            text = "ANC" + str(i)
-            # index of logged reference receiver starts at 0 not at 1
-            rx = (rx[0] + 5, rx[1] - 1)
-            i += 1
+        if not options.grad_desc:
+            for rx in anchor_positions_procrustes:
+                if i == 1:
+                    ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=250, alpha=0.9, label = "Result anchors, RMSE: "+ "${0:.3f}".format(rmse_anchors)+"m$")
+                else:
+                    ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c="b", s=250, alpha=0.9)
+                # set annotation RXx
+                text = "ANC" + str(i)
+                # index of logged reference receiver starts at 0 not at 1
+                rx = (rx[0] + 5, rx[1] - 1)
+                i += 1
         
         ax.legend()
 
@@ -337,165 +517,4 @@ if __name__ == "__main__":
             plt.savefig(args[0].split("/")[-1].split(".")[0] + "_stress.pdf", dpi=150)
 
     plt.show()
-
-
-
-    
-    if options.replay:
-        # first set of samples: delays for algorithm. length: average_length*num_sensors
-        # second set: delays for anchoring. length: average_length* num_anchors
-        # mabe build in check?
-        # samples log given
-        if len(args) == 2:
-            f_samples = open(args[1],"r")
-            for line_number, line in enumerate(f_samples.readlines()):
-                receivers_samples = eval(eval(line))
-                receivers = dict()
-                # FIXME
-                if line_number < selfloc_average_length * len(receivers_positions):
-                    for cnt_tx in range(1, len(receivers_positions) + 1):
-                        if selfloc_average_length * (cnt_tx - 1) <= line_number < selfloc_average_length * cnt_tx:
-                            receivers_samples.insert(cnt_tx - 1, [])
-                for receiver_idx in range(len(receivers_positions)):
-                    receivers[receiver_idx] = receiver_interface.receiver_interface(None,None,receiver_idx)
-                    receivers[receiver_idx].coordinates = receivers_positions[receiver_idx]
-                    receivers[receiver_idx].offset = receivers_offset[receiver_idx]
-                    receivers[receiver_idx].serial = receiver_idx
-                    receivers[receiver_idx].frequency = frequency
-                    receivers[receiver_idx].interpolation = interpolation
-                    receivers[receiver_idx].samp_rate = sampling_rate
-                    receivers[receiver_idx].samples_to_receive = samples_to_receive
-                    receivers[receiver_idx].samples = receivers_samples[receiver_idx]
-                    receivers[receiver_idx].correlation_interpolation = True
-                    receivers[receiver_idx].measurement_noise = 10
-                    receivers[receiver_idx].selected_position = "selfloc"
-                receivers_steps.append(receivers)
-
-            f_samples.close()
-            receivers_selfloc = receivers_steps[:len(receivers_positions)*selfloc_average_length]
-            receivers_anchoring = receivers_steps[len(receivers_positions)*selfloc_average_length:]
-            if len(receivers_anchoring) != anchor_average * num_anchors:
-                print "Alert: samples missing!"
-                pdb.set_trace()
-            for cnt_j in range(len(receivers_selfloc)/selfloc_average_length):
-                for cnt_average in range(selfloc_average_length):
-                    curr_rx_set = receivers_selfloc[cnt_j*selfloc_average_length + cnt_average]
-                    for cnt_l, rx_l in enumerate(curr_rx_set.values()):
-                        for cnt_k, rx_k in enumerate(curr_rx_set.values()):
-                            if cnt_j != cnt_l and cnt_j != cnt_k and cnt_l != cnt_k:
-                                window_size = 13
-                                #by now ugly hack, rethink later
-                                delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = corr_spline_interpolation(curr_rx_set.values()[cnt_l].samples, curr_rx_set.values()[cnt_k].samples, window_size)[1] / sampling_rate * 10**9 + rx_l.offset - rx_k.offset
-                                #print(correlate({receivers.keys()[cnt_l]:receivers.values()[cnt_k],receivers.keys()[cnt_l]:receivers.values()[cnt_k]})[1])
-                            else:
-                                delay_tensor[cnt_j,cnt_l,cnt_k,cnt_average] = 0.0
-            D = np.ndarray(shape=(len(receivers_positions),len(receivers_positions),len(receivers_positions)))
-            sum_square_tdoa = 0
-            for j in range(len(receivers_positions)):
-                for l in range(len(receivers_positions)):
-                    for k in range(len(receivers_positions)):
-                        # average distance differences
-                        tdoa = ransac_tdoa.ransac_fit(delay_tensor[j,l,k])/ 10**9 * 299700000.0
-                        #tdoa = np.mean(delay_tensor[j,l,k])/ 10**9 * 299700000.0
-                        sum_square_tdoa += tdoa**2
-                        D[j,l,k] = tdoa
-
-            anchor_loop_delays = []
-            anchor_loop_delay_history = []
-            delay_means = []
-            for receivers in receivers_anchoring:
-                #
-                # pdb.set_trace()
-                # del receivers[0]
-                delay = []
-                for receiver in receivers:
-                    window_size = 13
-                    if not ref_receiver == receiver:
-                        delay.append(corr_spline_interpolation(receivers.values()[receiver].samples,
-                                     receivers.values()[ref_receiver].samples, window_size)[1] / sampling_rate * 10**9 + \
-                                     receivers[receiver].offset - receivers[ref_receiver].offset)
-                anchor_loop_delays.append(delay)
-                # no sensor is transmitting
-                transmitter_history.append(-1)
-                if len(anchor_loop_delays) == anchor_average:
-                    #delay_mean = ransac_tdoa.ransac_fit(np.array(anchor_loop_delays))
-                    # delay_mean = np.mean(np.array(anchor_loop_delays))
-                    #delay_means.append(delay_mean)
-                    anchor_loop_delay_history.append(anchor_loop_delays)
-                    anchor_loop_delays = []
-        sum_square_tdoa = 0
-        for j in range(len(receivers_positions)):
-            for l in range(len(receivers_positions)):
-                for k in range(len(receivers_positions)):
-                    sum_square_tdoa += D[j, l, k] ** 2
-        pos_selfloc = None
-        stress = [10]
-        pos_selfloc, stress = dmds_self_tdoa.selfloc(D, basemap(bbox[2],bbox[3]), sum_square_tdoa, None, 5000)
-
-        # for chan algorithm:
-        receivers_dummy = {}
-        for receiver_idx in range(len(receivers_positions)):
-            receivers_dummy[receiver_idx] = receiver_interface.receiver_interface(None, None, receiver_idx)
-            receivers_dummy[receiver_idx].coordinates = receivers_positions[receiver_idx]
-            receivers_dummy[receiver_idx].offset = receivers_offset[receiver_idx]
-            receivers_dummy[receiver_idx].serial = receiver_idx
-            receivers_dummy[receiver_idx].frequency = frequency
-            receivers_dummy[receiver_idx].interpolation = interpolation
-            receivers_dummy[receiver_idx].samp_rate = sampling_rate
-            receivers_dummy[receiver_idx].samples_to_receive = samples_to_receive
-            receivers_dummy[receiver_idx].samples = [0.0]
-            receivers_dummy[receiver_idx].correlation_interpolation = True
-            receivers_dummy[receiver_idx].measurement_noise = 10
-            receivers_dummy[receiver_idx].selected_position = "selfloc"
-            receivers_dummy[receiver_idx].coordinates_selfloc = pos_selfloc[receiver_idx]
-
-        delay_means = []
-        for entry in anchor_loop_delay_history:
-            delay_mean = []
-            for i in range(len(receivers_positions) - 1):
-                delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:, i]))
-            delay_means.append(delay_mean)
-        for j, delay_mean in enumerate(delay_means):
-            anchor_positions[j] = chan94_algorithm.localize(receivers_dummy, ref_receiver, np.round(basemap(bbox[2], bbox[3])), delay=delay_mean)["coordinates"]
-        anchor_gt_positions = np.array(anchor_gt_positions)
-        anchor_positions = np.array(anchor_positions)
-        d, coordinates_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling = False)
-        print anchor_gt_positions
-        print(coordinates_procrustes)
-        reflection = np.linalg.det(tform["rotation"])
-        pos_selfloc_procrustes =  np.dot(pos_selfloc,tform["rotation"]) + tform["translation"]
-
-
-        
-        header =  "["  + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," \
-                    + str(calibration_position) + "," + str(interpolation) + "," \
-                    + str(bandwidth) + "," + str(samples_to_receive) + "," + str(lo_offset) + "," \
-                    + str(bbox) + "," + str(receivers_positions.tolist()) + "," + str(selected_positions.tolist()) + "," \
-                    + str(receivers_gps) + "," + str(receivers_antenna) + "," + str(receivers_gain) + "," + str(receivers_offset) \
-                    + "," + str(selfloc_average_length) + "," + str(num_anchors) + "," + str(anchor_average) + "," \
-                    + str(receivers_dummy.keys().index(ref_receiver)) + "," + str(alpha) + "]\n"
-
-        results_file_selfloc = "../log/results_post_selfloc_" + time.strftime("%d_%m_%y-%H_%M_%S") + ".txt"
-        fi = open(results_file_selfloc,'w')
-        fi.write("##########################################################################################################################################################################################\n")
-        fi.write("rx_time,sampling_rate,frequency,frequency_calibration,calibration_position,interpolation,bandwidth,samples_to_receive,lo_offset,bbox,receivers_positions,selected_positions,receivers_gps,receivers_antenna,receivers_gain,sample_average,num_anchors,anchor_average,index_ref_receiver,alpha\n")
-        fi.write("##########################################################################################################################################################################################\n")
-        fi.write(header)
-        fi.write(str(transmitter_history) + "\n")
-        fi.write(str(timestamp_history) + "\n")
-        fi.write(str(delay_tensor.tolist()) + "\n")
-        fi.write(str(D.tolist()) + "\n")
-        fi.write(str(anchor_loop_delay_history) + "\n")
-        fi.write(str(anchor_positions.tolist()) + "\n")
-        fi.write(str(coordinates_procrustes.tolist()) + "\n")
-        fi.write(str(anchor_gt_positions.tolist()) + "\n")
-        fi.write(str(pos_selfloc.tolist()) + "\n")
-        fi.write(str(pos_selfloc_procrustes.tolist()) + "\n")
-        #fi.write(str(tform.keys()) + "\n")
-        #tform["rotation"] = tform["rotation"].tolist()
-        #tform["translation"] = tform["translation"].tolist()
-        #fi.write(str(tform.values()) + "\n")
-        fi.write(str(stress) + "\n")
-        fi.close()
-        print "selfloc test results written to: \n" +results_file_selfloc
 
