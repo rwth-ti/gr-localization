@@ -116,7 +116,7 @@ def dmds_grad_descend_anchoring(D, tdoas, roi, pos_anchors, sum_square_tdoa, ref
             stress_last = stress
             stress = np.sqrt((1 - beta) * np.sum(np.sum(np.sum(np.square(D - D_est)))) + beta * np.sum(np.sum(np.sum(np.square(D_anchor - D_anchor_est)))))
             stress_list.append(stress)
-            stress_diff = stress - stress_last
+            stress_diff = -stress + stress_last
             grad = stress_gradient_anchoring(xo,yo,x_b,y_b,D,D_anchor,beta)
             #pdb.set_trace()
             xo = xo - alpha * 1.0 / ((n - 1) * (n - 2)) * grad[:, 0]
@@ -127,6 +127,8 @@ def dmds_grad_descend_anchoring(D, tdoas, roi, pos_anchors, sum_square_tdoa, ref
             it += 1
             print "stress: ", stress
             print "stress_diff: ", stress_diff
+            if stress < sigma:
+                beta = 0.4
         # if solution is good stop iterating
     print it
     return np.array([xo,yo]).T, stress_list

@@ -304,11 +304,11 @@ if __name__ == "__main__":
             pos_selfloc_procrustes, stress = dmds_self_tdoa.dmds_grad_descend_anchoring(D, np.array(delay_means),
                                                                              basemap(bbox[2], bbox[3]),
                                                                              np.array(anchor_gt_positions), sum_square_tdoa,
-                                                                             ref_receiver, 5000)
+                                                                             ref_receiver, 1000)
             pos_selfloc = pos_selfloc_procrustes
         else:
             pos_selfloc, stress = dmds_self_tdoa.selfloc(D, basemap(bbox[2], bbox[3]), sum_square_tdoa, None, 5000)
-
+        print pos_selfloc_procrustes
             # for chan algorithm:
             #pdb.set_trace()
         receivers_dummy = {}
@@ -326,23 +326,24 @@ if __name__ == "__main__":
             receivers_dummy[receiver_idx].measurement_noise = 10
             receivers_dummy[receiver_idx].selected_position = "selfloc"
             receivers_dummy[receiver_idx].coordinates_selfloc = pos_selfloc[receiver_idx]
+        #if not options.grad_desc:
+        delay_means = []
+        for entry in anchor_loop_delay_history:
+            delay_mean = []
+            for i in range(len(receivers_positions) - 1):
+                delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:, i]))
+            delay_means.append(delay_mean)
+        for j, delay_mean in enumerate(delay_means):
+            anchor_positions[j] = \
+            chan94_algorithm.localize(receivers_dummy, ref_receiver, np.round(basemap(bbox[2], bbox[3])),
+                                      delay=delay_mean)["coordinates"]
+        anchor_gt_positions = np.array(anchor_gt_positions)
+        anchor_positions = np.array(anchor_positions)
+        d, anchor_positions_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling=False)
+        print anchor_gt_positions
+        print(anchor_positions_procrustes)
+        reflection = np.linalg.det(tform["rotation"])
         if not options.grad_desc:
-            delay_means = []
-            for entry in anchor_loop_delay_history:
-                delay_mean = []
-                for i in range(len(receivers_positions) - 1):
-                    delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:, i]))
-                delay_means.append(delay_mean)
-            for j, delay_mean in enumerate(delay_means):
-                anchor_positions[j] = \
-                chan94_algorithm.localize(receivers_dummy, ref_receiver, np.round(basemap(bbox[2], bbox[3])),
-                                          delay=delay_mean)["coordinates"]
-            anchor_gt_positions = np.array(anchor_gt_positions)
-            anchor_positions = np.array(anchor_positions)
-            d, anchor_positions_procrustes, tform = procrustes(anchor_gt_positions, anchor_positions, scaling=False)
-            print anchor_gt_positions
-            print(anchor_positions_procrustes)
-            reflection = np.linalg.det(tform["rotation"])
             pos_selfloc_procrustes = np.dot(pos_selfloc, tform["rotation"]) + tform["translation"]
 
         header = "[" + str(sampling_rate) + "," + str(frequency) + "," + str(frequency_calibration) + "," \
@@ -400,7 +401,7 @@ if __name__ == "__main__":
             x_diff_anchors = anchor_positions_procrustes[:,0] - anchor_gt_positions[:,0]
             y_diff_anchors = anchor_positions_procrustes[:,1] - anchor_gt_positions[:,1]
             rmse_anchors = np.sqrt(np.mean(np.square(x_diff_anchors) + np.square(y_diff_anchors)))
-
+        print pos_selfloc_procrustes
         x_diff_positions = pos_selfloc_procrustes[:,0] - receivers_positions[:,0]
         y_diff_positions = pos_selfloc_procrustes[:,1] - receivers_positions[:,1]
         rmse_positions = np.sqrt(np.mean(np.square(x_diff_positions) + np.square(y_diff_positions)))
