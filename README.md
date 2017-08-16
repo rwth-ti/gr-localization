@@ -90,7 +90,6 @@ Once everything is running the different components should appear in the setup t
 
 Copyright information
 ------------------
-Copyright © 2016 Institute for Theoretical Information Technology,
+Copyright © 2017 Institute for Theoretical Information Technology,
                  RWTH Aachen University <https://www.ti.rwth-aachen.de/>
 
-Unless otherwise stated, all files are distributed under GPL v3 license.
