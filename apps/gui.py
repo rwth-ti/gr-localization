@@ -20,7 +20,7 @@ from mpl_toolkits.basemap import Basemap
 import requests
 from StringIO import StringIO
 from PIL import Image
-from pyproj import Proj, transform
+from PIL import PngImagePlugin
 import math
 import socket
 import urllib2
@@ -30,16 +30,16 @@ sys.path.append("../python")
 import receiver_interface
 import rpc_manager as rpc_manager_local
 import gui_helpers
+import osm_tile_download
 
-def check_OSM():
+def check_osm():
     try:
         header = {"pragma" : "no-cache"} # Tells the server to send fresh copy
-        req = urllib2.Request("http://www.openstreetmap.org", headers=header)
+        req = urllib2.Request("http://tile.openstreetmap.org", headers=header)
         response=urllib2.urlopen(req,timeout=2)
-        print "you are connected"
         return True
     except urllib2.URLError as err:
-        print "Openstreetmap.org not availabe. Check your internet connection"
+        print "Error: tile.openstreetmap.org not reachable"
         return False
 
 class gui(QtGui.QMainWindow):
@@ -664,7 +664,7 @@ class gui(QtGui.QMainWindow):
         msg.setWindowTitle("Error loading map")
         msg.show()
 
-    def set_map(self, bbox):
+    def set_bbox_gui(self, bbox):
         self.gui.lineEditLeft.setText(str(bbox[0]))
         self.gui.lineEditLeft.setCursorPosition(0)
         self.gui.lineEditBottom.setText(str(bbox[1]))
@@ -674,51 +674,66 @@ class gui(QtGui.QMainWindow):
         self.gui.lineEditTop.setText(str(bbox[3]))
         self.gui.lineEditTop.setCursorPosition(0)
 
-        inProj = Proj(init='epsg:4326')
-        outProj = Proj(init='epsg:3857')
-        x0, y0 = transform(inProj,outProj,bbox[0],bbox[1])
-        x1, y1 = transform(inProj,outProj,bbox[2],bbox[3])
-        x = x1 - x0
-        y = y1 - y0
-        scale = math.ceil(math.sqrt(abs(x*y/0.3136))) * 2
-        
-        # check if OSM is available at first 
-
-        if self.map_type == "Online" and check_OSM():
-            print "Setting online map", bbox
-            print "+".join(str(j).replace(".",",") for j in bbox)
-            # search for existing map for this bounding box
-            if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
-                # request only if no map can be found
-                r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-                if r.status_code == 200:
-                    img = Image.open(StringIO(r.content))
+    def set_map(self, bbox):
+        self.set_bbox_gui(bbox)
+        # create plot for basemap
+        #
+        if hasattr(self, "ax"):
+            self.figure.delaxes(self.ax)
+        self.ax = self.figure.add_subplot(111)
+        # get extent size in pixels for zoom level calculation
+        extent = self.ax.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
+        extent_width, extent_height = extent.width, extent.height
+        extent_width *= self.figure.dpi
+        extent_height *= self.figure.dpi
+        # first check if OSM is available
+        if self.map_type == "Online" and check_osm():
+            print "Using online map with bounding box", bbox
+            # search for existing map with this bounding box
+            if not any(i.find("map_"+"+".join(str(j).replace(".",",") for j in bbox)+".png")!= -1 for i in os.listdir("../maps/") ):
+                # download only if no map can be found
+                #
+                # scraping no longer allowed
+                #
+                # r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
+                # if r.status_code == 200:
+                #     img = Image.open(StringIO(r.content))
+                #
+                # use tile server instead
+                lat_deg = bbox[1]
+                lon_deg = bbox[0]
+                delta_lat = bbox[3]-bbox[1]
+                delta_lon = bbox[2]-bbox[0]
+                try:
+                    #print "Tile download params", lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height
+                    img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height)
                     if not os.path.exists("../maps"):
-                            os.makedirs("../maps")
-                    img.save("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
-                else:
-                    self.signal_error_set_map.emit()
+                        os.makedirs("../maps")
+                    # add bbox as meta data
+                    meta = PngImagePlugin.PngInfo()
+                    meta.add_text("bbox", str(bbox))
+                    img.save("../maps/map_"+"+".join(str(i).replace(".",",") for i in bbox)+".png", "png", pnginfo=meta)
+                except:
+                    print("Error: map download failed")
+                    return
             else:
                 # if available, open offline map instead
-                img = Image.open("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
-            
-
-
+                img = Image.open("../maps/map_"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
+                bbox_meta = eval(img.info['bbox'])
+                if list(bbox_meta) != bbox:
+                    print "Error: bounding boxes in meta data and filename do not agree"
         else:
-            print "Setting offline map", self.map_file
+            print "Using offline map", self.map_file
             try:
                 img = Image.open(self.map_file)
+                bbox = eval(img.info['bbox'])
+                print "Bounding box", bbox
+                self.bbox = bbox
+                self.set_bbox_gui(bbox)
+                self.set_bbox(self.hostname, options.id_gui)
             except:
                 self.signal_error_set_map.emit()
                 return
-
-        if hasattr(self, "ax"):
-            self.figure.delaxes(self.ax)
-        self.ax = self.figure.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
-
-        #
-        # create basemap
-        #
 
         # get reference UTM grid
         lon = bbox[0]
@@ -735,14 +750,12 @@ class gui(QtGui.QMainWindow):
                 lon_0 = 33
             else:
                 lon_0 = int(lon/6)*6
-
         elif 56<=lat and lat<= 64:
             lat_0 = 56
             if 3<=lon and lon<=12:
                 lon_0 = 3
             else:
                 lon_0 = int(lon/6)*6
-
         else:
             lat_0 = int(lat/8)*8
             lon_0 = int(lon/6)*6
@@ -759,6 +772,11 @@ class gui(QtGui.QMainWindow):
         if hasattr(self, "image"):
             self.image.remove()
         self.image = self.basemap.imshow(img, interpolation='lanczos', origin='upper')
+        ## zoom to requested bounding box
+        #ll = self.basemap(bbox[0], bbox[2])
+        #ur = self.basemap(bbox[1], bbox[3])
+        #self.ax.set_ylim([ll[0], ur[0]])
+        #self.ax.set_xlim([ll[1], ur[1]])
 
         self.zp = gui_helpers.ZoomPan()
         figZoom = self.zp.zoom_factory(self.ax, base_scale = 1.5)
@@ -818,7 +836,6 @@ class gui(QtGui.QMainWindow):
             text = ("Rx" + str(self.receivers.keys().index(serial) + 1)
                         + " "
                         + str(np.round(receiver.coordinates,2)))
-                        
             if serial != self.ref_receiver:
                 receiver.annotation = self.ax.annotate(text, receiver.coordinates,fontweight='bold',bbox=dict(facecolor='w', alpha=0.9, zorder=20))
             else:
@@ -1251,9 +1268,12 @@ class gui(QtGui.QMainWindow):
     def set_TDOA_grid_based_num_samples(self, num_samples):
         self.rpc_manager.request("set_TDOA_grid_based_num_samples", [num_samples])
 
-    def set_bbox(self):
+    def set_bbox(self, hostname=None, id_gui=None):
         bbox = [float(self.gui.lineEditLeft.text()),float(self.gui.lineEditBottom.text()),float(self.gui.lineEditRight.text()),float(self.gui.lineEditTop.text())]
-        self.rpc_manager.request("set_bbox",[bbox])
+        if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
+            self.rpc_manager.request("set_bbox",[bbox, hostname, id_gui])
+        else:
+            print "Error: invalid bounding box"
 
     def set_record_results(self):
         self.rpc_manager.request("set_record_results",[self.gui.checkBoxRecordResults.isChecked()])

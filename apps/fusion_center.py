@@ -164,22 +164,22 @@ class fusion_center():
         # averaging:
         self.ransac_tdoa = ransac_1d.ransac_1d(ransac_1d.ConstantLeastSquaresModel(), 0.3, 0.1, 1000, 5)
         # ICT + surroundings
-        #self.bbox = 6.0580,50.7775,6.0690,50.7810
-        self.bbox = 6.0606,50.77819,6.06481,50.77967
+        #self.bbox = [6.0580,50.7775,6.0690,50.7810]
+        self.bbox = [6.0606,50.77819,6.06481,50.77967]
 
         # campus hoern:
-        #self.bbox = 6.05938, 50.77728, 6.06646, 50.78075
+        #self.bbox = [6.05938, 50.77728, 6.06646, 50.78075]
         # closeup of meadow in front of ict cubes
-        #self.bbox = (6.06210,50.77865,6.06306,50.77923)
+        #self.bbox = [6.06210,50.77865,6.06306,50.77923]
         # Football court
-        #self.bbox = 6.06429,50.77697,6.07271,50.78033
+        #self.bbox = [6.06429,50.77697,6.07271,50.78033]
         # ICT indoor
-        #self.bbox = 6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289
-        #self.bbox = 6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738
+        #self.bbox = [6.061698496341705,50.77914404797512,6.063739657402039,50.77976138469289]
+        #self.bbox = [6.061738267169996,50.779093354299285,6.063693919000911,50.77980828706738]
         # UPB Campus
-        #self.bbox = -75.59124,6.24113,-75.58851,6.24261
+        #self.bbox = [-75.59124,6.24113,-75.58851,6.24261]
         # Hack for Hofburg Vienna
-        #self.bbox = 16.366270782839383, 48.20741002023011, 16.367042, 48.2075765
+        #self.bbox = [16.366270782839383, 48.20741002023011, 16.367042, 48.2075765]
         self.init_map()
 
 
@@ -530,7 +530,7 @@ class fusion_center():
         was_not_registered = False
         gui_serial = hostname + str(id_gui)
         if not self.guis.has_key(gui_serial):
-            gui = gui_interface("tcp://" + ip_addr + ":" + str(7775 + id_gui), hostname)
+            gui = gui_interface("tcp://" + ip_addr + ":" + str(7775 + id_gui), hostname, id_gui)
             self.guis[gui_serial] = gui
             was_not_registered = True
         else:
@@ -942,11 +942,13 @@ class fusion_center():
         self.ntp_sync = True
         print("NTP synchronization done")
 
-    def set_bbox(self, bbox):
+    def set_bbox(self, bbox, hostname=None, id_gui=None):
         self.bbox = bbox
         self.init_map()
         for gui in self.guis.values():
-            gui.rpc_manager.request("init_map",[bbox, self.map_type, self.map_file, self.coordinates_type])
+            # do not send request if hostname+id_gui is provided to avoid a loop
+            if not str(hostname)+str(id_gui) == gui.hostname+str(gui.id_gui):
+                gui.rpc_manager.request("init_map",[bbox, self.map_type, self.map_file, self.coordinates_type])
 
     def set_acquisition_time(self, acquisition_time):
         self.acquisition_time = acquisition_time
@@ -1621,9 +1623,10 @@ class fusion_center():
         return correlation, delay, correlation_labels
 
 class gui_interface():
-    def __init__(self, rpc_address, hostname):
+    def __init__(self, rpc_address, hostname, id_gui):
         self.rpc_address = rpc_address
         self.hostname = hostname
+        self.id_gui = id_gui
         self.rpc_manager = rpc_manager_local.rpc_manager()
         self.rpc_manager.set_request_socket(rpc_address)
 
