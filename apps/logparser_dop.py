@@ -16,7 +16,7 @@ from matplotlib import colorbar
 from matplotlib import patches
 from pylab import get_cmap
 from pyproj import Proj, transform
-from PIL import Image
+from PIL import Image, PngImagePlugin
 import time
 import pdb
 import pprint
@@ -28,6 +28,7 @@ from mpl_toolkits.basemap import Basemap
 sys.path.append("../python")
 import receiver_interface,chan94_algorithm_filtered,chan94_algorithm,grid_based_algorithm    
 import dop
+import osm_tile_download
 
        
 def get_spaced_colors(n):
@@ -93,7 +94,7 @@ if __name__ == "__main__":
         bandwidth = acquisition[9]
         samples_to_receive = acquisition[10]
         lo_offset = acquisition[11]
-        bbox = acquisition[12]
+        bbox = list(acquisition[12])
         """
         print bbox
         bbox=list(bbox)
@@ -166,24 +167,46 @@ if __name__ == "__main__":
     scale_y = y/200
 
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
-    print "+".join(str(j).replace(".",",") for j in bbox)
-    if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
-        # request only if no map can be found
-        r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-        if r.status_code == 200:
-            img = Image.open(StringIO(r.content))
-            if not os.path.exists("../maps"):
-                    os.makedirs("../maps")
-            img.save("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
-        else:
-            print "OSM error"
-    else:
-        # if available, open offline map instead
-        img = Image.open("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
-    #img = Image.open("../maps/ict_cubes.png")
-
     ax = figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
-    
+    extent = ax.get_window_extent().transformed(figure_map.dpi_scale_trans.inverted())
+    extent_width, extent_height = extent.width, extent.height
+    extent_width *= figure_map.dpi
+    extent_height *= figure_map.dpi
+    # first check if OSM is available
+    if osm_tile_download.check_osm():
+        print "Using online map with bounding box", bbox
+        # search for existing map with this bounding box
+        if not any(i.find("map_" + "+".join(str(j).replace(".", ",") for j in bbox) + ".png") != -1 for i in
+                   os.listdir("../maps/")):
+            # download only if no map can be found
+            #
+            # scraping no longer allowed
+            # use tile server instead
+            lat_deg = bbox[1]
+            lon_deg = bbox[0]
+            delta_lat = bbox[3] - bbox[1]
+            delta_lon = bbox[2] - bbox[0]
+            try:
+                # print "Tile download params", lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height
+                img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, extent_width,
+                                                          extent_height)
+                if not os.path.exists("../maps"):
+                    os.makedirs("../maps")
+                # add bbox as meta data
+                meta = PngImagePlugin.PngInfo()
+                meta.add_text("bbox", str(bbox))
+                img.save("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png", "png",
+                         pnginfo=meta)
+            except:
+                print("Error: map download failed")
+                sys.exit()
+        else:
+            # if available, open offline map instead
+            img = Image.open("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png")
+            bbox_meta = eval(img.info['bbox'])
+            if list(bbox_meta) != bbox:
+                print "Error: bounding boxes in meta data and filename do not agree"
+                sys.exit()
     #
     # create basemap
     #

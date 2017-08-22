@@ -10,7 +10,7 @@ from matplotlib import patches
 import numpy as np
 import sys, warnings, os
 from pyproj import Proj, transform
-from PIL import Image
+from PIL import Image, PngImagePlugin
 import math
 import requests
 from StringIO import StringIO
@@ -28,6 +28,7 @@ from procrustes import procrustes
 import dmds_self_tdoa
 import helpers
 import ransac_1d
+import osm_tile_download
 
 #mpl
 matplotlib.rcParams['text.usetex'] = True
@@ -35,7 +36,6 @@ matplotlib.rcParams['text.latex.unicode'] = True
 matplotlib.rcParams['font.size'] = 15
 matplotlib.rcParams['font.family'] = "serif"
 matplotlib.rcParams['font.serif'] = "cm10"
-
 
 c = 299700000.0
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     bandwidth = acquisition[5]
     samples_to_receive = acquisition[6]
     lo_offset = acquisition[7]
-    bbox = acquisition[8]
+    bbox = list(acquisition[8])
     receivers_positions = acquisition[9]
     selected_positions = np.array(acquisition[10])
     receivers_gps = acquisition[11]
@@ -117,29 +117,6 @@ if __name__ == "__main__":
     stress_list = eval(f_results.readline())
 
     ransac_tdoa = ransac_1d.ransac_1d(ransac_1d.ConstantLeastSquaresModel(), 0.3, 0.1, 1000, 5)
-
-    delay_means = []
-    for entry in anchor_loop_delay_history:
-        delay_mean = []
-        for i in range(len(receivers_positions)-1):
-            delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:,i]))
-        delay_means.append(delay_mean)
-
-    print "+".join(str(j).replace(".",",") for j in bbox)
-    if not any(i.find("+".join(str(j).replace(".",",") for j in bbox))!= -1 for i in os.listdir("../maps/") ):
-        # request only if no map can be found
-        r = requests.get("http://render.openstreetmap.org/cgi-bin/export?bbox=" + str(bbox)[1:-1] + "&scale=" + str(scale) + "&format=png", stream=True)
-        if r.status_code == 200:
-            img = Image.open(StringIO(r.content))
-            if not os.path.exists("../maps"):
-                    os.makedirs("../maps")
-            img.save("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
-        else:
-            print "OSM error"
-    else:
-        # if available, open offline map instead
-        img = Image.open("../maps/map"+"+".join(str(i).replace(".",",") for i in bbox)+".png")
-    #img = Image.open("../maps/ict_cubes.png")
 
     lon = bbox[0]
     lat = bbox[1]
@@ -183,6 +160,48 @@ if __name__ == "__main__":
     x = x1 - x0
     y = y1 - y0
     f_results.close()
+    figure_map = plt.figure(figsize=(20, 10))
+    ax = figure_map.add_subplot(111, xlim=(x0, x1), ylim=(y0, y1), autoscale_on=False)
+    # get extent size in pixels for zoom level calculation
+    extent = ax.get_window_extent().transformed(figure_map.dpi_scale_trans.inverted())
+    extent_width, extent_height = extent.width, extent.height
+    extent_width *= figure_map.dpi
+    extent_height *= figure_map.dpi
+    # first check if OSM is available
+    if osm_tile_download.check_osm():
+        print "Using online map with bounding box", bbox
+        # search for existing map with this bounding box
+        if not any(i.find("map_" + "+".join(str(j).replace(".", ",") for j in bbox) + ".png") != -1 for i in
+                   os.listdir("../maps/")):
+            # download only if no map can be found
+            #
+            # scraping no longer allowed
+            # use tile server instead
+            lat_deg = bbox[1]
+            lon_deg = bbox[0]
+            delta_lat = bbox[3] - bbox[1]
+            delta_lon = bbox[2] - bbox[0]
+            try:
+                # print "Tile download params", lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height
+                img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, extent_width,
+                                                          extent_height)
+                if not os.path.exists("../maps"):
+                    os.makedirs("../maps")
+                # add bbox as meta data
+                meta = PngImagePlugin.PngInfo()
+                meta.add_text("bbox", str(bbox))
+                img.save("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png", "png",
+                         pnginfo=meta)
+            except:
+                print("Error: map download failed")
+                sys.exit()
+        else:
+            # if available, open offline map instead
+            img = Image.open("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png")
+            bbox_meta = eval(img.info['bbox'])
+            if list(bbox_meta) != bbox:
+                print "Error: bounding boxes in meta data and filename do not agree"
+                sys.exit()
     
     #receivers_positions = []
     
@@ -191,6 +210,14 @@ if __name__ == "__main__":
     #    receivers_positions.append(basemap(pos[0],pos[1]))
     
     #receivers_positions = np.array(receivers_positions)
+
+    # calculate delays
+    delay_means = []
+    for entry in anchor_loop_delay_history:
+        delay_mean = []
+        for i in range(len(receivers_positions)-1):
+            delay_mean.append(ransac_tdoa.ransac_fit(np.array(entry)[:,i]))
+        delay_means.append(delay_mean)
     D_true = np.ndarray(shape = (len(receivers_positions),len(receivers_positions),len(receivers_positions)))
     #receivers_positions = [(131.2797962158893, 59.88438221876277), (121.4281368314987, 102.70505203219363),(153.97361311259738, 93.98137587687233), (115.85778131733423, 72.92402160679922)]
     receivers_positions = np.array(receivers_positions)
@@ -384,8 +411,6 @@ if __name__ == "__main__":
         print "selfloc test results written to: \n" + results_file_selfloc
 
     if options.map:
-        figure_map = plt.figure(figsize=(20,10))
-        ax = figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
         figure_map.canvas.set_window_title(args[0].split("/")[-1].split(".")[0] + "_map")
         basemap.imshow(img, interpolation='lanczos', origin='upper')
         i = 1
