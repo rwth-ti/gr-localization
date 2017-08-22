@@ -2,8 +2,6 @@
 
 from optparse import OptionParser
 import matplotlib
-matplotlib.rcParams['text.usetex'] = True
-matplotlib.rcParams['text.latex.unicode'] = True
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import numpy as np
@@ -30,9 +28,11 @@ c = 299700000.0
 
 # print with approopriate resolution
 np.set_printoptions(precision=20)
-plt.rc('text', usetex=True)
-plt.rc('font', size = '15', family='serif', serif = 'cm10')
-
+matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['text.latex.unicode'] = True
+matplotlib.rcParams['font.size'] = 15
+matplotlib.rcParams['font.family'] = "serif"
+matplotlib.rcParams['font.serif'] = "cm10"
 class parser():
     def __init__(self,bbox,filename,options):
         self.options = options

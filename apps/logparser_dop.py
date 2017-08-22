@@ -9,8 +9,6 @@ import math
 import requests
 from StringIO import StringIO
 import matplotlib
-matplotlib.rcParams['text.usetex'] = True
-matplotlib.rcParams['text.latex.unicode'] = True
 import matplotlib.pyplot as plt
 from matplotlib import colorbar
 from matplotlib import patches
@@ -30,6 +28,11 @@ import receiver_interface,chan94_algorithm_filtered,chan94_algorithm,grid_based_
 import dop
 import osm_tile_download
 
+matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['text.latex.unicode'] = True
+matplotlib.rcParams['font.size'] = 15
+matplotlib.rcParams['font.family'] = "serif"
+matplotlib.rcParams['font.serif'] = "cm10"
        
 def get_spaced_colors(n):
     max_value = 16581375 #255**3
@@ -156,15 +159,15 @@ if __name__ == "__main__":
 
     # evaluate exactly 200 positions on each axis
 
-    x_steps = np.linspace(0,x,200)
+    x_steps = np.linspace(0,x,400)
     '''
     lons = np.ndarray(shape=(len(x_steps)))
     for i,x in enumerate(x_steps):
         lons[i] = 
     '''
-    y_steps = np.linspace(0,y,200)
-    scale_x = x/200
-    scale_y = y/200
+    y_steps = np.linspace(0,y,400)
+    scale_x = x/400
+    scale_y = y/400
 
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
     ax = figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
@@ -186,20 +189,16 @@ if __name__ == "__main__":
             lon_deg = bbox[0]
             delta_lat = bbox[3] - bbox[1]
             delta_lon = bbox[2] - bbox[0]
-            try:
-                # print "Tile download params", lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height
-                img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, extent_width,
-                                                          extent_height)
-                if not os.path.exists("../maps"):
-                    os.makedirs("../maps")
-                # add bbox as meta data
-                meta = PngImagePlugin.PngInfo()
-                meta.add_text("bbox", str(bbox))
-                img.save("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png", "png",
-                         pnginfo=meta)
-            except:
-                print("Error: map download failed")
-                sys.exit()
+            # print "Tile download params", lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height
+            img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, extent_width,
+                                                      extent_height)
+            if not os.path.exists("../maps"):
+                os.makedirs("../maps")
+            # add bbox as meta data
+            meta = PngImagePlugin.PngInfo()
+            meta.add_text("bbox", str(bbox))
+            img.save("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png", "png",
+                     pnginfo=meta)
         else:
             # if available, open offline map instead
             img = Image.open("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png")
@@ -254,7 +253,7 @@ if __name__ == "__main__":
             receivers_positions[i] = basemap(receiver_pos[0],receiver_pos[1])
     '''
 
-    ax.axis([25,230,15,165])
+    #ax.axis([25,230,15,165])
     reference_selection = options.reference_selection
     receivers_ignored = eval(options.ignore_sensors)
     for idx in range(len(receivers_ignored)):
@@ -279,7 +278,7 @@ if __name__ == "__main__":
     skip_cnt = 0
     for receiver_idx in range(len(receivers_positions)):
         if (receiver_idx) not in receivers_ignored:
-            receivers[receiver_idx - skip_cnt] =receiver_interface.receiver_interface(None,None,receiver_idx)
+            receivers[receiver_idx - skip_cnt] = receiver_interface.receiver_interface(None,None,receiver_idx)
             receivers[receiver_idx - skip_cnt].coordinates=receivers_positions[receiver_idx]
             receivers[receiver_idx - skip_cnt].serial = receiver_idx
             print receivers[receiver_idx - skip_cnt].coordinates
@@ -361,7 +360,7 @@ if __name__ == "__main__":
                 references[x_it,y_it] += 1 + np.where(receivers_ignored == references[x_it,y_it])[0][0]
             
         #rfx = plt.pcolor(x_steps,y_steps,references, cmap=cmap, alpha=0.5, linewidth=0, edgecolor = 'face', rasterized = True)
-        rfx = plt.imshow(references, interpolation='nearest', cmap=cmap, origin = 'lower',aspect = 'equal', alpha=0.5, extent=[0,x,0,y])
+        rfx = plt.imshow(references, interpolation='nearest', cmap=cmap, origin = 'lower', alpha=0.5, extent=[0,x,0,y])
         #references = transform_scalar(references, lons, lats, nx, ny)
         #rfx = basemap.imshow(references, cmap=cmap, alpha=0.5)
         
