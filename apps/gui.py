@@ -32,15 +32,7 @@ import rpc_manager as rpc_manager_local
 import gui_helpers
 import osm_tile_download
 
-def check_osm():
-    try:
-        header = {"pragma" : "no-cache"} # Tells the server to send fresh copy
-        req = urllib2.Request("http://tile.openstreetmap.org", headers=header)
-        response=urllib2.urlopen(req,timeout=2)
-        return True
-    except urllib2.URLError as err:
-        print "Error: tile.openstreetmap.org not reachable"
-        return False
+
 
 class gui(QtGui.QMainWindow):
     signal_error_set_map = QtCore.pyqtSignal()
@@ -687,7 +679,7 @@ class gui(QtGui.QMainWindow):
         extent_width *= self.figure.dpi
         extent_height *= self.figure.dpi
         # first check if OSM is available
-        if self.map_type == "Online" and check_osm():
+        if self.map_type == "Online" and osm_tile_download.check_osm():
             print "Using online map with bounding box", bbox
             # search for existing map with this bounding box
             if not any(i.find("map_"+"+".join(str(j).replace(".",",") for j in bbox)+".png")!= -1 for i in os.listdir("../maps/") ):

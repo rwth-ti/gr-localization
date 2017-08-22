@@ -9,6 +9,17 @@ import StringIO
 from PIL import Image
 from pyproj import Proj, transform
 
+
+def check_osm():
+    try:
+        header = {"pragma" : "no-cache"} # Tells the server to send fresh copy
+        req = urllib2.Request("http://tile.openstreetmap.org", headers=header)
+        response=urllib2.urlopen(req,timeout=2)
+        return True
+    except urllib2.URLError as err:
+        print "Error: tile.openstreetmap.org not reachable"
+        return False
+
 def deg2num(lat_deg, lon_deg, zoom_level):
   lat_rad = math.radians(lat_deg)
   n = 2.0 ** zoom_level
