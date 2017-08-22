@@ -65,7 +65,7 @@ def get_image_cluster(lat_deg, lon_deg, delta_lat,  delta_lon, extent_width, ext
     # calculate zoom level
     max_dimension = max(x1_desired-x0_desired,y1_desired-y0_desired)
     max_extent = max(extent_width, extent_height)
-    zoom_level = int(math.ceil(math.log(40074156*math.cos(lat_deg+delta_lat/2)/(max_dimension/max_extent),2)-8))
+    zoom_level = int(math.ceil(math.log(40074156*math.cos(math.radians(lat_deg+delta_lat))/(max_dimension/max_extent),2)-8))
     print "Zoom level:", zoom_level
     tile_bbox = get_cluster_bbox(lat_deg, lon_deg, delta_lat, delta_lon, zoom_level)
     x0_tiles, y0_tiles = transform(inProj,outProj,tile_bbox[0],tile_bbox[1])
