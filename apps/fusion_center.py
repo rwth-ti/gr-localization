@@ -116,8 +116,6 @@ class fusion_center():
         self.transmitter = -1 # No sensor is transmitting
         self.transmitter_debug = 0
         self.sample_average = int(options.selfloc_average_length)
-        self.transmitter_history = []
-        self.timestamp_history = []
         #[[[[]<-average]<-cnt_l]<-cnt_k]<-cnt_j
         self.delay_tensor = np.ndarray(shape=(4, 4, 4, self.sample_average))
         self.D = np.ndarray(shape=(4, 4, 4))
@@ -143,6 +141,7 @@ class fusion_center():
         self.completed_anchors = [0.0] * self.num_anchors
         self.completed_anchors_positions = [0.0] * self.num_anchors
         self.sample_history = [0.0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
+        self.transmitter_history = [0.0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
         self.delays_calibration_selfloc = []
 
         self.map_type = "Online"
@@ -308,6 +307,8 @@ class fusion_center():
                 ref_receiver = self.receivers[self.ref_receiver]
                 if ref_receiver.selected_position == "manual":
                     pos_ref = ref_receiver.coordinates
+                elif ref_receiver.selected_position == "selfloc":
+                    pos_ref = ref_receiver.coordinates_selfloc
                 else:
                     pos_ref = ref_receiver.coordinates_gps
                 index_delay = 0
@@ -316,8 +317,8 @@ class fusion_center():
                         receiver = self.receivers.values()[i]
                         if receiver.selected_position == "manual":
                             pos_receiver = receiver.coordinates
-                        elif ref_receiver.selected_position == "selfloc" :
-                            pos_ref = ref_receiver.coordinates_gps
+                        elif ref_receiver.selected_position == "selfloc":
+                            pos_receiver = ref_receiver.coordinates_selfloc
                         else:
                             pos_receiver = receiver.coordinates_gps
                         d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
@@ -741,8 +742,7 @@ class fusion_center():
         #if len(self.receivers) > 3:
         # number of receptions required for the whole process
         #acquisitions = len(self.receivers)*self.sample_average
-        self.transmitter_history = []
-        self.timestamp_history = []
+        self.transmitter_history = [0.0] * (4 * self.sample_average + self.num_anchors * self.anchor_average)
         self.cnt_j = 0
         self.cnt_average = 0
         self.self_localization = True
@@ -1149,8 +1149,13 @@ class fusion_center():
                               + str(self.sample_average) + "," + str(self.num_anchors) + "," + str(self.anchor_average) + "," \
                               + str(self.receivers.keys().index(self.ref_receiver)) + "," + str(self.alpha) + "]\n"
         fi.write(self.header_selfloc)
+        fi.write(
+            "##########################################################################################################################################################################################\n")
+        fi.write(
+            "transmitter_history,delay_tensor,D,anchor_loop_delay_history,anchor_positions,anchor_coordinates_procrustes, anchor_gt_positions, pos_selfloc, pos_selfloc_procrustes, stress_list\n")
+        fi.write(
+            "##########################################################################################################################################################################################\n")
         fi.write(str(self.transmitter_history) + "\n")
-        fi.write(str(self.timestamp_history) + "\n")
         fi.write(str(self.delay_tensor.tolist()) + "\n")
         fi.write(str(self.D.tolist()) + "\n")
         fi.write(str(self.anchor_loop_delay_history) + "\n")
@@ -1436,9 +1441,7 @@ class fusion_center():
         if self.anchor_loop:
             self.anchor_loop_delays.append(delay)
             # no sensor is transmitting
-            self.cnt_anc_average += 1
-            self.transmitter_history.append(-1)
-            self.timestamp_history.append(receivers.values()[0].tags["rx_time"]) 
+            self.transmitter_history[len(self.receivers) * self.sample_average + self.num_anchor * self.anchor_average + self.cnt_anc_average] = -1
             if len(self.anchor_loop_delays) == self.anchor_average:
                 self.flush = True
                 self.run_loop = False
@@ -1462,6 +1465,8 @@ class fusion_center():
                 self.processing = False
                 self.set_anchor_position(self.anchor_positions[self.num_anchor])
                 return
+            self.cnt_anc_average += 1
+
         # set flags to enable new reception
         for receiver in receivers.values():
             receiver.samples = np.array([])
@@ -1515,9 +1520,8 @@ class fusion_center():
                         print("Error in: ",receivers.keys()[cnt_l])
                 else:
                     self.delay_tensor[self.cnt_j,cnt_l,cnt_k,self.cnt_average] = 0.0
-        self.transmitter_history.append(self.cnt_j)
+        self.transmitter_history[self.cnt_j * self.sample_average + self.cnt_average] = self.cnt_j
         # Transmitter should not be -1 in this function
-        self.timestamp_history.append(receivers.values()[len(self.receivers) - self.transmitter - 1].tags["rx_time"]) 
         delay = []
         delay_labels = []
         for idx in range(len(self.delay_tensor)):

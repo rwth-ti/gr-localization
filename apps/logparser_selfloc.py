@@ -100,8 +100,10 @@ if __name__ == "__main__":
     alpha = acquisition[19]
 
     # selfloc results
+    f_results.readline()
+    f_results.readline()
+    f_results.readline()
     transmitter_history = eval(f_results.readline())
-    timestamp_history = eval(f_results.readline())
     delay_tensor = np.array(eval(f_results.readline()))
     D = np.array(eval(f_results.readline()))
     anchor_loop_delay_history = eval(f_results.readline())
@@ -365,7 +367,6 @@ if __name__ == "__main__":
             "##########################################################################################################################################################################################\n")
         fi.write(header)
         fi.write(str(transmitter_history) + "\n")
-        fi.write(str(timestamp_history) + "\n")
         fi.write(str(delay_tensor.tolist()) + "\n")
         fi.write(str(D.tolist()) + "\n")
         fi.write(str(anchor_loop_delay_history) + "\n")

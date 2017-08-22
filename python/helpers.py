@@ -13,9 +13,11 @@ def build_results_strings(receivers):
         if i == 1:
             #TODO: general solution!!!
             if receiver.selected_position == "manual":
-                receivers_position = receivers_position + str(receiver.coordinates)
+                receivers_position = receivers_position + "[" + ",".join(str(coord) for coord in receiver.coordinates) + "]"
+            elif receiver.selected_position == "selfloc":
+                receivers_position = receivers_position + "[" + ",".join(str(coord) for coord in receiver.coordinates_selfloc) + "]"
             else:
-                receivers_position = receivers_position + str(receiver.coordinates_gps)
+                receivers_position = receivers_position + "[" + ",".join(str(coord) for coord in receiver.coordinates_gps) + "]"
             selected_positions = selected_positions + "'" + receiver.selected_position + "'"
             receivers_gps = receivers_gps + "'" + receiver.gps + "'"
             receivers_antenna = receivers_antenna + "'" + receiver.antenna + "'"
@@ -23,9 +25,11 @@ def build_results_strings(receivers):
             receivers_offset = receivers_offset + str(receiver.offset)
         else:
             if receiver.selected_position == "manual":
-                receivers_position = receivers_position + "," + str(receiver.coordinates)
+                receivers_position = receivers_position + "," + "[" + ",".join(str(coord) for coord in receiver.coordinates) + "]"
+            elif receiver.selected_position == "selfloc":
+                receivers_position = receivers_position + "," + "[" + ",".join(str(coord) for coord in receiver.coordinates_selfloc) + "]"
             else:
-                receivers_position = receivers_position + "," + str(receiver.coordinates_gps)
+                receivers_position = receivers_position + "," + "[" + ",".join(str(coord) for coord in receiver.coordinates_gps) + "]"
             selected_positions = selected_positions + "," + "'" + receiver.selected_position + "'"
             receivers_gps = receivers_gps + "," + "'" + receiver.gps + "'"
             receivers_antenna = receivers_antenna + "," + "'" + receiver.antenna + "'"
