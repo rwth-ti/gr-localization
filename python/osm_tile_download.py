@@ -1,6 +1,8 @@
 #
 # based on https://stackoverflow.com/questions/28476117/
 #                  easy-openstreetmap-tile-displaying-for-python
+# and http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Python
+# and http://wiki.openstreetmap.org/wiki/DE:Zoom_levels
 #
 
 import math
