@@ -24,7 +24,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 #import multiprocessing
 from mpl_toolkits.basemap import Basemap
 sys.path.append("../python")
-import receiver_interface,chan94_algorithm_filtered,chan94_algorithm,grid_based_algorithm    
+import receiver_interface,chan94_algorithm,grid_based_algorithm    
 import dop
 import osm_tile_download
 
@@ -59,6 +59,8 @@ def parse_options():
                       help="reference selection algorithm. Implemented options are: Manual, Min-DOP ")
     parser.add_option("", "--ignore-sensors", type = "str", default="[]",
                       help="list of indices sensors that should be ignored, e.g. [1,5]")
+    parser.add_option("", "--crop-ict", action = "store_true", default=False,
+                      help="Optimize axes for plots of scenarios near ict cubes")
     parser.add_option("", "--input-type", type = "str", default="log",
                       help="select input method: by default, a log of gr-localization is required.\n Option manual enables input of file containing receiver and bounding-box gps coordiantes.\n File structure: [(Rx1x,Rx1y),(Rx2x,...)...]\n\t[lonlowerBound, latLowerBound, lonUpperBound, latUpperBound]")
     parser.add_option("-s", "--save", action="store_true", default=False,
@@ -175,12 +177,11 @@ if __name__ == "__main__":
     extent_width, extent_height = extent.width, extent.height
     extent_width *= figure_map.dpi
     extent_height *= figure_map.dpi
-    # first check if OSM is available
-    if osm_tile_download.check_osm():
-        print "Using online map with bounding box", bbox
-        # search for existing map with this bounding box
-        if not any(i.find("map_" + "+".join(str(j).replace(".", ",") for j in bbox) + ".png") != -1 for i in
+    # search for existing map with this bounding box
+    if not any(i.find("map_" + "+".join(str(j).replace(".", ",") for j in bbox) + ".png") != -1 for i in
                    os.listdir("../maps/")):
+        if osm_tile_download.check_osm():
+            print "Using online map with bounding box", bbox            
             # download only if no map can be found
             #
             # scraping no longer allowed
@@ -199,13 +200,14 @@ if __name__ == "__main__":
             meta.add_text("bbox", str(bbox))
             img.save("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png", "png",
                      pnginfo=meta)
-        else:
-            # if available, open offline map instead
-            img = Image.open("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png")
-            bbox_meta = eval(img.info['bbox'])
-            if list(bbox_meta) != bbox:
-                print "Error: bounding boxes in meta data and filename do not agree"
-                sys.exit()
+    else:
+        # if available, open offline map instead
+        print "Use existing offline map"
+        img = Image.open("../maps/map_" + "+".join(str(i).replace(".", ",") for i in bbox) + ".png")
+        bbox_meta = eval(img.info['bbox'])
+        if list(bbox_meta) != bbox:
+            print "Error: bounding boxes in meta data and filename do not agree"
+            sys.exit()
     #
     # create basemap
     #
@@ -243,9 +245,19 @@ if __name__ == "__main__":
     #int(np.linalg.norm(basemap(bbox[0],bbox[1])-basemap(bbox[2],bbox[1])))
     basemap.imshow(img, interpolation='lanczos', origin='upper')
     #FIXME:HARDCODED PARAMETERS
-    barlength = 40
-    x_offset_scale = 0.17
-    y_offset_scale = 0.15
+    if options.crop_ict:
+        barlength = 40
+        x_offset_scale = 0.17
+        y_offset_scale = 0.15
+        label_x_offs = 2
+        label_y_offs = 2.5
+        ax.axis([25,230,15,165])
+    else:
+        barlength = 5000
+        x_offset_scale = 0.2
+        y_offset_scale = 0.05
+        label_x_offs = 150
+        label_y_offs = 200
     basemap.drawmapscale(lon=bbox[0]-x_offset_scale*(bbox[0]-bbox[2]), lat=bbox[1]-y_offset_scale*(bbox[1]-bbox[3]), lon0=bbox[0]-x_offset_scale*(bbox[0]-bbox[2]), lat0=bbox[1]-y_offset_scale*(bbox[1]-bbox[3]), length = barlength,  units='m',barstyle='fancy',fontsize = 18)
     '''
     if options.input_type == "manual":
@@ -253,7 +265,6 @@ if __name__ == "__main__":
             receivers_positions[i] = basemap(receiver_pos[0],receiver_pos[1])
     '''
 
-    #ax.axis([25,230,15,165])
     reference_selection = options.reference_selection
     receivers_ignored = eval(options.ignore_sensors)
     for idx in range(len(receivers_ignored)):
@@ -387,7 +398,7 @@ if __name__ == "__main__":
             # set annotation RXx
             text = "Rx" + str(i)
             # index of logged reference receiver starts at 0 not at 1
-            rx = (rx[0]+2,rx[1]+2.5)
+            rx = (rx[0] + label_x_offs,rx[1] + label_y_offs)
             
             if i != (ref_receiver+1) or options.reference_selection == "Min-DOP" or options.plot_difference:
                 ax.annotate(text, rx,fontweight='bold', fontsize = 16,bbox=dict(facecolor='w', alpha=0.9))
@@ -396,93 +407,4 @@ if __name__ == "__main__":
         i += 1
     if options.save:
         plt.savefig(filename + ".pdf", dpi=100, edgecolor='none')
-
-        
-
-
-
-
-        
-    '''
-    # num_cores = multiprocessing.cpu_count()
-    if options.cov:
-        f_samples = open(args[1],"r")
-
-        
-        for line_number, line in enumerate(f_samples):  
-            #if line_number >= len(timestamps):
-            #   break
-                
-            if line_number >= 20:
-                break
-            acquisition_samples = eval(eval(line))
-            receivers_samples = acquisition_samples[0]
-            receivers=dict()
-            for receiver_idx in range(len(receivers_samples)):
-                receivers[receiver_idx] = receiver_interface.receiver_interface(None,None,receiver_idx)
-                receivers[receiver_idx].coordinates = receivers_positions[receiver_idx]
-                receivers[receiver_idx].serial = receiver_idx
-                receivers[receiver_idx].frequency = frequency
-                receivers[receiver_idx].interpolation = interpolation
-                receivers[receiver_idx].samp_rate = sampling_rate
-                receivers[receiver_idx].samples_to_receive = samples_to_receive
-                receivers[receiver_idx].samples = receivers_samples[receiver_idx] 
-            for receiver in receivers.values():
-                x = np.linspace(0,len(receiver.samples),len(receiver.samples))
-                f = interpolate.interp1d(x, receiver.samples)
-                x_interpolated = np.linspace(0,len(receiver.samples),len(receiver.samples) * interpolation)
-                receiver.samples = f(x_interpolated)
-            for receiver in receivers.values():
-                if receiver != ref_receiver:
-                    correlation = np.absolute(np.correlate(receiver.samples, receivers[ref_receiver].samples, "full", False))
-                
-            receivers_steps.append(receivers)
-        f_samples.close()
-            
-        cov_file = "../log/results_cov_" + time.strftime("%d_%m_%y-%H:%M:%S") + ".txt"
-        f = open(cov_file,"w")
-        for x in x_steps:
-            for y in y_steps:
-                receivers = receivers_steps[0]
-                coordinates = array([x,y])
-                delay_calibration = [0,0]
-                index_delay = 0
-                print "iteration"
-
-                pos_ref = receivers[ref_receiver].coordinates
-                for i in range(0,len(receivers)):
-                        if not ref_receiver == receivers.keys()[i]:
-                            print receivers.keys()[i]
-                            pos_receiver = receivers[i].coordinates
-                            d_ref = np.linalg.norm(np.array(coordinates)-pos_ref)
-                            d_receiver = np.linalg.norm(np.array(coordinates)-pos_receiver)
-                            delay_true = (d_receiver-d_ref) * sampling_rate * interpolation / 299700000
-                            delay_calibration[index_delay] = int(np.floor(delay_true))
-                            index_delay += 1
-                
-                
-                for i in range(len(receivers_steps)):
-                    if options.algorithm=="chan"or options.algorithm=="both":
-                        index_delay = 0
-                        for j in range(0,len(receivers)):
-                            if not ref_receiver == receivers_steps[i].keys()[j]:
-                                print "true delay",delay_calibration[index_delay]
-                                receivers_steps[i].values()[j].samples = np.roll(receivers_steps[i].values()[j].samples,delay_calibration[index_delay])
-                                index_delay += 1
-                        estimated_positions["chan"]=chan94_algorithm.localize(receivers_steps[i],ref_receiver,np.round(basemap(bbox[2],bbox[3])))
-                        if i == 0:
-                            chan_x = np.array(estimated_positions["chan"]["coordinates"][0])
-                            chan_y = np.array(estimated_positions["chan"]["coordinates"][1])
-                        else:
-                            chan_x = np.hstack((chan_x,np.array(estimated_positions["chan"]["coordinates"][0])))
-                            chan_y = np.hstack((chan_y,np.array(estimated_positions["chan"]["coordinates"][1])))
-                chan_x_mean = np.mean(chan_x)
-                chan_x_variance = np.var(chan_x)
-                chan_y_mean = np.mean(chan_y)
-                chan_y_variance = np.var(chan_y)
-                chan_cov = np.cov([chan_x,chan_y])
-                f.write(str(chan_cov.tolist()) + "," + str(chan_x_mean) + "," + str(chan_y_mean)+"\n")
-        f.close()
-        print "results written to: " +cov_file
-        '''
     plt.show()
