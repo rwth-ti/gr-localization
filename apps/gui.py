@@ -673,11 +673,8 @@ class gui(QtGui.QMainWindow):
         if hasattr(self, "ax"):
             self.figure.delaxes(self.ax)
         self.ax = self.figure.add_subplot(111)
-        # get extent size in pixels for zoom level calculation
-        extent = self.ax.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
-        extent_width, extent_height = extent.width, extent.height
-        extent_width *= self.figure.dpi
-        extent_height *= self.figure.dpi
+        # get figure size in pixels for zoom level calculation
+        figure_size = self.figure.get_size_inches()*self.figure.dpi
         # first check if OSM is available
         if self.map_type == "Online" and osm_tile_download.check_osm():
             print "Using online map with bounding box", bbox
@@ -698,7 +695,7 @@ class gui(QtGui.QMainWindow):
                 delta_lon = bbox[2]-bbox[0]
                 try:
                     #print "Tile download params", lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height
-                    img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, extent_width, extent_height)
+                    img = osm_tile_download.get_image_cluster(lat_deg, lon_deg, delta_lat, delta_lon, figure_size[0], figure_size[1])
                     if not os.path.exists("../maps"):
                         os.makedirs("../maps")
                     # add bbox as meta data
