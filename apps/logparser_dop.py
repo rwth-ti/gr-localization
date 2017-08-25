@@ -30,9 +30,9 @@ import osm_tile_download
 
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.unicode'] = True
-matplotlib.rcParams['font.size'] = 15
+matplotlib.rcParams['font.size'] = 14
 matplotlib.rcParams['font.family'] = "serif"
-matplotlib.rcParams['font.serif'] = "cm10"
+#matplotlib.rcParams['font.serif'] = "cm10"
        
 def get_spaced_colors(n):
     max_value = 16581375 #255**3
@@ -72,8 +72,6 @@ def parse_options():
 
 
 if __name__ == "__main__":
-    plt.rc('text', usetex=True)
-    plt.rc('font', family='serif')
     options,args = parse_options()
     receivers_steps=[]
     gps_flag = False
@@ -167,9 +165,9 @@ if __name__ == "__main__":
     for i,x in enumerate(x_steps):
         lons[i] = 
     '''
-    y_steps = np.linspace(0,y,400)
+    y_steps = np.linspace(0,y,800)
     scale_x = x/400
-    scale_y = y/400
+    scale_y = y/800
 
     scale = math.ceil(math.sqrt(abs(x*y/0.3136)))
     ax = figure_map.add_subplot(111, xlim=(x0,x1), ylim=(y0,y1), autoscale_on=False)
@@ -379,7 +377,7 @@ if __name__ == "__main__":
         cbar.ax.get_yaxis().set_ticks([])
         for j in range(len(receivers_positions)):
             cbar.ax.text(.5, (10.1/len(receivers_positions) * (j+0.5)) / 10.0, "$%i$"%(j+1), ha='center', va='center',fontsize=28)
-        cbar.set_label("Selected reference sensor",fontsize = 28,labelpad = 20)
+        cbar.set_label(r'$\mathrm{Selected~reference~sensor}$',fontsize = 24,labelpad = 20)
         
     # For nice looking but hardcoded plots in paper
     #colorlist = ['#7F7FFF','#FE7F7F','#80FD7F']
@@ -396,7 +394,7 @@ if __name__ == "__main__":
                 color = "b"
             ax.scatter(rx[0], rx[1],linewidths=2, marker='^', c=color, s=400, alpha=1)
             # set annotation RXx
-            text = "Rx" + str(i)
+            text = r'Rx' + str(i)
             # index of logged reference receiver starts at 0 not at 1
             rx = (rx[0] + label_x_offs,rx[1] + label_y_offs)
             
