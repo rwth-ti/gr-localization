@@ -2,6 +2,8 @@ gr-localization GNU Radio based localization framework
 ======================================================
 Application to perform localization experiments using SDR. Includes software for the receivers, fusion center and GUI.
 
+![alt text](gui_map.png "Screenshot of the GUI")
+
 
 Dependencies
 ------------------
